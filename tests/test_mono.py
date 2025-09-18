@@ -1,11 +1,11 @@
 import numpy as np
 from PIL import Image
-from libs.vision.mono import check_monochrome
+from imageworks.libs.vision.mono import check_monochrome  # ← fixed import
 
 
 def _save(tmp_path, rgb):
     p = tmp_path / "im.png"
-    Image.fromarray(rgb, "RGB").save(p)
+    Image.fromarray(rgb).save(p)
     return p
 
 
