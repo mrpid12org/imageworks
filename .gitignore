@@ -1,5 +1,39 @@
+# Python / venv
 .venv/
 __pycache__/
 *.pyc
-*.env
-.env
+
+# Model & cache dirs (adjust if your model dirs differ)
+ai-models/
+*.safetensors
+*.pt
+*.bin
+*.ckpt
+
+# OS / IDE
+.DS_Store
+.vscode/
+# Python / env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Build artifacts
+*.egg-info/
+src/*.egg-info/
+
+# Editor/IDE
+.vscode/
+.DS_Store
+
+# Model weights & caches (adjust to your folders)
+ai-models/
+*.safetensors
+*.pt
+*.bin
+*.ckpt
+
+# Run outputs
+mono_results*.jsonl
+*.csv

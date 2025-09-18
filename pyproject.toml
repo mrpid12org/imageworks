@@ -1,0 +1,46 @@
+[project]
+name = "imageworks"
+version = "0.1.0"
+description = "Local photo utilities: monochrome validation, tagging, similarity."
+readme = "README.md"
+authors = [
+    { name = "Stewart Hopkins", email = "stewart.hopkins@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "faiss-cpu>=1.12.0",
+    "fastapi>=0.116.2",
+    "open-clip-torch>=3.1.0",
+    "opencv-python-headless>=4.12.0.88",
+    "pillow>=11.3.0",
+    "pydantic>=2.11.9",
+    "rich>=14.1.0",
+    "sentence-transformers>=5.1.0",
+    "typer>=0.17.4",
+    "uvicorn[standard]>=0.35.0",
+]
+
+[project.scripts]
+# Typer app entry point for the mono checker
+imageworks-mono = "imageworks.apps.competition_checker.cli.mono:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Use the src/ layout
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "huggingface-hub[cli]>=0.35.0",
+    "isort>=6.0.1",
+    "pre-commit>=4.3.0",
+    "pytest>=8.4.2",
+    "ruff>=0.13.0",
+]
