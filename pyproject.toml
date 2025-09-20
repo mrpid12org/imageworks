@@ -18,6 +18,9 @@ dependencies = [
     "sentence-transformers>=5.1.0",
     "typer>=0.17.4",
     "uvicorn[standard]>=0.35.0",
+    "torch==2.7.1+cu128",
+    "torchvision==0.22.1+cu128",
+    "torchaudio==2.7.1+cu128",
 ]
 
 [project.scripts]
@@ -57,3 +60,17 @@ dev = [
     "pytest>=8.4.2",
     "ruff>=0.13.0",
 ]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }

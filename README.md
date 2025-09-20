@@ -45,10 +45,11 @@ To remove diagnostics/keywords later, generate a cleanup script:
 - `tests/test_mono.py` exercises the monochrome detector against synthetic images.
 - `tests/test_env.py` validates environment imports and, optionally, CUDA. By default the CUDA test is skipped; set `REQUIRE_CUDA=1` to enforce it: `REQUIRE_CUDA=1 uv run pytest -q`.
 
-### GPU wheels (optional)
-- On CUDA hosts you may prefer CUDA-specific PyTorch wheels. Install them before syncing the env, then reinstall via uv:
-  - `pip install --upgrade --index-url https://download.pytorch.org/whl/cu124 torch torchvision torchaudio`
-  - `uv sync --reinstall-package torch torchvision torchaudio`
+### PyTorch / CUDA
+- The project pins PyTorch/torchvision/torchaudio to the CUDA 12.8 wheels (2.7.x).
+- `uv sync` automatically pulls from the PyTorch CUDA index defined in `pyproject.toml`.
+- Ensure the NVIDIA driver on your workstation provides CUDA 12.8 support (required for RTX 6000 PRO / Blackwell).
+- CPU-only environments can remove or override these packages if needed; otherwise expect a ~1 GB download the first time the environment is locked.
 
 ## Documentation
 - Developer Environment: `docs/dev-env/ide-setup-wsl-vscode.md`
