@@ -1,0 +1,27 @@
+%Image::ExifTool::UserDefined = (
+'Image::ExifTool::XMP::Main' => {
+MW => {
+SubDirectory => {
+TagTable => 'Image::ExifTool::UserDefined::XMP::MW',
+},
+},
+},
+);
+
+%Image::ExifTool::UserDefined::XMP::MW = (
+GROUPS => { 0 => 'XMP', 1 => 'XMP-MW', 2 => 'Image' },
+NAMESPACE => { 'MW' => 'http://imageworks.local/xmp/mw/1.0/' },
+WRITABLE => 'string',
+
+MonoVerdict => { Writable => 'string' },
+MonoMode => { Writable => 'string' },
+MonoReason => { Writable => 'string' },
+MonoTone1 => { Writable => 'string' },
+MonoTone2 => { Writable => 'string' },
+MonoTone3 => { Writable => 'string' },
+MonoHueStd => { Writable => 'real' },
+MonoHueR => { Writable => 'real' },
+MonoHueR2 => { Writable => 'real' },
+);
+
+1;

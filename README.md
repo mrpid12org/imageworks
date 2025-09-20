@@ -20,15 +20,39 @@ Both applications share a Python codebase (`src/imageworks`) that targets WSL/Ub
 
 ## Running the Applications
 - CLI entry point: `uv run imageworks-mono --help` (Typer app declared in `pyproject.toml`).
-- Web/API components live under `src/imageworks/apps/competition_checker` and can be hosted via FastAPI/Uvicorn.
+- Web/API: run `uv run imageworks-mono-api` then call:
+  - `GET /healthz`
+  - `POST /mono/check` (multipart upload or JSON with `path`)
+  - `POST /mono/batch` (JSON: `folder`, optional `exts`, thresholds)
+- CLI defaults: `pyproject.toml` `[tool.imageworks.mono]` defines the folder, extensions, and output paths used when you omit options.
+- Run with defaults: `uv run imageworks-mono` (produces JSONL and summary without extra flags).
+- Auto-write XMP: `uv run imageworks-mono --write-xmp` regenerates the ExifTool script and runs it (respecting defaults for script path/keywords/sidecars).
+
+### Writing diagnostics into images (Lightroom demo)
+- Generate JSONL with diagnostics: `uv run imageworks-mono check <folder> --jsonl-out mono_results.jsonl`
+- Create an ExifTool script that writes custom XMP fields (and optional keywords):
+  - `uv run imageworks-mono-xmp generate mono_results.jsonl --out write_xmp.sh`
+  - Include LR-friendly keywords (prefix `mono:`): add `--as-keywords`
+- Run the script (requires ExifTool): `bash write_xmp.sh`
+- In Lightroom: Metadata → Read Metadata from Files to ingest changes.
+
+To remove diagnostics/keywords later, generate a cleanup script:
+- `uv run imageworks-mono-xmp clean mono_results.jsonl --out clean_xmp.sh`
+- For keywords-only removal: add `--keywords-only`
 
 ## Testing
 - Execute the full suite with `uv run pytest` from the repository root.
 - `tests/test_mono.py` exercises the monochrome detector against synthetic images.
-- `tests/test_env.py` validates CUDA availability and imports for FAISS, OpenCLIP, Pillow, and OpenCV; skip or adjust if running on CPU-only hardware.
+- `tests/test_env.py` validates environment imports and, optionally, CUDA. By default the CUDA test is skipped; set `REQUIRE_CUDA=1` to enforce it: `REQUIRE_CUDA=1 uv run pytest -q`.
+
+### GPU wheels (optional)
+- On CUDA hosts you may prefer CUDA-specific PyTorch wheels. Install them before syncing the env, then reinstall via uv:
+  - `pip install --upgrade --index-url https://download.pytorch.org/whl/cu124 torch torchvision torchaudio`
+  - `uv sync --reinstall-package torch torchvision torchaudio`
 
 ## Documentation
 - Developer Environment: `docs/dev-env/ide-setup-wsl-vscode.md`
 - Project Specification: `docs/spec/imageworks-specification.md`
+- Project Structure: `docs/PROJECT_STRUCTURE.md`
 
 For architecture or roadmap discussions, start with the specification and follow links into the docs folder.

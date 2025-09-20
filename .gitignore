@@ -37,3 +37,6 @@ ai-models/
 # Run outputs
 mono_results*.jsonl
 *.csv
+
+# Generated scripts
+write_xmp.sh
