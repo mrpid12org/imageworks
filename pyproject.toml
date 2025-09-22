@@ -31,7 +31,7 @@ imageworks-mono-xmp = "imageworks.tools.write_mono_xmp:app"
 
 # Centralized defaults for the mono CLI
 [tool.imageworks.mono]
-default_folder = "/mnt/d/Proper Photos/photos/ccc test images"
+default_folder = "/mnt/d/Proper Photos/photos/ccc test images/pdi12425"
 default_exts = "jpg,jpeg,tif,tiff,png"
 default_jsonl = "mono_results.jsonl"
 default_xmp_script = "write_xmp.sh"
@@ -39,6 +39,8 @@ default_visualize_suffix = "_mono_vis"
 neutral_tol = 2
 toned_pass_deg = 6.0
 toned_query_deg = 10.0
+lab_toned_pass_deg = 10.0
+lab_toned_query_deg = 14.0
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

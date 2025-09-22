@@ -265,6 +265,50 @@ The emphasis is on privacy (local processing), speed, reproducibility, and a pat
 2. **Qualification** – true-monochrome check → pass / pass-with-query / fail; near-duplicate screening against local archive (initially).
 3. **CCC Integration (later)** – new entries checked on CCC systems using pre-computed metadata/indexes; must operate CPU-only.
 
+#### Monochrome Checker – Interpretation Guide
+
+The checker labels each JPEG as `PASS`, `PASS (query)`, or `FAIL`. It measures LAB chroma and hue variation to decide whether colour is both strong and multi-hued (FIAP/PSA definition of colour) or simply a single tint.
+
+**Decision tree**
+
+The simplified logic is:
+
+1. **Neutral pass** – `C*99 ≤ 2.0`. Everything stays within noise, so the image is neutral monochrome.
+2. **Toned pass** – the hue spread is inside the toned threshold (`hue_std ≤ 6°` by default). These are classic sepia/selenium looks.
+3. **Uniform strong tone pass** – even if the cast is saturated, we allow it when the hue is effectively single-colour: `hue_std ≤ 14°`, hue concentration `R ≥ 0.85`, the top hue carries ≥ 97 % of the chroma weight, and the tone covers at least ~5 % of the frame above `C*4`. This meets the “one tone across the image” rule in FIAP/PSA guidance.
+4. **Tiny leak downgrade** – if the image would otherwise fail but the colour footprint is microscopic (`C*99 ≤ 4`, `pct>C*4 < 1 %`, `pct>C*2 < 8 %`), the verdict drops to `PASS [review]` so minor halos don’t cause hard rejections.
+5. **Query** – cast is measurable but still limited. Typical triggers:
+   - Hue spread in the “caution” band (≈6–14°) with modest chroma coverage.
+   - Strong hue drift between shadows/highlights while the `C*4` footprint stays below ≈5 %.
+   - Secondary hue peaks that indicate potential split-toning, but not enough area to force a fail.
+   These files are flagged for juror review with Lightroom tips.
+6. **Fail** – we land here when the image shows multiple hues or a colour footprint that exceeds the guard rails:
+   - `C*99 ≥ 6` **and** (`pct>C*4 ≥ 10 %` or largest `C*4` cluster ≥ 8 %).
+   - Hue spread is wider than the toned limit **and** the tone is not classed as a uniform strong tone.
+   - Additional context (hue drift > 120°, bimodality, colourfulness) supplies the failure tag (`color_present`, `split_toning_suspected`, etc.).
+
+This sequence mirrors the competition definition: pure greyscale and single-hue toning pass; dual-hue or colour-on-grey mixtures fail; borderline/low-footprint cases require human review.
+
+**Key metrics in the summary**
+
+ Key metrics in the summary:
+- **Chroma (C*)** - distance from neutral in the LAB plane (`C* = sqrt(a*^2 + b*^2)`). Small values mean almost no tint; higher values flag stronger colour.
+- **Hue spread** - circular standard deviation of hue in degrees. Think “how wide is the tint fan?” Small spreads mean a single tint; large spreads mean multiple hue families, which is the first warning sign of split-toning.
+- **Chroma percentiles** - C* max and C*99 show how saturated the brightest regions are. Anything above about 3 is plainly visible.
+- **Chroma footprint (pct > C*2 / pct > C*4)** - share of pixels whose chroma exceeds 2 or 4 units. The C*2 percentage counts faint colour; the C*4 percentage counts clearly visible colour. Together they tell us whether colour is confined to speckles or covers meaningful areas of the frame.
+- **Largest chroma cluster** - largest smoothed connected region above C*2/C*4 (after a small morphological close), reported as the share of high-chroma pixels within that region. A large cluster highlights concentrated edits (e.g., colour introduced by cloning or selective adjustments) even when the overall footprint is small.
+- **Hue drift** - how the average hue shifts as brightness changes (degrees per L*). This reveals when shadows and highlights carry different colours: low drift means the tint stays consistent, while high drift (especially with a wide hue spread) is the hallmark of split-toning or false-colour rendering.
+
+By default the checker only forces a FAIL when the strong-colour footprint exceeds roughly 10 % of the frame (`lab_fail_c4_ratio`) or any single cluster crosses 8 % (`lab_fail_c4_cluster`) **and** the hue spread sits outside the toned limit. These guard rails, along with the uniform-toned exception above, can be tuned per session: `uv run imageworks-mono check --lab-fail-c4-ratio 0.05` for example. Use `uv run imageworks-mono --help` to see every CLI switch and default.
+
+Visual aids:
+- `lab_chroma` overlays mark where chroma magnitude is high, even for faint casts.
+- `lab_residual` overlays colour the hue families so opposing tones become obvious.
+- Overlay files store the fail or query summary in their metadata description so Lightroom shows the reason alongside the preview.
+
+Infrared entries:
+- False-colour IR captures often contain two complementary lobes even when the print looks mono. Treat them like any other query: inspect overlays and use B&W/Color Grading toggles in Lightroom. You can raise the hard-fail thresholds temporarily (`--lab-fail-c4-ratio`) if you want more leniency for a dedicated IR judging session.
+
 ### Non-Functional Goals
 - Local-only by default; explicit opt-in for any network use.
 - Performance targets (local workstation):
