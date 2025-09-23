@@ -112,6 +112,10 @@ class MonoResult:
     hue_peak_delta_deg: Optional[float] = None
     hue_second_mass: Optional[float] = None
     hue_weighting: Optional[str] = None
+    # New: Lightness-based hue analysis for split-tone interpretation
+    mean_hue_highs_deg: Optional[float] = None
+    mean_hue_shadows_deg: Optional[float] = None
+    delta_hue_highs_shadows_deg: Optional[float] = None
 
 
 @dataclass
@@ -535,6 +539,12 @@ def _name_split_tone_recipe(
     return None
 
 
+def _circular_hue_delta(hue1: float, hue2: float) -> float:
+    """Calculates the shortest circular distance between two hues in degrees."""
+    delta = abs(hue1 - hue2)
+    return min(delta, 360 - delta)
+
+
 def _top_hue_peaks(
     h_deg: np.ndarray, s: np.ndarray, mask: np.ndarray, k: int = 3
 ) -> Tuple[List[float], List[float]]:
@@ -702,6 +712,8 @@ def _summarize_reason(
     failure_reason: Optional[str],
     loader_diag: LoaderDiagnostics,
     hue_clusters: int,
+    split_tone_name: Optional[str] = None,
+    delta_hue_highs_shadows_deg: Optional[float] = None,
 ) -> str:
     pieces: List[str] = []
 
@@ -737,12 +749,13 @@ def _summarize_reason(
             "multi_color": "Multiple strong colours appear instead of a single tint.",
             "color_present": "Colour variation exceeds the toned limits for this class.",
         }
-        pieces.append(
-            failure_map.get(
-                failure_reason,
-                "Colour structure inconsistent with monochrome criteria.",
-            )
+        reason_text = failure_map.get(
+            failure_reason,
+            "Colour structure inconsistent with monochrome criteria.",
         )
+        if split_tone_name:
+            reason_text += f" (likely {split_tone_name})"
+        pieces.append(reason_text)
         if dominant_color:
             pieces.append(f"Dominant tone around {dominant_color}.")
 
@@ -754,6 +767,16 @@ def _summarize_reason(
             pieces.append("Hue changes noticeably between darks and lights.")
         else:
             pieces.append("Hue flips between hue families across the tonal range.")
+
+    if delta_hue_highs_shadows_deg is not None:
+        if delta_hue_highs_shadows_deg < 45.0:
+            pieces.append(
+                f"Highlights and shadows hues are close (Δh={delta_hue_highs_shadows_deg:.1f}°), indicating a drifted single tone."
+            )
+        else:
+            pieces.append(
+                f"Highlights and shadows hues are distinct (Δh={delta_hue_highs_shadows_deg:.1f}°), supporting a split-tone interpretation."
+            )
 
     icc_status = loader_diag.icc_status or ""
     if icc_status.startswith("no_profile"):
@@ -788,6 +811,40 @@ def _lab_stats(
     chroma_p95 = float(np.percentile(chroma, 95)) if chroma.size else 0.0
     chroma_p99 = float(np.percentile(chroma, 99)) if chroma.size else 0.0
     return L, a, b, chroma, chroma_max, chroma_med, chroma_p95, chroma_p99
+
+
+def _get_mean_hue_in_lightness_bands(
+    L: np.ndarray, hue_deg: np.ndarray, mask: np.ndarray, percentile_band: float
+) -> Optional[float]:
+    """Calculates the mean hue for pixels within a specific lightness percentile band."""
+    if not np.any(mask):
+        return None
+
+    L_masked = L[mask]
+    hue_masked = hue_deg[mask]
+
+    if L_masked.size < 10:  # Require a minimum number of pixels for reliable stats
+        return None
+
+    # Determine lightness thresholds for the band
+    lower_bound = np.percentile(L_masked, 50 - percentile_band / 2)
+    upper_bound = np.percentile(L_masked, 50 + percentile_band / 2)
+
+    # Filter pixels within the lightness band
+    band_mask = (L_masked >= lower_bound) & (L_masked <= upper_bound)
+    if not np.any(band_mask):
+        return None
+
+    hues_in_band = hue_masked[band_mask]
+    if hues_in_band.size == 0:
+        return None
+
+    # Calculate circular mean hue for the band
+    radians = np.deg2rad(hues_in_band)
+    c = np.mean(np.cos(radians))
+    s = np.mean(np.sin(radians))
+    mean_angle = (np.degrees(np.arctan2(s, c)) + 360.0) % 360.0
+    return float(mean_angle)
 
 
 def _check_monochrome_lab(
@@ -972,6 +1029,13 @@ def _check_monochrome_lab(
                 if c1 and c2:
                     split_name = f"{c1}-{c2} Split"
 
+    # New: Lightness-based hue analysis for split-tone interpretation
+    mean_hue_highs = _get_mean_hue_in_lightness_bands(L, hue_deg_all, mask, 25.0)
+    mean_hue_shadows = _get_mean_hue_in_lightness_bands(L, hue_deg_all, mask, 25.0)
+    delta_hue_highs_shadows: Optional[float] = None
+    if mean_hue_highs is not None and mean_hue_shadows is not None:
+        delta_hue_highs_shadows = _circular_hue_delta(mean_hue_highs, mean_hue_shadows)
+
     shadow_mask = (L <= LAB_SHADOW_NEUTRAL_L) & (chroma <= LAB_SHADOW_NEUTRAL_CHROMA)
     shadow_share = float(np.mean(shadow_mask)) if shadow_mask.size else 0.0
     subject_share = max(0.0, 1.0 - shadow_share)
@@ -1049,7 +1113,83 @@ def _check_monochrome_lab(
         hue_peak_delta_deg=peak_delta_deg,
         hue_second_mass=second_mass,
         hue_weighting="chroma",
+        mean_hue_highs_deg=mean_hue_highs,
+        mean_hue_shadows_deg=mean_hue_shadows,
+        delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
     )
+
+    if chroma_p99 <= neutral_chroma:
+        confidence = (
+            "low"
+            if loader_diag.icc_status.startswith("no_profile")
+            or loader_diag.icc_status.startswith("embedded_assumed")
+            else "normal"
+        )
+        return MonoResult(
+            verdict="pass",
+            mode="neutral",
+            failure_reason=None,
+            reason_summary=_summarize_reason(
+                verdict="pass",
+                mode="neutral",
+                dominant_color=None,
+                dominant_hue=None,
+                hue_std=0.0,
+                hue_drift_deg_per_l=None,
+                chroma_p99=chroma_p99,
+                chroma_med=chroma_med,
+                failure_reason=None,
+                loader_diag=loader_diag,
+                hue_clusters=1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+            ),
+            confidence=confidence,
+            **base_result_args,
+        )
+
+    # Check for toning-collapse: if two peaks are detected, but highlights and shadows
+    # are in the same general hue family, it's a drifted single tone, not a split-tone.
+    if (
+        fail_two_peak
+        and delta_hue_highs_shadows is not None
+        and delta_hue_highs_shadows < 45.0
+    ):
+        # Reclassify as a toned pass or query, depending on hue_std
+        verdict: Verdict = "pass"
+        reason_summary_base = (
+            "Toning collapsed to a single hue family across highlights and shadows."
+        )
+        if hue_std > toned_pass_deg:
+            verdict = "pass_with_query"
+            reason_summary_base += (
+                " Hue variation is wider than typical for a pure single tone."
+            )
+
+        return MonoResult(
+            verdict=verdict,
+            mode="toned",
+            failure_reason=None,
+            reason_summary=_summarize_reason(
+                verdict=verdict,
+                mode="toned",
+                dominant_color=dom_color,
+                dominant_hue=mean_hue_deg,
+                hue_std=hue_std,
+                hue_drift_deg_per_l=hue_drift,
+                chroma_p99=chroma_p99,
+                chroma_med=chroma_med,
+                failure_reason=None,
+                loader_diag=loader_diag,
+                hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+            )
+            + " "
+            + reason_summary_base,
+            confidence="review",
+            **base_result_args,
+        )
 
     if force_fail and single_hue_stage_lit:
         confidence = "review"
@@ -1065,6 +1205,8 @@ def _check_monochrome_lab(
             failure_reason=None,
             loader_diag=loader_diag,
             hue_clusters=len(peak_hues) if peak_hues else 1,
+            split_tone_name=split_name,
+            delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
         )
         reason_summary += f" Large neutral-shadow region (~{shadow_share*100:.1f}%) with a single-hue subject—review lighting intent."
         return MonoResult(
@@ -1094,6 +1236,8 @@ def _check_monochrome_lab(
                 failure_reason=None,
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1126,6 +1270,8 @@ def _check_monochrome_lab(
                 failure_reason=None,
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1160,6 +1306,8 @@ def _check_monochrome_lab(
                 failure_reason=None,
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1223,6 +1371,8 @@ def _check_monochrome_lab(
                 failure_reason=None,
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
             ),
             confidence=degrade_confidence or "review",
             **base_result_args,
@@ -1245,6 +1395,8 @@ def _check_monochrome_lab(
                 failure_reason=None,
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
+                split_tone_name=split_name,
+                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
             ),
             confidence=degrade_confidence or "review",
             **base_result_args,
@@ -1269,6 +1421,8 @@ def _check_monochrome_lab(
         failure_reason=failure_reason,
         loader_diag=loader_diag,
         hue_clusters=len(peak_hues) if peak_hues else 0,
+        split_tone_name=split_name,
+        delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
     )
     if force_fail:
         reason_summary += (

@@ -173,6 +173,9 @@ def _result_to_json(path: str, res: MonoResult) -> Dict[str, Any]:
         "hue_peak_delta_deg": res.hue_peak_delta_deg,
         "hue_second_mass": res.hue_second_mass,
         "hue_weighting": res.hue_weighting,
+        "mean_hue_highs_deg": res.mean_hue_highs_deg,
+        "mean_hue_shadows_deg": res.mean_hue_shadows_deg,
+        "delta_hue_highs_shadows_deg": res.delta_hue_highs_shadows_deg,
     }
     return obj
 
@@ -248,6 +251,17 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
         if peak_delta > 0 or second_mass > 0:
             notes.append(
                 f"Two-peak analysis shows Δh={peak_delta:.1f}° with secondary mass={second_mass*100:.1f}%."
+            )
+
+    delta_highs_shadows = res.get("delta_hue_highs_shadows_deg")
+    if isinstance(delta_highs_shadows, (int, float)):
+        if delta_highs_shadows < 45.0:
+            notes.append(
+                f"Highlights and shadows hues are close (Δh={delta_highs_shadows:.1f}°), indicating a drifted single tone."
+            )
+        else:
+            notes.append(
+                f"Highlights and shadows hues are distinct (Δh={delta_highs_shadows:.1f}°), supporting a split-tone interpretation."
             )
 
     if notes:
@@ -658,6 +672,9 @@ def check(
                 "hue_peak_delta_deg",
                 "hue_second_mass",
                 "hue_weighting",
+                "mean_hue_highs_deg",
+                "mean_hue_shadows_deg",
+                "delta_hue_highs_shadows_deg",
                 "loader_status",
                 "source_profile",
                 "scale_factor",
@@ -790,6 +807,11 @@ def check(
                 hue_peak_delta_deg = res_dict.get("hue_peak_delta_deg")
                 hue_second_mass = res_dict.get("hue_second_mass")
                 hue_weighting = res_dict.get("hue_weighting")
+                mean_hue_highs_deg = res_dict.get("mean_hue_highs_deg")
+                mean_hue_shadows_deg = res_dict.get("mean_hue_shadows_deg")
+                delta_hue_highs_shadows_deg = res_dict.get(
+                    "delta_hue_highs_shadows_deg"
+                )
                 csv_writer.writerow(
                     [
                         title,
@@ -855,6 +877,21 @@ def check(
                             else ""
                         ),
                         hue_weighting or "",
+                        (
+                            f"{mean_hue_highs_deg:.2f}"
+                            if isinstance(mean_hue_highs_deg, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{mean_hue_shadows_deg:.2f}"
+                            if isinstance(mean_hue_shadows_deg, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{delta_hue_highs_shadows_deg:.2f}"
+                            if isinstance(delta_hue_highs_shadows_deg, (float, int))
+                            else ""
+                        ),
                         res_dict.get("loader_status", ""),
                         res_dict.get("source_profile", ""),
                         (
