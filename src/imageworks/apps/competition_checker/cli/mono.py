@@ -517,7 +517,6 @@ def check(
     folder = folder or (
         Path(defaults["default_folder"]) if defaults.get("default_folder") else None
     )
-    #    auto_heatmap_mode = defaults.get("auto_heatmap_mode", "lab_chroma")
     auto_heatmap_modes_cfg = defaults.get("auto_heatmap_modes")
     if auto_heatmap_modes_cfg:
         if isinstance(auto_heatmap_modes_cfg, str):
@@ -564,7 +563,7 @@ def check(
     lab_chroma_mask_val = float(
         lab_chroma_mask
         if lab_chroma_mask is not None
-        else defaults.get("lab_chroma_mask", 1.0)
+        else defaults.get("lab_chroma_mask", 2.0)
     )
     lab_toned_pass_val = (
         float(lab_toned_pass)

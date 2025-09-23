@@ -21,8 +21,8 @@ except ImportError:  # pragma: no cover - depends on Pillow build
 Verdict = Literal["pass", "pass_with_query", "fail"]
 Mode = Literal["neutral", "toned", "not_mono"]
 
-LAB_TONED_PASS_DEFAULT = 6.0
-LAB_TONED_QUERY_DEFAULT = 10.0
+LAB_TONED_PASS_DEFAULT = 10.0
+LAB_TONED_QUERY_DEFAULT = 14.0
 # Allow exceptionally strong but uniform tones to pass if the hue spread remains
 # narrow and the frame stays single-hued.
 LAB_STRONG_TONE_HUE_STD = 14.0
@@ -776,20 +776,27 @@ def _check_monochrome_lab(
         chroma_norm = np.clip(chroma / chroma_max, 0.0, 1.0)
 
     hues = hue_deg_all[mask]
-    hue_std = _circular_std_deg_from_angles(hues)
+    weights = chroma_norm[mask]
+
+    # Weighted circular statistics
+    rad = np.deg2rad(hues)
+    w = weights.astype(np.float32)
+    w_sum = float(np.sum(w)) or 1.0
+    c = float(np.sum(np.cos(rad) * w) / w_sum)
+    s_ = float(np.sum(np.sin(rad) * w) / w_sum)
+    R = float(np.hypot(c, s_))
+    # Handle R > 1 due to float precision
+    R = min(R, 1.0)
+    hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
+    mean_hue_deg = float((np.degrees(np.arctan2(s_, c)) + 360.0) % 360.0)
+
+    # Bimodality (doubled angles), also weighted
+    rad2 = 2.0 * rad
+    c2 = float(np.sum(np.cos(rad2) * w) / w_sum)
+    s2 = float(np.sum(np.sin(rad2) * w) / w_sum)
+    R2 = float(np.hypot(c2, s2))
+
     hue_drift = _hue_drift_deg_per_l(L, hue_deg_all, mask)
-    # reuse the C* thresholds computed before the neutral short-circuit
-    radians = np.deg2rad(hues)
-    c = float(np.mean(np.cos(radians))) if hues.size else 1.0
-    s = float(np.mean(np.sin(radians))) if hues.size else 0.0
-    R = float(np.hypot(c, s))
-    mean_hue_deg = float((np.degrees(np.arctan2(s, c)) + 360.0) % 360.0)
-    radians2 = 2.0 * radians
-    R2 = (
-        float(np.hypot(np.mean(np.cos(radians2)), np.mean(np.sin(radians2))))
-        if hues.size
-        else 0.0
-    )
     dom_color = _name_color_from_hue(mean_hue_deg)
     sat_median_norm = float(np.median(chroma_norm[mask])) if np.any(mask) else 0.0
 
@@ -1280,7 +1287,7 @@ def check_monochrome(
     *,
     max_side: int = 1024,
     lab_neutral_chroma: float = 2.0,
-    lab_chroma_mask: float = 1.0,
+    lab_chroma_mask: float = 2.0,
     lab_toned_pass_deg: Optional[float] = None,
     lab_toned_query_deg: Optional[float] = None,
     lab_hard_fail_c4_ratio: float = LAB_HARD_FAIL_C4_RATIO_DEFAULT,

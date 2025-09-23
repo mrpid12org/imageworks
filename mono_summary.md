@@ -1,353 +1,339 @@
-Summary (lab): PASS=45  QUERY=2  FAIL=1
+Summary (lab): PASS=41  QUERY=3  FAIL=1
 
 
 === FAIL (1) ===
-Title: The Gambler
-Author: Andy Holloway
-Entry: 01_036 (01_036_SerialPDI1_2425.jpg)
+Title: Dawn Landing - Juvenile Marsh Harrier
+Author: André Neves
+Entry: 01_022 (01_022_SerialPDI2_2425.jpg)
   LAB result: FAIL (not mono) via lab
-  Notes: Hue variation covers about 13.6°; the tint wanders but stays related. Bright regions reach chroma 10.30 and the 99th percentile sits near 9.43, which looks strongly coloured. Around 99.9% of pixels sit beyond C*2 and 60.9% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 60.9% of the frame. Hue stays consistent from shadows to highlights.
-  Tones: dominant tone ≈ yellow; other tones: yellow, green
-  Reason: Colour variation exceeds the toned limits for this class. Dominant tone around yellow. Strong tint patch exceeds hard limit (pct>C*4 60.9%, largest cluster 60.9%, C*99 9.43).
-  Failure tag: color_present
-  Lightroom tip: In Develop > Basic, toggle B&W to show how much colour sits on top of the grayscale base. Then drag the Yellow saturation slider in HSL up and down—the yellow cast swings instantly. Zoom into the hotspot highlighted by the overlay; that region holds most of the coloured pixels. Overlay hint: lab_chroma (switch to lab_residual to see hue direction).
+  Notes: Hue variation covers about 16.6°; the tint wanders but stays related. Bright regions reach chroma 18.03 and the 99th percentile sits near 16.12, which looks strongly coloured. Around 91.2% of pixels sit beyond C*2 and 83.1% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 83.1% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ green; other tones: green, purple, purple
+  Reason: Multiple strong colours appear instead of a single tint. Dominant tone around green. Strong tint patch exceeds hard limit (pct>C*4 83.1%, largest cluster 83.1%, C*99 16.12).
+  Failure tag: multi_color
+  Lightroom tip: In Develop > Basic, toggle B&W to show how much colour sits on top of the grayscale base. Then drag the Green saturation slider in HSL up and down—the green cast swings instantly. Zoom into the hotspot highlighted by the overlay; that region holds most of the coloured pixels. Overlay hint: lab_chroma (switch to lab_residual to see hue direction).
 
 
-=== QUERY (2) ===
-Title: Vertical Windows
-Author: Charles Hall
-Entry: 01_011 (01_011_SerialPDI1_2425.jpg)
+=== QUERY (3) ===
+Title: Tuddenham Evening
+Author: John Harvey
+Entry: 01_002 (01_002_SerialPDI2_2425.jpg)
   LAB result: PASS_WITH_QUERY (toned) via lab [review]
-  Notes: Hue variation spans about 49.1°, so multiple colour families are in play. Bright regions reach chroma 3.00 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.1% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*2 cluster covers 1.1% of the frame. Hue stays consistent from shadows to highlights.
-  Tones: dominant tone ≈ blue; other tones: purple, blue, aqua
-  Reason: Borderline toned image dominated by blue; hue variation is close to the review threshold. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional.
+  Notes: Hue variation spans about 116.3°, so multiple colour families are in play. Bright regions reach chroma 35.36 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 31.4% of pixels sit beyond C*2 and 7.0% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 6.9% of the frame. Hue flips by roughly 160.2° through the tonal range, a strong split-tone signature.
+  Tones: dominant tone ≈ green; other tones: orange, blue, aqua
+  Reason: Borderline toned image dominated by green; hue variation is close to the review threshold. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
+  Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
+
+Title: Follow me
+Author: Alan Linsdell
+Entry: 01_030 (01_030_SerialPDI2_2425.jpg)
+  LAB result: PASS_WITH_QUERY (toned) via lab [review]
+  Notes: Hue variation spans about 134.3°, so multiple colour families are in play. Bright regions reach chroma 11.05 and the 99th percentile sits near 3.16, which looks clearly coloured. Roughly 4.6% of the frame carries a mild tint (C*2) and 0.5% pushes into stronger colour. Largest C*4 cluster covers 0.5% of the frame. Hue swings by about 71.3° between darks and lights, so tones respond differently.
+  Tones: dominant tone ≈ red; other tones: magenta, red, orange
+  Reason: Borderline toned image dominated by red; hue variation is close to the review threshold. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue changes noticeably between darks and lights.
+  Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
+
+Title: The Witching Hour
+Author: Stacey Purkiss
+Entry: 01_055 (01_055_SerialPDI2_2425.jpg)
+  LAB result: PASS_WITH_QUERY (toned) via lab [review]
+  Notes: Hue variation spans about 50.8°, so multiple colour families are in play. Bright regions reach chroma 7.07 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.4% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*4 cluster covers 0.0% of the frame. Hue shifts gently (≈10.3°) across the tonal range.
+  Tones: dominant tone ≈ red; other tones: orange, red, yellow
+  Reason: Borderline toned image dominated by red; hue variation is close to the review threshold. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue shifts gently as tones brighten.
   Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_chroma (switch to lab_residual to see hue direction).
 
-Title: Karl
-Author: Sally Freeman
-Entry: 01_027 (01_027_SerialPDI1_2425.jpg)
-  LAB result: PASS_WITH_QUERY (toned) via lab [review]
-  Notes: Hue variation covers about 18.0°; the tint wanders but stays related. Bright regions reach chroma 33.84 and the 99th percentile sits near 16.49, which looks strongly coloured. Around 33.3% of pixels sit beyond C*2 and 23.2% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 23.2% of the frame. Hue stays consistent from shadows to highlights.
-  Tones: dominant tone ≈ purple; other tones: magenta, blue, aqua
-  Reason: Borderline toned image dominated by purple; hue variation is close to the review threshold. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Large neutral-shadow region (~66.5%) with a single-hue subject—review lighting intent.
-  Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Raise the global Saturation to +40 and return to zero while watching the purple areas for a gentle swing. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_chroma (switch to lab_residual to see hue direction).
 
-
-=== PASS (45) ===
-Title: An Enigmatic Series
-Author: Gerry Metcalfe
-Entry: 01_000 (01_000_SerialPDI1_2425.jpg)
+=== PASS (41) ===
+Title: The Artist
+Author: Jim Bennett
+Entry: 01_003 (01_003_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 2.24 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold.
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: See The Truth
-Author: Debra Bennett
-Entry: 01_002 (01_002_SerialPDI1_2425.jpg)
-  LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation spans about 109.7°, so multiple colour families are in play. Bright regions reach chroma 8.60 and the 99th percentile sits near 4.24, which looks clearly coloured. Around 16.6% of pixels sit beyond C*2 and 1.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 1.7% of the frame. Hue flips by roughly 279.9° through the tonal range, a strong split-tone signature.
-  Tones: dominant tone ≈ aqua; other tones: aqua, magenta, green
-  Reason: Toned monochrome with a dominant aqua tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
+Title: Left him standing
+Author: Rod Morrod
+Entry: 01_004 (01_004_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: May Bumps
-Author: Fleur Hayles
-Entry: 01_004 (01_004_SerialPDI1_2425.jpg)
+Title: North Sea Coast
+Author: Vivienne Houghton
+Entry: 01_005 (01_005_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Durham Cathedral
+Author: John Stevens
+Entry: 01_006 (01_006_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Afternoon Shadows
+Author: Jenny Hodd
+Entry: 01_007 (01_007_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Blizzard
+Author: Viktor Barkhatov
+Entry: 01_008 (01_008_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: The Owl Sanctuary
+Author: Gerry Metcalfe
+Entry: 01_011 (01_011_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab
+  Notes: Hue variation stays tight (≈9.9°), consistent with a single tint. Bright regions reach chroma 14.14 and the 99th percentile sits near 12.37, which looks strongly coloured. Around 95.1% of pixels sit beyond C*2 and 81.3% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 81.3% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ yellow; other tones: green, aqua, red
+  Reason: Toned monochrome with a dominant yellow tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
+
+Title: East Anglia Transport Museum
+Author: Shelagh Wooster
+Entry: 01_015 (01_015_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab
+  Notes: Hue variation stays tight (≈7.4°), consistent with a single tint. Bright regions reach chroma 10.44 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 86.2% of pixels sit beyond C*2 and 63.2% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 63.2% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ yellow; other tones: yellow, aqua, red
+  Reason: Toned monochrome with a dominant yellow tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
+
+Title: Let's hope nothing has pee'ed in this pond
+Author: Tim Ewbank
+Entry: 01_016 (01_016_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab [low]
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance. ICC profile missing; assumed sRGB.
 
-Title: Skyline
-Author: Heather Fairhead
-Entry: 01_007 (01_007_SerialPDI1_2425.jpg)
+Title: Here today, groyne tomorrow
+Author: Malcolm Brown
+Entry: 01_017 (01_017_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab [review]
+  Notes: Hue variation spans about 154.2°, so multiple colour families are in play. Bright regions reach chroma 27.78 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 15.5% of pixels sit beyond C*2 and 1.6% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 1.6% of the frame. Hue flips by roughly -262.1° through the tonal range, a strong split-tone signature.
+  Tones: dominant tone ≈ aqua; other tones: aqua, magenta, purple
+  Reason: Toned monochrome with a dominant aqua tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
+
+Title: Between 2 Palms
+Author: John Bulpitt
+Entry: 01_018 (01_018_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab [low]
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance. ICC profile missing; assumed sRGB.
+
+Title: The Trickster
+Author: Debra Bennett
+Entry: 01_019 (01_019_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 3.61 and the 99th percentile sits near 1.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.2% of the frame.
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 4.47 and the 99th percentile sits near 1.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: A View from the Rialto Bridge, Venice
-Author: Eleni Paliginis
-Entry: 01_009 (01_009_SerialPDI1_2425.jpg)
+Title: Shipwrecked - old Hunstanton
+Author: Fleur Hayles
+Entry: 01_028 (01_028_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Liberty
-Author: Allan Hale
-Entry: 01_014 (01_014_SerialPDI1_2425.jpg)
+Title: Classic car club meeting
+Author: Brian Cockley
+Entry: 01_029 (01_029_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab [low]
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance. ICC profile missing; assumed sRGB.
+
+Title: Harvest
+Author: Jim Cromwell
+Entry: 01_032 (01_032_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: In the Limelight
-Author: Peter Baker
-Entry: 01_016 (01_016_SerialPDI1_2425.jpg)
+Title: Ruined House Lough Caragh Kerry
+Author: Sally Freeman
+Entry: 01_033 (01_033_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Suddenly He Regretted Dating a Zombie
+Title: Retro Snapper
+Author: Clive Downes
+Entry: 01_034 (01_034_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Practising the Uppercut
 Author: Philip Earl
-Entry: 01_019 (01_019_SerialPDI1_2425.jpg)
+Entry: 01_035 (01_035_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 2.83 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Beach Bubbles
-Author: Helen Cherry
-Entry: 01_023 (01_023_SerialPDI1_2425.jpg)
+Title: Protection
+Author: Pat Frost
+Entry: 01_037 (01_037_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 3.61 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Home Before the Storm
-Author: Ken Bingham
-Entry: 01_024 (01_024_SerialPDI1_2425.jpg)
+Title: Text Book Cornering Technique
+Author: Nick Bowman
+Entry: 01_038 (01_038_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab [review]
+  Notes: Hue variation spans about 99.1°, so multiple colour families are in play. Bright regions reach chroma 26.93 and the 99th percentile sits near 5.66, which looks clearly coloured. Around 12.5% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue flips by roughly 475.5° through the tonal range, a strong split-tone signature.
+  Tones: dominant tone ≈ yellow; other tones: aqua, magenta, magenta
+  Reason: Toned monochrome with a dominant yellow tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
+
+Title: Icelandic Moonscape
+Author: John McDowall
+Entry: 01_039 (01_039_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 1.41 and the 99th percentile sits near 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Gin for Breakfast?
+Author: Sarah Rossouw
+Entry: 01_040 (01_040_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: American Cemetery on a Cold Winter's Day
+Author: Maggie O'Moore
+Entry: 01_042 (01_042_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Staying Out of the Midday Sun
+Author: Andrew Colgan
+Entry: 01_044 (01_044_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 5.66 and the 99th percentile sits near 2.00, which looks a faint but measurable tint. About 1.0% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*4 cluster covers 0.0% of the frame.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Pump Room, Stretham
+Author: Michael Harris
+Entry: 01_047 (01_047_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: D Day Memorial Omaha Beach
+Author: Allan Hale
+Entry: 01_050 (01_050_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab
+  Notes: Hue variation stays tight (≈8.7°), consistent with a single tint. Bright regions reach chroma 8.54 and the 99th percentile sits near 5.39, which looks clearly coloured. Around 10.4% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ aqua; other tones: aqua, red, orange
+  Reason: Toned monochrome with a dominant aqua tint; hue variation stays within the relaxed limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional.
+
+Title: Brett Anderson
+Author: Yair Doza
+Entry: 01_052 (01_052_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Love in the rain
+Author: Bob Coote
+Entry: 01_053 (01_053_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab [review]
+  Notes: Hue variation covers about 17.7°; the tint wanders but stays related. Bright regions reach chroma 3.16 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.8% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*2 cluster covers 0.7% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ purple; other tones: purple, purple
+  Reason: Toned monochrome with a dominant purple tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional.
+
+Title: Misty Morning at the Lake
+Author: Helen Cherry
+Entry: 01_056 (01_056_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Dovercourt Lighthouse
+Author: Sue Badcock
+Entry: 01_058 (01_058_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Higger Tor
+Author: Penny Reeves
+Entry: 01_059 (01_059_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Simon Belcher at British Championships 2024
+Author: Christine Bulpitt
+Entry: 01_060 (01_060_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+
+Title: Against the Clock
+Author: John Gough
+Entry: 01_064 (01_064_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 1.00 and the 99th percentile sits near 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Raven Courtship Aerobatics
-Author: André Neves
-Entry: 01_025 (01_025_SerialPDI1_2425.jpg)
+Title: Between the Tides
+Author: Ken Bingham
+Entry: 01_065 (01_065_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab
+  Notes: Hue variation stays tight (≈4.5°), consistent with a single tint. Bright regions reach chroma 17.26 and the 99th percentile sits near 16.12, which looks strongly coloured. Around 100.0% of pixels sit beyond C*2 and 100.0% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 100.0% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ green; other tones: green
+  Reason: Toned monochrome with a dominant green tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame.
+
+Title: Piazza San Marco in Rain
+Author: Eleni Paliginis
+Entry: 01_067 (01_067_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Pony Tails
-Author: Nicky Guard
-Entry: 01_026 (01_026_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Phalanx, Amboseli
-Author: Mark Farrington
-Entry: 01_028 (01_028_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Barley Fields
-Author: James Dudley
-Entry: 01_030 (01_030_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: The Scarred Predator
-Author: Philip Gravett
-Entry: 01_031 (01_031_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Open to the Skies
-Author: Pat Draper
-Entry: 01_032 (01_032_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Total Focus
-Author: Nick Bowman
-Entry: 01_037 (01_037_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Summer Loving
-Author: Sarah Kelman
-Entry: 01_039 (01_039_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Bodhi Tree Skeleton Leaves
-Author: Maggie O'Moore
-Entry: 01_042 (01_042_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Keeping Time
-Author: Michael Harris
-Entry: 01_044 (01_044_SerialPDI1_2425.jpg)
-  LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation spans about 130.8°, so multiple colour families are in play. Bright regions reach chroma 21.02 and the 99th percentile sits near 4.00, which looks clearly coloured. Around 11.7% of pixels sit beyond C*2 and 1.0% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 1.0% of the frame. Hue flips by roughly -1029.3° through the tonal range, a strong split-tone signature.
-  Tones: dominant tone ≈ blue; other tones: aqua, magenta, blue
-  Reason: Toned monochrome with a dominant blue tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
-
-Title: Hawker Sea Hurricane MK.1b
-Author: Stacey Purkiss
-Entry: 01_045 (01_045_SerialPDI1_2425.jpg)
-  LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation spans about 55.4°, so multiple colour families are in play. Bright regions reach chroma 10.30 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.9% of pixels nudge past C*2, with 0.2% showing stronger colour (C*4). Largest C*4 cluster covers 0.1% of the frame. Hue flips by roughly -140.9° through the tonal range, a strong split-tone signature.
-  Tones: dominant tone ≈ magenta; other tones: magenta, red, aqua
-  Reason: Toned monochrome with a dominant magenta tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
-
-Title: The Sculptor's Workbench
-Author: Jenny Hodd
-Entry: 01_050 (01_050_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Earthquake Damage in a Moroccan Souk
-Author: Andrew Colgan
-Entry: 01_051 (01_051_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: A Different View
-Author: Sue Badcock
-Entry: 01_052 (01_052_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Valencia City of Arts and Sciences
+Title: East London Streetscape
 Author: Martin Johnson
-Entry: 01_055 (01_055_SerialPDI1_2425.jpg)
+Entry: 01_068 (01_068_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Spring Blossom
-Author: Vivienne Houghton
-Entry: 01_056 (01_056_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
+Title: Bruce the homeless cat
+Author: Gillian Cockley
+Entry: 01_069 (01_069_SerialPDI2_2425.jpg)
+  LAB result: PASS (neutral) via lab [low]
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 3.61 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
+  Reason: Neutral monochrome detected; residual chroma sits inside tolerance. ICC profile missing; assumed sRGB.
 
-Title: Cruel Sea
-Author: John Stevens
-Entry: 01_057 (01_057_SerialPDI1_2425.jpg)
+Title: Seeking Shade from the Intense Sunlight
+Author: Philip Gravett
+Entry: 01_073 (01_073_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
   Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: A Man from Jaisalmer, India
-Author: Shelagh Wooster
-Entry: 01_058 (01_058_SerialPDI1_2425.jpg)
+Title: The Station at Lyon–Saint Exupéry Airport
+Author: David Jenkins
+Entry: 01_076 (01_076_SerialPDI2_2425.jpg)
+  LAB result: PASS (toned) via lab
+  Notes: Hue variation stays tight (≈7.7°), consistent with a single tint. Bright regions reach chroma 6.32 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 48.7% of pixels sit beyond C*2 and 15.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 15.7% of the frame. Hue stays consistent from shadows to highlights.
+  Tones: dominant tone ≈ aqua; other tones: aqua, red
+  Reason: Toned monochrome with a dominant aqua tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
+
+Title: North Norfolks Finest
+Author: Peter Baker
+Entry: 01_082 (01_082_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 2.24 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
 
-Title: Will this be me one day mum.
-Author: Bob Coote
-Entry: 01_061 (01_061_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: At the Forge
+Title: Wells Cathedral
 Author: Barry Badcock
-Entry: 01_064 (01_064_SerialPDI1_2425.jpg)
+Entry: 01_086 (01_086_SerialPDI2_2425.jpg)
   LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Mark Dry - Scottish Record Holder
-Author: John Bulpitt
-Entry: 01_066 (01_066_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: The Boxer
-Author: Jim Bennett
-Entry: 01_067 (01_067_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Never Mind the Weather
-Author: Chris Fell
-Entry: 01_068 (01_068_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Black-browed Albatross
-Author: Alan Linsdell
-Entry: 01_075 (01_075_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Menai
-Author: Jim Cromwell
-Entry: 01_076 (01_076_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Just Looking
-Author: Sue McDowall
-Entry: 01_077 (01_077_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: The Pugilist
-Author: Malcolm Brown
-Entry: 01_079 (01_079_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 2.24 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Danny Mace at the British Championships
-Author: Christine Bulpitt
-Entry: 01_083 (01_083_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 5.83 and the 99th percentile sits near 1.41, which looks barely above neutral. About 0.8% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*4 cluster covers 0.0% of the frame.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Lady of Legend
-Author: John Hunting
-Entry: 01_085 (01_085_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Hopton Castle, a Civil War Ruin
-Author: Jane Moore
-Entry: 01_090 (01_090_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Male Lion Shaking off  Rain
-Author: Yvette Smith
-Entry: 01_091 (01_091_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Arctic Fox  Hunting
-Author: John McDowall
-Entry: 01_092 (01_092_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 2.24 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.0% of the frame.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Escape the City
-Author: John Gough
-Entry: 01_094 (01_094_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 4.12 and the 99th percentile sits near 0.00, which looks barely above neutral. Only trace pixels (under 0.5%) creep past the C*2 threshold. Largest C*2 cluster covers 0.1% of the frame.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Birds On Wire
-Author: David Trent
-Entry: 01_097 (01_097_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. The 99th percentile chroma is 0.00, which looks barely above neutral.
-  Reason: Neutral monochrome detected; residual chroma sits inside tolerance.
-
-Title: Hollywood Style
-Author: Clive Downes
-Entry: 01_098 (01_098_SerialPDI1_2425.jpg)
-  LAB result: PASS (neutral) via lab
-  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 1.41 and the 99th percentile sits near 0.00, which looks barely above neutral.
+  Notes: Hue variation stays tight (≈0.0°), consistent with a single tint. Bright regions reach chroma 1.00 and the 99th percentile sits near 0.00, which looks barely above neutral.
   Reason: Neutral monochrome detected; residual chroma sits inside tolerance.

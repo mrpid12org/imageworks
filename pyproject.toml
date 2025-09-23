@@ -4,34 +4,35 @@ version = "0.1.0"
 description = "Local photo utilities: monochrome validation, tagging, similarity."
 readme = "README.md"
 authors = [
-    { name = "Stewart Hopkins", email = "stewart.hopkins@gmail.com" }
+{ name = "Stewart Hopkins", email = "stewart.hopkins@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "faiss-cpu>=1.12.0",
-    "fastapi>=0.116.2",
-    "open-clip-torch>=3.1.0",
-    "opencv-python-headless>=4.12.0.88",
-    "pillow>=11.3.0",
-    "pydantic>=2.11.9",
-    "rich>=14.1.0",
-    "sentence-transformers>=5.1.0",
-    "typer>=0.17.4",
-    "uvicorn[standard]>=0.35.0",
-    "torch==2.7.1+cu128",
-    "torchvision==0.22.1+cu128",
-    "torchaudio==2.7.1+cu128",
+"faiss-cpu>=1.12.0",
+"fastapi>=0.116.2",
+"open-clip-torch>=3.1.0",
+"opencv-python-headless>=4.12.0.88",
+"pillow>=11.3.0",
+"pydantic>=2.11.9",
+"rich>=14.1.0",
+"sentence-transformers>=5.1.0",
+"typer>=0.17.4",
+"uvicorn[standard]>=0.35.0",
+"torch==2.7.1+cu128",
+"torchvision==0.22.1+cu128",
+"torchaudio==2.7.1+cu128",
 ]
 
 [project.scripts]
-# Typer app entry point for the mono checker
+
+#Typer app entry point for the mono checker
 imageworks-mono = "imageworks.apps.competition_checker.cli.mono:app"
 imageworks-mono-api = "imageworks.apps.competition_checker.api.main:run"
 imageworks-mono-xmp = "imageworks.tools.write_mono_xmp:app"
 
-# Centralized defaults for the mono CLI
+#Centralized defaults for the mono CLI
 [tool.imageworks.mono]
-default_folder = "/mnt/d/Proper Photos/photos/ccc test images/pdi12425"
+default_folder = "/mnt/d/Proper Photos/photos/ccc test images/pdi22425"
 default_exts = "jpg,jpeg,tif,tiff,png"
 default_jsonl = "mono_results.jsonl"
 default_xmp_script = "write_xmp.sh"
@@ -41,13 +42,15 @@ toned_pass_deg = 6.0
 toned_query_deg = 10.0
 lab_toned_pass_deg = 10.0
 lab_toned_query_deg = 14.0
+lab_chroma_mask = 2.0
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-# Use the src/ layout
+
+#Use the src/ layout
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
@@ -55,12 +58,12 @@ where = ["src"]
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "huggingface-hub[cli]>=0.35.0",
-    "isort>=6.0.1",
-    "pre-commit>=4.3.0",
-    "pytest>=8.4.2",
-    "ruff>=0.13.0",
+"black>=25.1.0",
+"huggingface-hub[cli]>=0.35.0",
+"isort>=6.0.1",
+"pre-commit>=4.3.0",
+"pytest>=8.4.2",
+"ruff>=0.13.0",
 ]
 
 [[tool.uv.index]]
