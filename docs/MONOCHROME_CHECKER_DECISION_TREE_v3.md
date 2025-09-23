@@ -38,31 +38,31 @@ The checker evaluates an image through the following sequence of conditions. The
 
 ```mermaid
 graph TD
-    A[Start] --> B["Step 1: Neutral Check<br>Is chroma_p99 <= neutral_chroma?"];
+    A[Start] --> B["Step 1: Neutral Check<br>Is chroma_p99 le neutral_chroma?"];
     B -- Yes --> C[Verdict: PASS - Neutral];
-    B -- No --> D["Step 2: Toning Collapse Check<br>Is fail_two_peak AND Δh < 45°?"];
-    D -- Yes --> E{Is hue_std > toned_pass_deg?};
+    B -- No --> D["Step 2: Toning Collapse Check<br>Is fail_two_peak AND delta_h lt 45?"];
+    D -- Yes --> E{Is hue_std gt toned_pass_deg?};
     E -- Yes --> F[Verdict: PASS WITH QUERY - Toned];
     E -- No --> G[Verdict: PASS - Toned];
     D -- No --> H["Step 3: Stage-Lit Override<br>Is force_fail AND single_hue_stage_lit?"];
     H -- Yes --> I[Verdict: PASS WITH QUERY - Toned];
-    H -- No --> J["Step 4: Uniform Strong Tone Override<br>Is uniform_strong_tone AND hue_std > toned_pass_deg?"];
+    H -- No --> J["Step 4: Uniform Strong Tone Override<br>Is uniform_strong_tone AND hue_std gt toned_pass_deg?"];
     J -- Yes --> K[Verdict: PASS - Toned];
-    J -- No --> L["Step 5: Refined Pass Condition<br>Is NOT force_fail AND hue_std <= toned_pass_deg AND merge_ok?"];
+    J -- No --> L["Step 5: Refined Pass Condition<br>Is NOT force_fail AND hue_std le toned_pass_deg AND merge_ok?"];
     L -- Yes --> M[Verdict: PASS - Toned];
     L -- No --> N["Step 6: Refined Query Condition<br>Is NOT force_fail AND borderline?"];
     N -- Yes --> O[Verdict: PASS WITH QUERY - Toned];
     N -- No --> P["Step 7: Default Fail Conditions"];
 
-    P --> Q{Is fail_two_peak OR hilo_split OR (R < 0.4 AND R2 > 0.6)?};
+    P --> Q{Is fail_two_peak OR hilo_split OR R lt 0.4 AND R2 gt 0.6?};
     Q -- Yes --> R[Reason: split_toning_suspected];
-    Q -- No --> S{Is cf >= 25.0 OR chroma_p95 > neutral_chroma + 8.0?};
+    Q -- No --> S{Is cf ge 25.0 OR chroma_p95 gt neutral_chroma plus 8.0?};
     S -- Yes --> T[Reason: multi_color];
-    S -- No --> U{Is chroma_med < neutral_chroma * 0.75 AND hue_std < 30.0?};
+    S -- No --> U{Is chroma_med lt neutral_chroma times 0.75 AND hue_std lt 30.0?};
     U -- Yes --> V[Reason: near_neutral_color_cast];
     U -- No --> W[Reason: color_present];
 
-    R --> X["Step 8: Degrade Fail?<br>Is NOT force_fail?"];
+    R --> X["Step 8: Degrade Fail<br>Is NOT force_fail?"];
     T --> X;
     V --> X;
     W --> X;
