@@ -31,38 +31,38 @@ The checker evaluates an image through the following sequence of conditions. The
 
 ```mermaid
 graph TD
-    A[Start: Check Monochrome] --> B{Is chroma_p99 <= neutral_chroma?};
+    A[Start: Check Monochrome] --> B{Is chroma_p99 below threshold?};
     B -- Yes --> C[Verdict: PASS - Neutral Monochrome];
-    B -- No --> D{Is fail_two_peak AND delta_h_highs_shadows_deg < 45.0?};
-    D -- Yes --> E{Is hue_std > toned_pass_deg?};
+    B -- No --> D{Two peaks and small highlight-shadow difference?};
+    D -- Yes --> E{Is hue_std above toned pass threshold?};
     E -- Yes --> F[Verdict: PASS WITH QUERY - Toned - Toning collapsed, but wider hue variation];
     E -- No --> G[Verdict: PASS - Toned - Toning collapsed to single hue family];
-    D -- No --> H{Is force_fail AND single_hue_stage_lit?};
+    D -- No --> H{Force fail and stage-lit?};
     H -- Yes --> I[Verdict: PASS WITH QUERY - Toned - Stage-lit override];
-    H -- No --> J{Is uniform_strong_tone AND hue_std > toned_pass_deg?};
+    H -- No --> J{Uniform strong tone and hue_std above pass threshold?};
     J -- Yes --> K[Verdict: PASS - Toned - Uniform strong tone override];
-    J -- No --> L{Is NOT force_fail AND hue_std <= toned_pass_deg AND merge_ok?};
+    J -- No --> L{No force fail, hue_std below pass threshold, merge ok?};
     L -- Yes --> M[Verdict: PASS - Toned - Refined Pass Condition];
-    L -- No --> N{Is NOT force_fail AND (hue_std <= toned_query_deg OR (peak_delta_deg > 12.0 AND peak_delta_deg <= 18.0 AND second_mass < 0.15))?};
+    L -- No --> N{No force fail, toned query or minor second peak?};
     N -- Yes --> O[Verdict: PASS WITH QUERY - Toned - Refined Query Condition];
     N -- No --> P{Default Fail Conditions};
 
-    P --> Q{Is fail_two_peak OR hilo_split OR (R < 0.4 AND R2 > 0.6)?};
+    P --> Q{Split-tone, hilo split, or bimodal?};
     Q -- Yes --> R[Failure Reason: split_toning_suspected];
-    Q -- No --> S{Is cf >= 25.0 OR chroma_p95 > neutral_chroma + 8.0?};
+    Q -- No --> S{Colorful or high chroma?};
     S -- Yes --> T[Failure Reason: multi_color];
-    S -- No --> U{Is chroma_med < neutral_chroma * 0.75 AND hue_std < 30.0?};
+    S -- No --> U{Low median chroma and low hue_std?};
     U -- Yes --> V[Failure Reason: near_neutral_color_cast];
     U -- No --> W[Failure Reason: color_present];
 
-    R --> X{Is NOT force_fail?};
+    R --> X{Not force fail?};
     T --> X;
     V --> X;
     W --> X;
 
-    X -- Yes --> Y{Can degrade to PASS? (small_footprint OR soft_large_footprint AND chroma_ratio4 < 0.12) AND (large_drift OR hue_std < 45.0)};
+    X -- Yes --> Y{Degrade to PASS?};
     Y -- Yes --> Z[Verdict: PASS - Toned - Degraded from Fail];
-    Y -- No --> AA{Can degrade to PASS WITH QUERY? (moderate_footprint OR subtle_cast OR soft_large_footprint OR (large_drift AND chroma_ratio4 < 0.05))};
+    Y -- No --> AA{Degrade to PASS WITH QUERY?};
     AA -- Yes --> BB[Verdict: PASS WITH QUERY - Toned - Degraded from Fail];
     AA -- No --> CC[Verdict: FAIL - Not Monochrome - Final Fail];
     X -- No --> CC;
