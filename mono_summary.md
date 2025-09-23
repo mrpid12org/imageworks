@@ -1,7 +1,17 @@
-Summary (lab): PASS=2  QUERY=1  FAIL=1
+Summary (lab): PASS=2  QUERY=1  FAIL=2
 
 
-=== FAIL (1) ===
+=== FAIL (2) ===
+Title: —
+Author: —
+Entry: sjh_240314_3086-100-split2.jpg (sjh_240314_3086-100-split2.jpg)
+  LAB result: FAIL (not mono) via lab
+  Notes: Hue variation covers about 20.4°; the tint wanders but stays related. Bright regions reach chroma 8.60 and the 99th percentile sits near 6.71, which looks strongly coloured. Around 98.3% of pixels sit beyond C*2 and 93.8% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 93.8% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=37.0° with secondary mass=20.1%.
+  Tones: dominant tone ≈ red; other tones: red, red
+  Reason: Split-toned image with distinct hue families across the frame. Dominant tone around red. Strong tint patch exceeds hard limit (pct>C*4 93.8%, largest cluster 93.8%, C*99 6.71).
+  Failure tag: Split-Toning Suspected (likely red-red Split).
+  Lightroom tip: In Develop > Basic, toggle B&W to show how much colour sits on top of the grayscale base. Then drag the Red saturation slider in HSL up and down—the red cast swings instantly. If tones change across the range, pull Shadow and Highlight saturation to zero in Color Grading and restore it to expose the split tone. Zoom into the hotspot highlighted by the overlay; that region holds most of the coloured pixels. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
+
 Title: —
 Author: —
 Entry: sjh_240314_3086-100-splittone.jpg (sjh_240314_3086-100-splittone.jpg)
@@ -9,7 +19,7 @@ Entry: sjh_240314_3086-100-splittone.jpg (sjh_240314_3086-100-splittone.jpg)
   Notes: Hue variation covers about 20.3°; the tint wanders but stays related. Bright regions reach chroma 9.22 and the 99th percentile sits near 6.71, which looks strongly coloured. Around 98.3% of pixels sit beyond C*2 and 93.8% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 93.8% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=36.9° with secondary mass=20.1%.
   Tones: dominant tone ≈ red; other tones: red, red
   Reason: Split-toned image with distinct hue families across the frame. Dominant tone around red. Strong tint patch exceeds hard limit (pct>C*4 93.8%, largest cluster 93.8%, C*99 6.71).
-  Failure tag: split_toning_suspected
+  Failure tag: Split-Toning Suspected (likely red-red Split).
   Lightroom tip: In Develop > Basic, toggle B&W to show how much colour sits on top of the grayscale base. Then drag the Red saturation slider in HSL up and down—the red cast swings instantly. If tones change across the range, pull Shadow and Highlight saturation to zero in Color Grading and restore it to expose the split tone. Zoom into the hotspot highlighted by the overlay; that region holds most of the coloured pixels. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
 
 

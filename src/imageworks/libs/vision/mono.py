@@ -117,8 +117,8 @@ class MonoResult:
 @dataclass
 class SplitToneRecipe:
     name: str
-    h1_range: Tuple[float, float]
-    h2_range: Tuple[float, float]
+    h1_range: Tuple[float, float]  # Warmer tone
+    h2_range: Tuple[float, float]  # Cooler tone
     delta_range: Tuple[float, float]
     description: str
 
@@ -130,6 +130,13 @@ SPLIT_TONE_RECIPES = [
         h2_range=(195, 215),
         delta_range=(150, 185),
         description="Historic darkroom look with aged highlights and cool, paper-like shadows.",
+    ),
+    SplitToneRecipe(
+        name="Gold-Blue",
+        h1_range=(10, 55),
+        h2_range=(220, 250),
+        delta_range=(150, 200),
+        description="Classic cinematic look with gold highlights and deep blue shadows.",
     ),
     SplitToneRecipe(
         name="Teal-Orange",
@@ -501,18 +508,25 @@ def _name_split_tone_recipe(
     h1: float, h2: float, delta: float
 ) -> Optional[Tuple[str, str]]:
     """Name common split-tone recipes based on the two dominant hue peaks."""
-    # Ensure h1 is the warmer tone for easier comparison
-    if 120 < h1 < 300:
+    # Sort hues into a predictable order (warm, cool) for matching
+    # Red/Yellow/Orange hues are considered "warm"
+    h1_is_warm = (0 <= h1 <= 75) or (h1 >= 300)
+    h2_is_warm = (0 <= h2 <= 75) or (h2 >= 300)
+    if not h1_is_warm and h2_is_warm:
         h1, h2 = h2, h1
 
     for recipe in SPLIT_TONE_RECIPES:
-        # Handle red wrapping around 360/0
+        # Handle hue ranges that wrap around 0° (e.g., for Red)
         h1_in_range = (
-            recipe.h1_range[0] <= h1 <= recipe.h1_range[1]
+            (recipe.h1_range[0] <= h1 <= recipe.h1_range[1])
             if recipe.h1_range[0] < recipe.h1_range[1]
             else (h1 >= recipe.h1_range[0] or h1 <= recipe.h1_range[1])
         )
-        h2_in_range = recipe.h2_range[0] <= h2 <= recipe.h2_range[1]
+        h2_in_range = (
+            (recipe.h2_range[0] <= h2 <= recipe.h2_range[1])
+            if recipe.h2_range[0] < recipe.h2_range[1]
+            else (h2 >= recipe.h2_range[0] or h2 <= recipe.h2_range[1])
+        )
         delta_in_range = recipe.delta_range[0] <= delta <= recipe.delta_range[1]
 
         if h1_in_range and h2_in_range and delta_in_range:
