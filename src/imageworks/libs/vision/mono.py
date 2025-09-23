@@ -106,6 +106,10 @@ class MonoResult:
     scale_factor: float = 1.0
     hue_drift_deg_per_l: Optional[float] = None
     confidence: Optional[str] = None
+    # Refinement B: explicit two-peak analysis fields for auditability
+    hue_peak_delta_deg: Optional[float] = None
+    hue_second_mass: Optional[float] = None
+    hue_weighting: Optional[str] = None
 
 
 def _parse_xmp_text(node: Optional[ET.Element], ns: Dict[str, str]) -> Optional[str]:
@@ -718,10 +722,10 @@ def _check_monochrome_lab(
             else "normal"
         )
         return MonoResult(
-            "pass",
-            "neutral",
-            max_diff,
-            0.0,
+            verdict="pass",
+            mode="neutral",
+            channel_max_diff=max_diff,
+            hue_std_deg=0.0,
             dominant_hue_deg=None,
             dominant_color=None,
             hue_concentration=0.0,
@@ -763,6 +767,7 @@ def _check_monochrome_lab(
             scale_factor=loader_diag.scale_factor,
             hue_drift_deg_per_l=None,
             confidence=confidence,
+            hue_weighting="chroma",
         )
 
     hue_deg_all = (np.degrees(np.arctan2(b, a)) + 360.0) % 360.0
@@ -775,8 +780,9 @@ def _check_monochrome_lab(
     if chroma_max > 1e-6:
         chroma_norm = np.clip(chroma / chroma_max, 0.0, 1.0)
 
+    # REFINEMENT A: Use chroma-weighted hue statistics for more robust results
     hues = hue_deg_all[mask]
-    weights = chroma_norm[mask]
+    weights = chroma[mask]  # Use raw chroma for weighting
 
     # Weighted circular statistics
     rad = np.deg2rad(hues)
@@ -837,6 +843,21 @@ def _check_monochrome_lab(
 
     peak_names = [_name_color_from_hue(hh) or "unknown" for hh in peak_hues]
 
+    # REFINEMENT B: Calculate explicit two-peak separation and secondary mass
+    peak_delta_deg: Optional[float] = None
+    second_mass = 0.0
+    if peak_hues and len(peak_hues) >= 2 and peak_w and sum(peak_w) > 0:
+        # sort by weight
+        order = np.argsort(peak_w)[::-1]
+        h1 = peak_hues[order[0]] % 360.0
+        h2 = peak_hues[order[1]] % 360.0
+        # circular distance
+        dh = abs((h1 - h2 + 180.0) % 360.0 - 180.0)
+        peak_delta_deg = float(dh)
+        total_w = float(sum(peak_w))
+        if total_w > 0:
+            second_mass = float(peak_w[order[1]] / total_w)
+
     shadow_mask = (L <= LAB_SHADOW_NEUTRAL_L) & (chroma <= LAB_SHADOW_NEUTRAL_CHROMA)
     shadow_share = float(np.mean(shadow_mask)) if shadow_mask.size else 0.0
     subject_share = max(0.0, 1.0 - shadow_share)
@@ -861,6 +882,13 @@ def _check_monochrome_lab(
         and chroma_ratio4 >= 0.05
     )
 
+    # REFINEMENT B: Integrate two-peak logic into decisions
+    fail_two_peak = (
+        (peak_delta_deg is not None)
+        and (peak_delta_deg >= 15.0)
+        and (second_mass >= 0.10)
+    )
+
     force_fail = (
         chroma_p99 >= 6.0
         and (
@@ -868,6 +896,43 @@ def _check_monochrome_lab(
         )
         and hue_std > toned_pass_deg
         and not uniform_strong_tone
+    )
+
+    # --- Start Decision Logic ---
+
+    # Common payload for all return paths
+    base_result_args = dict(
+        channel_max_diff=max_diff,
+        hue_std_deg=hue_std,
+        dominant_hue_deg=mean_hue_deg,
+        dominant_color=dom_color,
+        hue_concentration=R,
+        hue_bimodality=R2,
+        sat_median=sat_median_norm,
+        colorfulness=cf,
+        top_hues_deg=peak_hues,
+        top_colors=peak_names,
+        top_weights=peak_w,
+        analysis_method="lab",
+        loader_status=loader_diag.icc_status,
+        source_profile=loader_diag.icc_profile_name,
+        chroma_max=chroma_max,
+        chroma_median=chroma_med,
+        chroma_p95=chroma_p95,
+        chroma_p99=chroma_p99,
+        chroma_ratio_2=chroma_ratio2,
+        chroma_ratio_4=chroma_ratio4,
+        chroma_cluster_max_2=cluster_max2,
+        chroma_cluster_max_4=cluster_max4,
+        shadow_share=shadow_share,
+        subject_share=subject_share,
+        title=loader_diag.title,
+        author=loader_diag.author,
+        scale_factor=loader_diag.scale_factor,
+        hue_drift_deg_per_l=hue_drift,
+        hue_peak_delta_deg=peak_delta_deg,
+        hue_second_mass=second_mass,
+        hue_weighting="chroma",
     )
 
     if force_fail and single_hue_stage_lit:
@@ -887,71 +952,20 @@ def _check_monochrome_lab(
         )
         reason_summary += f" Large neutral-shadow region (~{shadow_share*100:.1f}%) with a single-hue subject—review lighting intent."
         return MonoResult(
-            "pass_with_query",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass_with_query",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=reason_summary,
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=confidence,
+            **base_result_args,
         )
 
     if uniform_strong_tone and hue_std > toned_pass_deg:
         confidence = "review"
         return MonoResult(
-            "pass",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=_summarize_reason(
                 verdict="pass",
                 mode="toned",
@@ -965,14 +979,15 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
             ),
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=confidence,
+            **base_result_args,
         )
 
-    if not force_fail and hue_std <= toned_pass_deg:
+    # Refined pass condition
+    merge_ok = (
+        (peak_delta_deg is None) or (peak_delta_deg <= 12.0) or (second_mass < 0.10)
+    )
+    if not force_fail and hue_std <= toned_pass_deg and merge_ok:
         confidence = (
             "low"
             if loader_diag.icc_status.startswith("no_profile")
@@ -980,33 +995,9 @@ def _check_monochrome_lab(
             else "normal"
         )
         return MonoResult(
-            "pass",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=_summarize_reason(
                 verdict="pass",
                 mode="toned",
@@ -1020,46 +1011,27 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
             ),
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=confidence,
+            **base_result_args,
         )
-    if not force_fail and hue_std <= toned_query_deg:
+    # Refined query condition
+    if not force_fail and (
+        hue_std <= toned_query_deg
+        or (
+            peak_delta_deg is not None
+            and 12.0 < peak_delta_deg <= 18.0
+            and second_mass < 0.15
+        )
+    ):
         confidence = "review"
         if loader_diag.icc_status.startswith(
             "no_profile"
         ) or loader_diag.icc_status.startswith("embedded_assumed"):
             confidence = "low"
         return MonoResult(
-            "pass_with_query",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass_with_query",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=_summarize_reason(
                 verdict="pass_with_query",
                 mode="toned",
@@ -1073,14 +1045,14 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
             ),
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=confidence,
+            **base_result_args,
         )
 
-    if R < 0.4 and R2 > 0.6:
+    # All paths from here lead to a fail verdict
+    if fail_two_peak:
+        failure_reason = "split_toning_suspected"
+    elif R < 0.4 and R2 > 0.6:
         failure_reason = "split_toning_suspected"
     elif cf >= 25.0 or chroma_p95 > neutral_chroma + 8.0:
         failure_reason = "multi_color"
@@ -1120,33 +1092,9 @@ def _check_monochrome_lab(
 
     if degrade_to_pass:
         return MonoResult(
-            "pass",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=_summarize_reason(
                 verdict="pass",
                 mode="toned",
@@ -1160,42 +1108,15 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
             ),
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=degrade_confidence or "review",
+            **base_result_args,
         )
 
     if degrade_to_query:
         return MonoResult(
-            "pass_with_query",
-            "toned",
-            max_diff,
-            hue_std,
-            dominant_hue_deg=mean_hue_deg,
-            dominant_color=dom_color,
-            hue_concentration=R,
-            hue_bimodality=R2,
-            sat_median=sat_median_norm,
-            colorfulness=cf,
+            verdict="pass_with_query",
+            mode="toned",
             failure_reason=None,
-            top_hues_deg=peak_hues,
-            top_colors=peak_names,
-            top_weights=peak_w,
-            analysis_method="lab",
-            loader_status=loader_diag.icc_status,
-            source_profile=loader_diag.icc_profile_name,
-            chroma_max=chroma_max,
-            chroma_median=chroma_med,
-            chroma_p95=chroma_p95,
-            chroma_p99=chroma_p99,
-            chroma_ratio_2=chroma_ratio2,
-            chroma_ratio_4=chroma_ratio4,
-            chroma_cluster_max_2=cluster_max2,
-            chroma_cluster_max_4=cluster_max4,
-            shadow_share=shadow_share,
-            subject_share=subject_share,
             reason_summary=_summarize_reason(
                 verdict="pass_with_query",
                 mode="toned",
@@ -1209,11 +1130,8 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
             ),
-            title=loader_diag.title,
-            author=loader_diag.author,
-            scale_factor=loader_diag.scale_factor,
-            hue_drift_deg_per_l=hue_drift,
             confidence=degrade_confidence or "review",
+            **base_result_args,
         )
 
     confidence = (
@@ -1243,39 +1161,12 @@ def _check_monochrome_lab(
         )
 
     return MonoResult(
-        "fail",
-        "not_mono",
-        max_diff,
-        hue_std,
-        dominant_hue_deg=mean_hue_deg,
-        dominant_color=dom_color,
-        hue_concentration=R,
-        hue_bimodality=R2,
-        sat_median=sat_median_norm,
-        colorfulness=cf,
+        verdict="fail",
+        mode="not_mono",
         failure_reason=failure_reason,
-        top_hues_deg=peak_hues,
-        top_colors=peak_names,
-        top_weights=peak_w,
-        analysis_method="lab",
-        loader_status=loader_diag.icc_status,
-        source_profile=loader_diag.icc_profile_name,
-        chroma_max=chroma_max,
-        chroma_median=chroma_med,
-        chroma_p95=chroma_p95,
-        chroma_p99=chroma_p99,
-        chroma_ratio_2=chroma_ratio2,
-        chroma_ratio_4=chroma_ratio4,
-        chroma_cluster_max_2=cluster_max2,
-        chroma_cluster_max_4=cluster_max4,
-        shadow_share=shadow_share,
-        subject_share=subject_share,
         reason_summary=reason_summary,
-        title=loader_diag.title,
-        author=loader_diag.author,
-        scale_factor=loader_diag.scale_factor,
-        hue_drift_deg_per_l=hue_drift,
         confidence=confidence,
+        **base_result_args,
     )
 
 

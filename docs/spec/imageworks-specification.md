@@ -269,23 +269,7 @@ The emphasis is on privacy (local processing), speed, reproducibility, and a pat
 
 The checker labels each JPEG as `PASS`, `PASS (query)`, or `FAIL`. It measures LAB chroma and hue variation to decide whether colour is both strong and multi-hued (FIAP/PSA definition of colour) or simply a single tint.
 
-**Decision tree**
-
-The simplified logic is:
-
-1. **Neutral pass** – `C*99 ≤ 2.0`. Everything stays within noise, so the image is neutral monochrome.
-2. **Toned pass** – the hue spread is inside the toned threshold (`hue_std ≤ 6°` by default). These are classic sepia/selenium looks.
-3. **Uniform strong tone pass** – even if the cast is saturated, we allow it when the hue is effectively single-colour: `hue_std ≤ 14°`, hue concentration `R ≥ 0.85`, the top hue carries ≥ 97 % of the chroma weight, and the tone covers at least ~5 % of the frame above `C*4`. This meets the “one tone across the image” rule in FIAP/PSA guidance.
-4. **Tiny leak downgrade** – if the image would otherwise fail but the colour footprint is microscopic (`C*99 ≤ 4`, `pct>C*4 < 1 %`, `pct>C*2 < 8 %`), the verdict drops to `PASS [review]` so minor halos don’t cause hard rejections.
-5. **Query** – cast is measurable but still limited. Typical triggers:
-   - Hue spread in the “caution” band (≈6–14°) with modest chroma coverage.
-   - Strong hue drift between shadows/highlights while the `C*4` footprint stays below ≈5 %.
-   - Secondary hue peaks that indicate potential split-toning, but not enough area to force a fail.
-   These files are flagged for juror review with Lightroom tips.
-6. **Fail** – we land here when the image shows multiple hues or a colour footprint that exceeds the guard rails:
-   - `C*99 ≥ 6` **and** (`pct>C*4 ≥ 10 %` or largest `C*4` cluster ≥ 8 %).
-   - Hue spread is wider than the toned limit **and** the tone is not classed as a uniform strong tone.
-   - Additional context (hue drift > 120°, bimodality, colourfulness) supplies the failure tag (`color_present`, `split_toning_suspected`, etc.).
+For a detailed, step-by-step explanation of the pass/fail logic, including thresholds and edge cases, please see the standalone [Monochrome Checker Logic Decision Tree](MONOCHROME_CHECKER_LOGIC.md).
 
 This sequence mirrors the competition definition: pure greyscale and single-hue toning pass; dual-hue or colour-on-grey mixtures fail; borderline/low-footprint cases require human review.
 

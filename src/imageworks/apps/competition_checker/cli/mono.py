@@ -168,6 +168,9 @@ def _result_to_json(path: str, res: MonoResult) -> Dict[str, Any]:
         "reason_summary": res.reason_summary,
         "title": res.title,
         "author": res.author,
+        "hue_peak_delta_deg": res.hue_peak_delta_deg,
+        "hue_second_mass": res.hue_second_mass,
+        "hue_weighting": res.hue_weighting,
     }
     return obj
 
@@ -236,6 +239,14 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
     drift = res.get("hue_drift_deg_per_l")
     if isinstance(drift, (int, float)):
         notes.append(_describe_hue_drift(float(drift)))
+
+    peak_delta = res.get("hue_peak_delta_deg")
+    second_mass = res.get("hue_second_mass")
+    if isinstance(peak_delta, (int, float)) and isinstance(second_mass, (int, float)):
+        if peak_delta > 0 or second_mass > 0:
+            notes.append(
+                f"Two-peak analysis shows Δh={peak_delta:.1f}° with secondary mass={second_mass*100:.1f}%."
+            )
 
     if notes:
         lines.append("Notes: " + " ".join(notes))
@@ -633,6 +644,9 @@ def check(
                 "largest_cluster_pct_gt_c2",
                 "largest_cluster_pct_gt_c4",
                 "hue_drift_deg_per_l",
+                "hue_peak_delta_deg",
+                "hue_second_mass",
+                "hue_weighting",
                 "loader_status",
                 "source_profile",
                 "scale_factor",
@@ -761,6 +775,9 @@ def check(
                 chroma_ratio_4 = res_dict.get("chroma_ratio_4")
                 cluster_max_2 = res_dict.get("chroma_cluster_max_2")
                 cluster_max_4 = res_dict.get("chroma_cluster_max_4")
+                hue_peak_delta_deg = res_dict.get("hue_peak_delta_deg")
+                hue_second_mass = res_dict.get("hue_second_mass")
+                hue_weighting = res_dict.get("hue_weighting")
                 csv_writer.writerow(
                     [
                         title,
@@ -813,6 +830,17 @@ def check(
                             if isinstance(hue_drift, (float, int))
                             else ""
                         ),
+                        (
+                            f"{hue_peak_delta_deg:.2f}"
+                            if isinstance(hue_peak_delta_deg, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_second_mass:.4f}"
+                            if isinstance(hue_second_mass, (float, int))
+                            else ""
+                        ),
+                        hue_weighting or "",
                         res_dict.get("loader_status", ""),
                         res_dict.get("source_profile", ""),
                         (

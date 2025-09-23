@@ -56,4 +56,10 @@ To remove diagnostics/keywords later, generate a cleanup script:
 - Project Specification: `docs/spec/imageworks-specification.md`
 - Project Structure: `docs/PROJECT_STRUCTURE.md`
 
+### Monochrome Checker Logic
+
+The logic for determining if an image is a valid monochrome is sophisticated, taking into account color variation, saturation, split-toning, and various edge cases.
+
+For a detailed, step-by-step explanation of the decision-making process, please refer to the [Monochrome Checker Logic Decision Tree](./docs/MONOCHROME_CHECKER_LOGIC.md).
+
 For architecture or roadmap discussions, start with the specification and follow links into the docs folder.

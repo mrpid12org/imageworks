@@ -6,7 +6,7 @@ Title: Dawn Landing - Juvenile Marsh Harrier
 Author: André Neves
 Entry: 01_022 (01_022_SerialPDI2_2425.jpg)
   LAB result: FAIL (not mono) via lab
-  Notes: Hue variation covers about 16.6°; the tint wanders but stays related. Bright regions reach chroma 18.03 and the 99th percentile sits near 16.12, which looks strongly coloured. Around 91.2% of pixels sit beyond C*2 and 83.1% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 83.1% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation covers about 16.6°; the tint wanders but stays related. Bright regions reach chroma 18.03 and the 99th percentile sits near 16.12, which looks strongly coloured. Around 91.2% of pixels sit beyond C*2 and 83.1% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 83.1% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=140.4° with secondary mass=1.7%.
   Tones: dominant tone ≈ green; other tones: green, purple, purple
   Reason: Multiple strong colours appear instead of a single tint. Dominant tone around green. Strong tint patch exceeds hard limit (pct>C*4 83.1%, largest cluster 83.1%, C*99 16.12).
   Failure tag: multi_color
@@ -18,7 +18,7 @@ Title: Tuddenham Evening
 Author: John Harvey
 Entry: 01_002 (01_002_SerialPDI2_2425.jpg)
   LAB result: PASS_WITH_QUERY (toned) via lab [review]
-  Notes: Hue variation spans about 116.3°, so multiple colour families are in play. Bright regions reach chroma 35.36 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 31.4% of pixels sit beyond C*2 and 7.0% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 6.9% of the frame. Hue flips by roughly 160.2° through the tonal range, a strong split-tone signature.
+  Notes: Hue variation spans about 116.3°, so multiple colour families are in play. Bright regions reach chroma 35.36 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 31.4% of pixels sit beyond C*2 and 7.0% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 6.9% of the frame. Hue flips by roughly 160.2° through the tonal range, a strong split-tone signature. Two-peak analysis shows Δh=169.7° with secondary mass=37.3%.
   Tones: dominant tone ≈ green; other tones: orange, blue, aqua
   Reason: Borderline toned image dominated by green; hue variation is close to the review threshold. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
   Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
@@ -27,7 +27,7 @@ Title: Follow me
 Author: Alan Linsdell
 Entry: 01_030 (01_030_SerialPDI2_2425.jpg)
   LAB result: PASS_WITH_QUERY (toned) via lab [review]
-  Notes: Hue variation spans about 134.3°, so multiple colour families are in play. Bright regions reach chroma 11.05 and the 99th percentile sits near 3.16, which looks clearly coloured. Roughly 4.6% of the frame carries a mild tint (C*2) and 0.5% pushes into stronger colour. Largest C*4 cluster covers 0.5% of the frame. Hue swings by about 71.3° between darks and lights, so tones respond differently.
+  Notes: Hue variation spans about 134.3°, so multiple colour families are in play. Bright regions reach chroma 11.05 and the 99th percentile sits near 3.16, which looks clearly coloured. Roughly 4.6% of the frame carries a mild tint (C*2) and 0.5% pushes into stronger colour. Largest C*4 cluster covers 0.5% of the frame. Hue swings by about 71.3° between darks and lights, so tones respond differently. Two-peak analysis shows Δh=32.1° with secondary mass=33.4%.
   Tones: dominant tone ≈ red; other tones: magenta, red, orange
   Reason: Borderline toned image dominated by red; hue variation is close to the review threshold. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue changes noticeably between darks and lights.
   Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_residual (add lab_chroma to gauge intensity).
@@ -36,7 +36,7 @@ Title: The Witching Hour
 Author: Stacey Purkiss
 Entry: 01_055 (01_055_SerialPDI2_2425.jpg)
   LAB result: PASS_WITH_QUERY (toned) via lab [review]
-  Notes: Hue variation spans about 50.8°, so multiple colour families are in play. Bright regions reach chroma 7.07 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.4% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*4 cluster covers 0.0% of the frame. Hue shifts gently (≈10.3°) across the tonal range.
+  Notes: Hue variation spans about 50.8°, so multiple colour families are in play. Bright regions reach chroma 7.07 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.4% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*4 cluster covers 0.0% of the frame. Hue shifts gently (≈10.3°) across the tonal range. Two-peak analysis shows Δh=49.0° with secondary mass=31.7%.
   Tones: dominant tone ≈ red; other tones: orange, red, yellow
   Reason: Borderline toned image dominated by red; hue variation is close to the review threshold. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue shifts gently as tones brighten.
   Lightroom tip: Press B&W to compare; if the frame barely shifts, the tint is subtle but measurable. Use Color Grading to drop Shadow and Highlight saturation to zero and back—the opposing hues reveal the split tone. Leave it if you like the tone—it's flagged only for review. Overlay hint: lab_chroma (switch to lab_residual to see hue direction).
@@ -89,7 +89,7 @@ Title: The Owl Sanctuary
 Author: Gerry Metcalfe
 Entry: 01_011 (01_011_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab
-  Notes: Hue variation stays tight (≈9.9°), consistent with a single tint. Bright regions reach chroma 14.14 and the 99th percentile sits near 12.37, which looks strongly coloured. Around 95.1% of pixels sit beyond C*2 and 81.3% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 81.3% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation stays tight (≈9.9°), consistent with a single tint. Bright regions reach chroma 14.14 and the 99th percentile sits near 12.37, which looks strongly coloured. Around 95.1% of pixels sit beyond C*2 and 81.3% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 81.3% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=51.7° with secondary mass=0.0%.
   Tones: dominant tone ≈ yellow; other tones: green, aqua, red
   Reason: Toned monochrome with a dominant yellow tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
 
@@ -97,7 +97,7 @@ Title: East Anglia Transport Museum
 Author: Shelagh Wooster
 Entry: 01_015 (01_015_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab
-  Notes: Hue variation stays tight (≈7.4°), consistent with a single tint. Bright regions reach chroma 10.44 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 86.2% of pixels sit beyond C*2 and 63.2% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 63.2% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation stays tight (≈7.4°), consistent with a single tint. Bright regions reach chroma 10.44 and the 99th percentile sits near 8.54, which looks strongly coloured. Around 86.2% of pixels sit beyond C*2 and 63.2% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 63.2% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=47.8° with secondary mass=0.2%.
   Tones: dominant tone ≈ yellow; other tones: yellow, aqua, red
   Reason: Toned monochrome with a dominant yellow tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
 
@@ -112,7 +112,7 @@ Title: Here today, groyne tomorrow
 Author: Malcolm Brown
 Entry: 01_017 (01_017_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation spans about 154.2°, so multiple colour families are in play. Bright regions reach chroma 27.78 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 15.5% of pixels sit beyond C*2 and 1.6% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 1.6% of the frame. Hue flips by roughly -262.1° through the tonal range, a strong split-tone signature.
+  Notes: Hue variation spans about 154.2°, so multiple colour families are in play. Bright regions reach chroma 27.78 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 15.5% of pixels sit beyond C*2 and 1.6% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 1.6% of the frame. Hue flips by roughly -262.1° through the tonal range, a strong split-tone signature. Two-peak analysis shows Δh=179.9° with secondary mass=47.0%.
   Tones: dominant tone ≈ aqua; other tones: aqua, magenta, purple
   Reason: Toned monochrome with a dominant aqua tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
 
@@ -183,7 +183,7 @@ Title: Text Book Cornering Technique
 Author: Nick Bowman
 Entry: 01_038 (01_038_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation spans about 99.1°, so multiple colour families are in play. Bright regions reach chroma 26.93 and the 99th percentile sits near 5.66, which looks clearly coloured. Around 12.5% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue flips by roughly 475.5° through the tonal range, a strong split-tone signature.
+  Notes: Hue variation spans about 99.1°, so multiple colour families are in play. Bright regions reach chroma 26.93 and the 99th percentile sits near 5.66, which looks clearly coloured. Around 12.5% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue flips by roughly 475.5° through the tonal range, a strong split-tone signature. Two-peak analysis shows Δh=145.6° with secondary mass=30.4%.
   Tones: dominant tone ≈ yellow; other tones: aqua, magenta, magenta
   Reason: Toned monochrome with a dominant yellow tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is present but still subtle. Multiple hue clusters detected—confirm the toning is intentional. Hue flips between hue families across the tonal range.
 
@@ -226,7 +226,7 @@ Title: D Day Memorial Omaha Beach
 Author: Allan Hale
 Entry: 01_050 (01_050_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab
-  Notes: Hue variation stays tight (≈8.7°), consistent with a single tint. Bright regions reach chroma 8.54 and the 99th percentile sits near 5.39, which looks clearly coloured. Around 10.4% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation stays tight (≈8.7°), consistent with a single tint. Bright regions reach chroma 8.54 and the 99th percentile sits near 5.39, which looks clearly coloured. Around 10.4% of pixels sit beyond C*2 and 2.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 2.7% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=139.8° with secondary mass=0.0%.
   Tones: dominant tone ≈ aqua; other tones: aqua, red, orange
   Reason: Toned monochrome with a dominant aqua tint; hue variation stays within the relaxed limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional.
 
@@ -241,7 +241,7 @@ Title: Love in the rain
 Author: Bob Coote
 Entry: 01_053 (01_053_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab [review]
-  Notes: Hue variation covers about 17.7°; the tint wanders but stays related. Bright regions reach chroma 3.16 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.8% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*2 cluster covers 0.7% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation covers about 17.7°; the tint wanders but stays related. Bright regions reach chroma 3.16 and the 99th percentile sits near 2.24, which looks a faint but measurable tint. About 1.8% of pixels nudge past C*2, with 0.0% showing stronger colour (C*4). Largest C*2 cluster covers 0.7% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=39.8° with secondary mass=22.6%.
   Tones: dominant tone ≈ purple; other tones: purple, purple
   Reason: Toned monochrome with a dominant purple tint; hue variation is narrow but stronger than the standard toned limit. Overall tint is essentially nil. Multiple hue clusters detected—confirm the toning is intentional.
 
@@ -320,7 +320,7 @@ Title: The Station at Lyon–Saint Exupéry Airport
 Author: David Jenkins
 Entry: 01_076 (01_076_SerialPDI2_2425.jpg)
   LAB result: PASS (toned) via lab
-  Notes: Hue variation stays tight (≈7.7°), consistent with a single tint. Bright regions reach chroma 6.32 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 48.7% of pixels sit beyond C*2 and 15.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 15.7% of the frame. Hue stays consistent from shadows to highlights.
+  Notes: Hue variation stays tight (≈7.7°), consistent with a single tint. Bright regions reach chroma 6.32 and the 99th percentile sits near 4.47, which looks clearly coloured. Around 48.7% of pixels sit beyond C*2 and 15.7% exceed C*4, so the cast touches a noticeable portion of the frame. Largest C*4 cluster covers 15.7% of the frame. Hue stays consistent from shadows to highlights. Two-peak analysis shows Δh=179.4° with secondary mass=0.0%.
   Tones: dominant tone ≈ aqua; other tones: aqua, red
   Reason: Toned monochrome with a dominant aqua tint; hue variation stays within the relaxed limit. Overall tint strength is obvious across the frame. Multiple hue clusters detected—confirm the toning is intentional.
 
