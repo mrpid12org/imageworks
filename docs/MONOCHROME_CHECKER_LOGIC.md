@@ -1,7 +1,5 @@
 # Monochrome Checker Logic: A Decision Tree
 
-# Monochrome Checker Logic: A Decision Tree
-
 ```mermaid
 graph TD
     subgraph "Step 1: Neutral Check"
@@ -13,64 +11,51 @@ graph TD
     end
 
     subgraph "Step 3: Toned Pass Check"
-        # Monochrome Checker Logic: A Decision Tree
+        C{"Valid single tone?<br>(hue_std <= 10° AND passes two-peak check)"};
+    end
 
-        ```mermaid
-        graph TD
-            subgraph "Step 1: Neutral Check"
-                A{"Is image neutral?<br>(Chroma-99th <= 2.0)"};
-            end
+    subgraph "Step 4: Query/Borderline Check"
+        D{"Borderline case?<br>(hue_std 10-14° OR borderline split-tone)"};
+    end
 
-            subgraph "Step 2: Hard-Fail Check"
-                B{"Obvious widespread color?<br>(Large footprint AND high hue spread)"};
-            end
+    subgraph "Step 5: Final Failure Analysis"
+        E{"Clear split-tone?<br>(Distant peaks AND significant mass)"};
+    end
 
-            subgraph "Step 3: Toned Pass Check"
-                C{"Valid single tone?<br>(hue_std <= 10° AND passes two-peak check)"};
-            end
+    subgraph "Verdicts"
+        direction LR
+        P1[PASS - Neutral];
+        P2[PASS - Toned];
+        Q[PASS - Query];
+        F1[FAIL - Color Present];
+        F2[FAIL - Split-Toning Suspected];
+    end
 
-            subgraph "Step 4: Query/Borderline Check"
-                D{"Borderline case?<br>(hue_std 10-14° OR borderline split-tone)"};
-            end
+    A -- No --> B;
+    A -- Yes --> P1;
 
-            subgraph "Step 5: Final Failure Analysis"
-                E{"Clear split-tone?<br>(Distant peaks AND significant mass)"};
-            end
+    B -- Yes --> F1;
+    B -- No --> C;
 
-            subgraph "Verdicts"
-                direction LR
-                P1[PASS - Neutral];
-                P2[PASS - Toned];
-                Q[PASS - Query];
-                F1[FAIL - Color Present];
-                F2[FAIL - Split-Toning Suspected];
-            end
+    C -- Yes --> P2;
+    C -- No --> D;
 
-            A -- No --> B;
-            A -- Yes --> P1;
+    D -- Yes --> Q;
+    D -- No --> E;
 
-            B -- Yes --> F1;
-            B -- No --> C;
+    E -- Yes --> F2;
+    E -- No --> F1;
 
-            C -- Yes --> P2;
-            C -- No --> D;
+    classDef check fill:#fff,stroke:#333,stroke-width:2px,color:#333;
+    classDef verdict_pass fill:#dfd,stroke:#3a3,stroke-width:2px;
+    classDef verdict_query fill:#fdf,stroke:#a3a,stroke-width:2px;
+    classDef verdict_fail fill:#fdd,stroke:#a33,stroke-width:2px;
 
-            D -- Yes --> Q;
-            D -- No --> E;
-
-            E -- Yes --> F2;
-            E -- No --> F1;
-
-            classDef check fill:#fff,stroke:#333,stroke-width:2px,color:#333;
-            classDef verdict_pass fill:#dfd,stroke:#3a3,stroke-width:2px;
-            classDef verdict_query fill:#fdf,stroke:#a3a,stroke-width:2px;
-            classDef verdict_fail fill:#fdd,stroke:#a33,stroke-width:2px;
-
-            class A,B,C,D,E check;
-            class P1,P2 verdict_pass;
-            class Q verdict_query;
-            class F1,F2 verdict_fail;
-        ```
+    class A,B,C,D,E check;
+    class P1,P2 verdict_pass;
+    class Q verdict_query;
+    class F1,F2 verdict_fail;
+```
         This document outlines the step-by-step logic the Imageworks Competition Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
 
         Guiding Principles
