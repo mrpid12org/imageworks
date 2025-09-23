@@ -1,5 +1,21 @@
 # Monochrome Checker Logic: A Decision Tree
 
+*For a detailed technical mapping of the code logic, see: [Monochrome Checker Decision Tree](MONOCHROME_CHECKER_DECISION_TREE.md)*
+---
+
+## Glossary
+
+- **Chroma**: The intensity or purity of color. In this context, low chroma means nearly neutral (gray), high chroma means strong color.
+- **Hue**: The attribute of a color that lets us classify it as red, yellow, green, etc. Hue is measured in degrees around a color wheel.
+- **Split-tone**: An image with two distinct color tones, often in highlights and shadows.
+- **Toned**: An image with a single, consistent color tint (e.g., sepia).
+- **Neutral**: An image with no discernible color tint—pure black, white, and gray.
+- **Query**: A result where the checker is unsure and flags the image for human review.
+- **Override**: A special rule that allows an image to pass or be flagged for review even if it would otherwise fail, based on specific characteristics (e.g., strong but uniform tone, stage lighting).
+- **Degrade**: The process of downgrading a fail to a pass or query if the color presence is minor or subtle.
+
+---
+
 ```mermaid
 graph TD
     subgraph "Step 1: Neutral Check"
@@ -72,7 +88,23 @@ For the most accurate analysis, the checker needs to understand the colors of an
 -   **Profiled Images:** If an image has an embedded color profile (e.g., Adobe RGB, ProPhoto RGB), the tool uses this profile to correctly convert the image's colors to sRGB before analysis. This is the ideal workflow.
 -   **Untagged Images:** If an image has **no** embedded color profile, the checker has no choice but to **assume** it uses a standard sRGB-like color space.
 
+
 **Why this matters:** If you provide an untagged image that was saved in a wide-gamut color space (like Adobe RGB), its colors will appear more saturated and may be misinterpreted by the checker. This can sometimes cause a subtly toned monochrome image to be flagged as having more color than it actually does. For best results, ensure your images are saved with their ICC color profiles embedded.
+
+---
+
+### Interpreting the Results: Judging the Output, Not the Method
+
+A critical distinction for judges is that the checker analyzes the final rendered pixels of an image, not the photographer's editing process.
+
+From pixels alone, we can reliably tell whether the resulting image reads as (i) neutral, (ii) single-toned, or (iii) split-toned. What we cannot do with certainty is prove whether the photographer applied a "split-toning" tool in their software.
+
+#### Many-to-One Mapping
+Different editing pipelines can lead to the same final result. A split-toning tool with a strong balance pushed to one side can create a single-toned output. Conversely, a single tint combined with complex curve adjustments can mimic a weak split-tone.
+
+**Competition Rules:** Salon rules (FIAP/PSA) are concerned with the final image. If the output exhibits a single, uniform tone, it should pass as monochrome, regardless of the tools used to create it. If the output shows two or more distinct tones, it should fail.
+
+The checker is aligned with this principle: it judges the result, not the artist’s intent or method.
 
 ---
 
