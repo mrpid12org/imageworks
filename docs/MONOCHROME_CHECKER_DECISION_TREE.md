@@ -1,75 +1,79 @@
-# Monochrome Checker Decision Tree
+# Monochrome Checker Decision Tree (Technical Reference, v3)
 
-This document outlines the decision-making logic used by the monochrome checker to classify images as "pass", "pass with query", or "fail" for monochrome compliance. The process involves a series of checks, starting with neutrality, then evaluating toning, and finally identifying various failure modes.
-
-## Key Concepts and Criteria Explained
-
-*   **`neutral_chroma`**: A threshold (default 2.0 C*) below which pixels are considered essentially neutral.
-*   **`toned_pass_deg`**: The maximum circular hue standard deviation (σ) in degrees (default 10.0°) for an image to be considered a clear "pass" as a toned monochrome.
-*   **`toned_query_deg`**: The maximum circular hue standard deviation (σ) in degrees (default 14.0°) for an image to be considered "pass with query" as a toned monochrome.
-*   **`force_fail`**: A flag indicating if the image has strong, widespread color that should generally lead to a failure, unless overridden by specific conditions.
-*   **`uniform_strong_tone`**: An override for images with exceptionally strong but uniform tones, allowing them to pass if the hue spread remains narrow and the image stays single-hued.
-    *   *Criteria:* `hue_std <= LAB_STRONG_TONE_HUE_STD` (14.0°), `hue_concentration (R) >= LAB_STRONG_TONE_CONCENTRATION` (0.85), `primary_share >= LAB_STRONG_TONE_PRIMARY_SHARE` (0.97), and `chroma_ratio4 >= 0.05`.
-*   **`single_hue_stage_lit`**: An override for images with a large neutral shadow region but a single-hue subject, often seen in stage lighting.
-    *   *Criteria:* `shadow_share >= LAB_SHADOW_QUERY_SHARE` (0.55), `subject_share >= 0.05`, `hue_std <= LAB_SHADOW_QUERY_HUE_STD` (24.0°), `primary_share >= LAB_SHADOW_QUERY_PRIMARY_SHARE` (0.95), and `chroma_ratio4 >= 0.05`.
-*   **`merge_ok`**: A condition indicating that any detected secondary hue peaks are either non-existent, very close to the primary peak (`<= MERGE_DEG` = 12.0°), or have insignificant mass (`< MINOR_MASS` = 0.10).
-*   **`fail_two_peak`**: A condition indicating that two distinct hue peaks were found, separated by a significant angular distance (`>= FAIL_DEG` = 15.0°) and with a substantial secondary mass (`>= MINOR_MASS` = 0.10).
-*   **`hilo_split`**: A condition indicating that the circular hue difference between highlights and shadows (`delta_h_highs_shadows_deg`) is significant (`>= HILO_SPLIT_DEG` = 45.0°).
-*   **`R` (Hue Concentration)**: Resultant length of the circular mean of hues. A value closer to 1.0 indicates a tighter concentration of hues.
-*   **`R2` (Hue Bimodality)**: Resultant length of the circular mean of doubled hues. A high value (e.g., > 0.6) can indicate bimodality, suggesting two distinct hue clusters.
-*   **`cf` (Colorfulness)**: Hasler–Süsstrunk colorfulness metric. A higher value indicates a more colorful image.
-*   **`chroma_p95`**: 95th percentile of chroma values.
-*   **`chroma_med`**: Median chroma value.
-*   **`small_footprint`, `moderate_footprint`, `soft_large_footprint`, `subtle_cast`**: These describe the extent and intensity of color presence in the image, used for degrading a potential "fail" to a "pass" or "query".
-*   **`large_drift`**: Indicates a significant shift in hue across the tonal range (`abs(hue_drift_deg_per_l) > 120.0`).
+*For a more user-friendly summary, see: [Monochrome Checker Logic](MONOCHROME_CHECKER_LOGIC.md)*
 
 ---
 
-## Decision Flow
+## Purpose and Audience
+
+This document is a detailed, technical mapping of the monochrome checker’s logic, written in plain English but closely following the code. It is intended for developers, advanced users, and anyone debugging or extending the checker. Variable names and thresholds are included to help link the explanation to the Python codebase.
+
+---
+
+## Key Concepts, Variables, and Thresholds
+
+The checker's logic relies on a set of specific metrics and configurable thresholds.
+
+| Variable/Concept         | Default   | Description                                                                 |
+|-------------------------|-----------|-----------------------------------------------------------------------------|
+| neutral_chroma          | 2.0 C*    | A chroma threshold below which pixels are considered essentially neutral.    |
+| toned_pass_deg          | 10.0°     | Max circular hue std-dev (σ) for clear PASS as toned monochrome.             |
+| toned_query_deg         | 14.0°     | Max hue std-dev (σ) for PASS WITH QUERY.                                    |
+| force_fail              | Flag      | Indicates strong, widespread color that should generally fail, unless overridden. |
+| uniform_strong_tone     | Override  | Exception for very strong but highly uniform tones.                          |
+| single_hue_stage_lit    | Override  | Exception for large neutral shadow region but single-hue subject.            |
+| merge_ok                | Condition | True if secondary hue peaks are close (Δh ≤ 12°) or have insignificant mass (<10%). |
+| fail_two_peak           | Condition | True if two distinct hue peaks are found, separated by Δh ≥ 15° and secondary mass ≥10%. |
+| hilo_split              | Condition | True if hue difference between highlights and shadows is significant (Δh ≥ 45°). |
+| R (Hue Concentration)   | Metric    | Resultant length of circular mean of hues (near 1.0 = tight concentration).  |
+| R2 (Hue Bimodality)     | Metric    | Resultant length of doubled hues (high >0.6 = two clusters).                 |
+| large_drift             | Condition | True if monotonic hue shift across tonal range (abs(hue_drift) > 120°).      |
+
+---
+
+## Decision Flow Diagram
+
 
 The checker evaluates an image through the following sequence of conditions. The first condition met determines the verdict.
 
 ```mermaid
 graph TD
-    A[Start: Check Monochrome] --> B{Is chroma_p99 below threshold?};
-    B -- Yes --> C[Verdict: PASS - Neutral Monochrome];
-    B -- No --> D{Two peaks and small highlight-shadow difference?};
-    D -- Yes --> E{Is hue_std above toned pass threshold?};
-    E -- Yes --> F[Verdict: PASS WITH QUERY - Toned - Toning collapsed, but wider hue variation];
-    E -- No --> G[Verdict: PASS - Toned - Toning collapsed to single hue family];
-    D -- No --> H{Force fail and stage-lit?};
-    H -- Yes --> I[Verdict: PASS WITH QUERY - Toned - Stage-lit override];
-    H -- No --> J{Uniform strong tone and hue_std above pass threshold?};
-    J -- Yes --> K[Verdict: PASS - Toned - Uniform strong tone override];
-    J -- No --> L{No force fail, hue_std below pass threshold, merge ok?};
-    L -- Yes --> M[Verdict: PASS - Toned - Refined Pass Condition];
-    L -- No --> N{No force fail, toned query or minor second peak?};
-    N -- Yes --> O[Verdict: PASS WITH QUERY - Toned - Refined Query Condition];
-    N -- No --> P{Default Fail Conditions};
+    A[Start] --> B["Step 1: Neutral Check<br>Is chroma_p99 le neutral_chroma?"];
+    B -- Yes --> C[Verdict: PASS - Neutral];
+    B -- No --> D["Step 2: Toning Collapse Check<br>Is fail_two_peak AND delta_h lt 45?"];
+    D -- Yes --> E{Is hue_std gt toned_pass_deg?};
+    E -- Yes --> F[Verdict: PASS WITH QUERY - Toned];
+    E -- No --> G[Verdict: PASS - Toned];
+    D -- No --> H["Step 3: Stage-Lit Override<br>Is force_fail AND single_hue_stage_lit?"];
+    H -- Yes --> I[Verdict: PASS WITH QUERY - Toned];
+    H -- No --> J["Step 4: Uniform Strong Tone Override<br>Is uniform_strong_tone AND hue_std gt toned_pass_deg?"];
+    J -- Yes --> K[Verdict: PASS - Toned];
+    J -- No --> L["Step 5: Refined Pass Condition<br>Is NOT force_fail AND hue_std le toned_pass_deg AND merge_ok?"];
+    L -- Yes --> M[Verdict: PASS - Toned];
+    L -- No --> N["Step 6: Refined Query Condition<br>Is NOT force_fail AND borderline?"];
+    N -- Yes --> O[Verdict: PASS WITH QUERY - Toned];
+    N -- No --> P["Step 7: Default Fail Conditions"];
 
-    P --> Q{Split-tone, hilo split, or bimodal?};
-    Q -- Yes --> R[Failure Reason: split_toning_suspected];
-    Q -- No --> S{Colorful or high chroma?};
-    S -- Yes --> T[Failure Reason: multi_color];
-    S -- No --> U{Low median chroma and low hue_std?};
-    U -- Yes --> V[Failure Reason: near_neutral_color_cast];
-    U -- No --> W[Failure Reason: color_present];
+    P --> Q{Is fail_two_peak OR hilo_split OR R lt 0.4 AND R2 gt 0.6?};
+    Q -- Yes --> R[Reason: split_toning_suspected];
+    Q -- No --> S{Is cf ge 25.0 OR chroma_p95 gt neutral_chroma plus 8.0?};
+    S -- Yes --> T[Reason: multi_color];
+    S -- No --> U{Is chroma_med lt neutral_chroma times 0.75 AND hue_std lt 30.0?};
+    U -- Yes --> V[Reason: near_neutral_color_cast];
+    U -- No --> W[Reason: color_present];
 
-    R --> X{Not force fail?};
+    R --> X["Step 8: Degrade Fail<br>Is NOT force_fail?"];
     T --> X;
     V --> X;
     W --> X;
 
-    X -- Yes --> Y{Degrade to PASS?};
-    Y -- Yes --> Z[Verdict: PASS - Toned - Degraded from Fail];
-    Y -- No --> AA{Degrade to PASS WITH QUERY?};
-    AA -- Yes --> BB[Verdict: PASS WITH QUERY - Toned - Degraded from Fail];
-    AA -- No --> CC[Verdict: FAIL - Not Monochrome - Final Fail];
+    X -- Yes --> Y{Can degrade to PASS?};
+    Y -- Yes --> Z[Verdict: PASS - Toned];
+    Y -- No --> AA{Can degrade to PASS WITH QUERY?};
+    AA -- Yes --> BB[Verdict: PASS WITH QUERY - Toned];
+    AA -- No --> CC["Step 9: Final Fail<br>FAIL - Not Monochrome"];
     X -- No --> CC;
 
-    CC --> End;
-    Z --> End;
-    BB --> End;
     C --> End;
     F --> End;
     G --> End;
@@ -77,84 +81,129 @@ graph TD
     K --> End;
     M --> End;
     O --> End;
+    Z --> End;
+    BB --> End;
+    CC --> End;
 ```
 
 ---
 
-## Detailed Explanation of Each Step:
+## Detailed Explanation of Each Step
 
-### 1. Neutral Monochrome Check
-*   **Purpose**: To quickly identify images that are truly grayscale with negligible color.
-*   **Criteria**: `chroma_p99 <= neutral_chroma`
-    *   `chroma_p99`: The 99th percentile of chroma values across the image. This means 99% of the pixels have a chroma value less than or equal to this number.
-    *   `neutral_chroma`: A configurable threshold (default 2.0). If almost all pixels have very low chroma, the image is considered neutral.
-*   **Outcome**: `PASS (Neutral Monochrome)`.
+### 1. Neutral Monochrome Check (Diagram Nodes B, C)
+**Purpose:** Quickly identify images that are truly grayscale with negligible color.
 
-### 2. Toning Collapse Check
-*   **Purpose**: To reclassify images that might initially appear split-toned (due to two distinct hue peaks) but where the highlights and shadows actually fall within the same general hue family. This prevents false positives for split-toning.
-*   **Criteria**: `fail_two_peak` is true AND `delta_h_highs_shadows_deg < 45.0`
-    *   `fail_two_peak`: Indicates that the two most dominant hue peaks are significantly separated (`>= 15.0°`) and both have substantial mass (`>= 10%`).
-    *   `delta_h_highs_shadows_deg`: The circular hue difference between the mean hue of the brightest 25% of pixels (highlights) and the darkest 25% of pixels (shadows).
-    *   `45.0°`: A threshold. If the hue difference between highlights and shadows is less than 45 degrees, it suggests they are part of the same broad hue family, even if two distinct peaks exist.
-*   **Outcome**:
-    *   If `hue_std > toned_pass_deg`: `PASS WITH QUERY (Toned)`. The toning collapsed, but the overall hue variation is still wider than a clear pass.
-    *   Otherwise: `PASS (Toned)`. The toning collapsed to a single hue family.
+**Criteria:** `chroma_p99 <= neutral_chroma`
 
-### 3. Stage-Lit Override
-*   **Purpose**: To correctly classify images that have a strong color element in the subject but a largely neutral background, common in stage photography.
-*   **Criteria**: `force_fail` is true AND `single_hue_stage_lit` is true
-    *   `force_fail`: A flag set if the image has strong, widespread color that would normally cause a failure.
-    *   `single_hue_stage_lit`: Indicates a large neutral-shadow region (e.g., >55% of pixels with low lightness and chroma) with a subject that has a single, dominant hue.
-*   **Outcome**: `PASS WITH QUERY (Toned)`.
+The 99th percentile of chroma values across the image is below the neutral threshold (default 2.0). This means 99% of the pixels have a chroma value less than or equal to this number.
 
-### 4. Uniform Strong Tone Override
-*   **Purpose**: To allow images with a very strong but consistent single tone (e.g., a deeply sepia-toned image) to pass, even if their overall hue spread is slightly wider than the standard pass threshold.
-*   **Criteria**: `uniform_strong_tone` is true AND `hue_std > toned_pass_deg`
-    *   `uniform_strong_tone`: Indicates a narrow hue spread (`<= 14.0°`), high hue concentration (`R >= 0.85`), a very dominant primary hue (`primary_share >= 0.97`), and a significant presence of strong color (`chroma_ratio4 >= 0.05`).
-    *   `hue_std > toned_pass_deg`: The overall hue spread is wider than the standard pass threshold.
-*   **Outcome**: `PASS (Toned)`.
+**Outcome:** PASS (Neutral Monochrome).
 
-### 5. Refined Pass Condition
-*   **Purpose**: The primary condition for an image to be considered a clear "pass" as a toned monochrome.
-*   **Criteria**: NOT `force_fail` AND `hue_std <= toned_pass_deg` AND `merge_ok`
-    *   `force_fail`: Must not be triggered.
-    *   `hue_std <= toned_pass_deg`: The circular hue standard deviation is within the tight "pass" limit (default 10.0°).
-    *   `merge_ok`: No significant split-toning is detected (either no second peak, or it's too close or too weak).
-*   **Outcome**: `PASS (Toned)`.
+### 2. Toning Collapse Check (Diagram Nodes D, E, F, G)
+**Purpose:** Reclassify images that might initially appear split-toned (due to two distinct hue peaks) but where the highlights and shadows actually fall within the same general hue family. This prevents false positives for split-toning.
 
-### 6. Refined Query Condition
-*   **Purpose**: To flag images for review that are borderline toned monochromes.
-*   **Criteria**: NOT `force_fail` AND (`hue_std <= toned_query_deg` OR (`peak_delta_deg` is not None AND `12.0 < peak_delta_deg <= 18.0` AND `second_mass < 0.15`))
-    *   `force_fail`: Must not be triggered.
-    *   `hue_std <= toned_query_deg`: The circular hue standard deviation is within the "query" limit (default 14.0°).
-    *   OR: There is a detected second hue peak that is moderately separated (`12.0° < peak_delta_deg <= 18.0°`) but has a relatively small mass (`second_mass < 0.15`). This catches subtle secondary tones that might warrant a human review.
-*   **Outcome**: `PASS WITH QUERY (Toned)`.
+**Criteria:** `fail_two_peak` is true AND `delta_h_highs_shadows_deg < 45.0`
 
-### 7. Default Fail Conditions
-*   **Purpose**: If none of the above conditions result in a pass or query, the image is considered a failure. This section determines the specific reason for failure.
-*   **Conditions (evaluated in order):**
-    *   **Split-Toning Suspected**: `fail_two_peak` is true OR `hilo_split` is true OR (`R < 0.4` AND `R2 > 0.6`).
-        *   *Explanation*: Indicates clear evidence of two distinct hue families, either from peak analysis, highlight/shadow comparison, or a legacy bimodality metric.
-        *   *Failure Reason*: `split_toning_suspected`.
-    *   **Multi-Color**: `cf >= 25.0` OR `chroma_p95 > neutral_chroma + 8.0`.
-        *   *Explanation*: The image is generally too colorful or has strong, widespread color.
-        *   *Failure Reason*: `multi_color`.
-    *   **Near-Neutral Color Cast**: `chroma_med < neutral_chroma * 0.75` AND `hue_std < 30.0`.
-        *   *Explanation*: A very subtle color cast is present, but it's not strong enough to be considered intentional toning.
-        *   *Failure Reason*: `near_neutral_color_cast`.
-    *   **Color Present (General)**: Any other case where color is detected but doesn't fit other categories.
-        *   *Failure Reason*: `color_present`.
+The image has two dominant hue peaks that are significantly separated (>= 15.0°) and both have substantial mass (>= 10%).
 
-### 8. Degrade to Pass/Query (from an initial Fail)
-*   **Purpose**: To re-evaluate certain "fail" conditions and potentially downgrade them to a "pass" or "pass with query" if the color presence is minor or subtle, especially if `force_fail` was not initially triggered.
-*   **Criteria (only if NOT `force_fail`):**
-    *   **Degrade to PASS**: If (`small_footprint` OR (`soft_large_footprint` AND `chroma_ratio4 < 0.12`)) AND (`large_drift` OR `hue_std < 45.0`).
-        *   *Explanation*: The color footprint is very small or soft, and either there's significant hue drift (which might be an artistic choice) or the hue spread is still relatively tight.
-        *   *Outcome*: `PASS (Toned)`.
-    *   **Degrade to PASS WITH QUERY**: If `moderate_footprint` OR `subtle_cast` OR `soft_large_footprint` OR (`large_drift` AND `chroma_ratio4 < 0.05`).
-        *   *Explanation*: The color footprint is moderate, or there's a subtle cast, or a soft large footprint, or large drift with a small strong color footprint. These are borderline cases that warrant review.
-        *   *Outcome*: `PASS WITH QUERY (Toned)`.
+BUT, the hue difference between the highlights and shadows is less than 45°, suggesting they are part of the same broad hue family.
 
-### 9. Final Fail
-*   **Purpose**: If an image still remains a "fail" after all degradation checks, it is definitively classified as not monochrome.
-*   **Outcome**: `FAIL (Not Monochrome)`.
+**Outcome:**
+
+- If `hue_std > toned_pass_deg`: PASS WITH QUERY (Toned). The toning collapsed, but the overall hue variation is still wider than a clear pass.
+- Otherwise: PASS (Toned). The toning collapsed to a single hue family.
+
+### 3. Stage-Lit Override (Diagram Nodes H, I)
+**Purpose:** Correctly classify images that have a strong color element in the subject but a largely neutral background, common in stage photography.
+
+**Criteria:** `force_fail` is true AND `single_hue_stage_lit` is true
+
+The image has strong, widespread color that would normally fail, but it also has a large neutral-shadow region (>55%) with a subject that has a single, dominant hue.
+
+**Outcome:** PASS WITH QUERY (Toned).
+
+### 4. Uniform Strong Tone Override (Diagram Nodes J, K)
+**Purpose:** Allow images with a very strong but consistent single tone (e.g., a deeply sepia-toned image) to pass, even if their overall hue spread is slightly wider than the standard pass threshold.
+
+**Criteria:** `uniform_strong_tone` is true AND `hue_std > toned_pass_deg`
+
+The image has a narrow hue spread (<= 14.0°), high hue concentration (R >= 0.85), a very dominant primary hue (>= 97%), and a significant presence of strong color.
+
+**Outcome:** PASS (Toned).
+
+### 5. Refined Pass Condition (Diagram Nodes L, M)
+**Purpose:** The primary condition for an image to be considered a clear "pass" as a toned monochrome.
+
+**Criteria:** NOT `force_fail` AND `hue_std <= toned_pass_deg` AND `merge_ok`
+
+The hue standard deviation is within the tight "pass" limit (default 10.0°).
+
+No significant split-toning is detected (either no second peak, or it's too close or too weak).
+
+**Outcome:** PASS (Toned).
+
+### 6. Refined Query Condition (Diagram Nodes N, O)
+**Purpose:** Flag images for review that are borderline toned monochromes.
+
+**Criteria:** NOT `force_fail` AND (`hue_std <= toned_query_deg` OR a moderately separated second peak with small mass exists).
+
+The hue standard deviation is within the "query" limit (default 14.0°).
+
+OR: There is a detected second hue peak that is moderately separated (12.0° < Δh <= 18.0°) but has a relatively small mass (< 15%).
+
+**Outcome:** PASS WITH QUERY (Toned).
+
+### 7. Default Fail Conditions (Diagram Nodes P-W)
+**Purpose:** If no pass/query condition is met, this determines the specific reason for failure.
+
+**Conditions (evaluated in order):**
+
+- **Split-Toning Suspected:** `fail_two_peak` is true OR `hilo_split` is true OR (`R < 0.4` AND `R2 > 0.6`).
+- **Multi-Color:** colorfulness >= 25.0 OR chroma_p95 > neutral_chroma + 8.0.
+- **Near-Neutral Color Cast:** chroma_med < neutral_chroma * 0.75 AND hue_std < 30.0.
+- **Color Present (General):** The default if no other reason fits.
+
+### 8. Degrade to Pass/Query (from an initial Fail) (Diagram Nodes X, Y, Z, AA, BB)
+**Purpose:** Re-evaluate some "fail" verdicts and downgrade them if the color is minor or subtle.
+
+**Criteria (only if NOT force_fail):**
+
+- **Degrade to PASS:** If the color footprint is very small and the hue spread is contained.
+- **Degrade to PASS WITH QUERY:** If the color footprint is moderate or subtle.
+
+**Outcome:** Can change a FAIL to PASS (Toned) or PASS WITH QUERY (Toned).
+
+### 9. Final Fail (Diagram Node CC)
+**Purpose:** If an image still remains a "fail" after all degradation checks, it is definitively classified as not monochrome.
+
+**Outcome:** FAIL (Not Monochrome).
+
+---
+
+## Mapping to Code
+
+- Main logic: `check_monochrome` and `_check_monochrome_lab` in `src/imageworks/libs/vision/mono.py`
+- CLI and config: `src/imageworks/apps/competition_checker/cli/mono.py`
+- Constants: Defined at the top of `mono.py`
+- Output structure: `MonoResult` dataclass
+
+---
+
+## Example Output Mapping
+
+A typical result dictionary (see `_result_to_json` in `cli/mono.py`):
+
+```json
+{
+	"verdict": "pass_with_query",
+	"mode": "toned",
+	"hue_std_deg": 13.2,
+	"dominant_color": "orange",
+	"failure_reason": null,
+	...
+}
+```
+
+`verdict` and `mode` map to the main decision outcome.
+
+`hue_std_deg`, `dominant_color`, and other metrics are used in the logic steps above.
