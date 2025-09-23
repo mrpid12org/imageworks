@@ -427,8 +427,9 @@ def _generate_heatmap_image(
             overlay = base * (1 - alpha) + heatmap * alpha
             out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
         else:
+            hue = (np.degrees(np.arctan2(b, a)) + 360.0) % 360.0
             hsv_vis = np.zeros((h, w, 3), dtype=np.uint8)
-            hsv_vis[..., 0] = (H / 2.0).astype(np.uint8)
+            hsv_vis[..., 0] = (hue / 2.0).astype(np.uint8)
             hsv_vis[..., 1] = (np.clip(norm, 0, 1) * 255).astype(np.uint8)
             hsv_vis[..., 2] = (np.clip(norm * 1.2, 0, 1) * 255).astype(np.uint8)
             color = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
@@ -661,6 +662,9 @@ def check(
                 "split_tone_description",
                 "dominant_color",
                 "hue_sigma_deg",
+                "hue_peak_delta_deg",
+                "hue_second_mass",
+                "delta_h_highs_shadows_deg",
                 "chroma_p99",
                 "chroma_max",
                 "pct_gt_c2",
@@ -668,12 +672,6 @@ def check(
                 "largest_cluster_pct_gt_c2",
                 "largest_cluster_pct_gt_c4",
                 "hue_drift_deg_per_l",
-                "hue_peak_delta_deg",
-                "hue_second_mass",
-                "hue_weighting",
-                "mean_hue_highs_deg",
-                "mean_hue_shadows_deg",
-                "delta_h_highs_shadows_deg",
                 "loader_status",
                 "source_profile",
                 "scale_factor",
@@ -794,21 +792,19 @@ def check(
                 if not isinstance(res_dict, dict):
                     continue
                 hue_sigma = res_dict.get("hue_std_deg")
+                hue_peak_delta = res_dict.get("hue_peak_delta_deg")
+                hue_second_mass = res_dict.get("hue_second_mass")
+                hilo_delta = res_dict.get("delta_h_highs_shadows_deg")
                 chroma_p99 = res_dict.get("chroma_p99")
                 chroma_max = res_dict.get("chroma_max")
-                hue_drift = res_dict.get("hue_drift_deg_per_l")
-                scale_factor = res_dict.get("scale_factor")
-                confidence = res_dict.get("confidence")
                 chroma_ratio_2 = res_dict.get("chroma_ratio_2")
                 chroma_ratio_4 = res_dict.get("chroma_ratio_4")
                 cluster_max_2 = res_dict.get("chroma_cluster_max_2")
                 cluster_max_4 = res_dict.get("chroma_cluster_max_4")
-                hue_peak_delta_deg = res_dict.get("hue_peak_delta_deg")
-                hue_second_mass = res_dict.get("hue_second_mass")
-                hue_weighting = res_dict.get("hue_weighting")
-                mean_hue_highs_deg = res_dict.get("mean_hue_highs_deg")
-                mean_hue_shadows_deg = res_dict.get("mean_hue_shadows_deg")
-                delta_h_highs_shadows_deg = res_dict.get("delta_h_highs_shadows_deg")
+                hue_drift = res_dict.get("hue_drift_deg_per_l")
+                scale_factor = res_dict.get("scale_factor")
+                confidence = res_dict.get("confidence")
+
                 csv_writer.writerow(
                     [
                         title,
@@ -826,6 +822,21 @@ def check(
                         (
                             f"{hue_sigma:.2f}"
                             if isinstance(hue_sigma, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_peak_delta:.2f}"
+                            if isinstance(hue_peak_delta, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_second_mass:.4f}"
+                            if isinstance(hue_second_mass, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hilo_delta:.2f}"
+                            if isinstance(hilo_delta, (float, int))
                             else ""
                         ),
                         (
@@ -861,32 +872,6 @@ def check(
                         (
                             f"{hue_drift:.2f}"
                             if isinstance(hue_drift, (float, int))
-                            else ""
-                        ),
-                        (
-                            f"{hue_peak_delta_deg:.2f}"
-                            if isinstance(hue_peak_delta_deg, (float, int))
-                            else ""
-                        ),
-                        (
-                            f"{hue_second_mass:.4f}"
-                            if isinstance(hue_second_mass, (float, int))
-                            else ""
-                        ),
-                        hue_weighting or "",
-                        (
-                            f"{mean_hue_highs_deg:.2f}"
-                            if isinstance(mean_hue_highs_deg, (float, int))
-                            else ""
-                        ),
-                        (
-                            f"{mean_hue_shadows_deg:.2f}"
-                            if isinstance(mean_hue_shadows_deg, (float, int))
-                            else ""
-                        ),
-                        (
-                            f"{delta_h_highs_shadows_deg:.2f}"
-                            if isinstance(delta_h_highs_shadows_deg, (float, int))
                             else ""
                         ),
                         res_dict.get("loader_status", ""),

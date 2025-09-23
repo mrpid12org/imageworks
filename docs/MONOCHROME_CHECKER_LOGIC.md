@@ -1,5 +1,7 @@
 # Monochrome Checker Logic: A Decision Tree
 
+# Monochrome Checker Logic: A Decision Tree
+
 ```mermaid
 graph TD
     subgraph "Step 1: Neutral Check"
@@ -55,7 +57,6 @@ graph TD
     class P1,P2 verdict_pass;
     class Q verdict_query;
     class F1,F2 verdict_fail;
-```
 
 This document outlines the step-by-step logic the Imageworks Competition Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
 
