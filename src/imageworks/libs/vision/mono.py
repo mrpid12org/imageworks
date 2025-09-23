@@ -108,14 +108,29 @@ class MonoResult:
     scale_factor: float = 1.0
     hue_drift_deg_per_l: Optional[float] = None
     confidence: Optional[str] = None
+    # New diagnostics for split-tone gating
+    hue_peak_delta_deg: Optional[float] = None  # Δh between top 2 peaks (deg)
+    hue_second_mass: Optional[float] = None  # mass of 2nd peak (0–1, chroma-weighted)
+    mean_hue_highs_deg: Optional[float] = None  # circular mean hue in top L* quartile
+    mean_hue_shadows_deg: Optional[float] = (
+        None  # circular mean hue in bottom L* quartile
+    )
+    delta_h_highs_shadows_deg: Optional[float] = (
+        None  # circular Δh between highs & shadows
+    )
+    hue_weighting: Optional[str] = None  # e.g., "chroma"
     # Refinement B: explicit two-peak analysis fields for auditability
-    hue_peak_delta_deg: Optional[float] = None
-    hue_second_mass: Optional[float] = None
-    hue_weighting: Optional[str] = None
-    # New: Lightness-based hue analysis for split-tone interpretation
-    mean_hue_highs_deg: Optional[float] = None
-    mean_hue_shadows_deg: Optional[float] = None
-    delta_hue_highs_shadows_deg: Optional[float] = None
+    hue_weighting: Optional[str] = None  # e.g., "chroma"
+    # New diagnostics for split-tone gating
+    hue_peak_delta_deg: Optional[float] = None  # Δh between top 2 peaks (deg)
+    hue_second_mass: Optional[float] = None  # mass of 2nd peak (0–1, chroma-weighted)
+    mean_hue_highs_deg: Optional[float] = None  # circular mean hue in top L* quartile
+    mean_hue_shadows_deg: Optional[float] = (
+        None  # circular mean hue in bottom L* quartile
+    )
+    delta_h_highs_shadows_deg: Optional[float] = (
+        None  # circular Δh between highs & shadows
+    )
 
 
 @dataclass
@@ -941,24 +956,20 @@ def _check_monochrome_lab(
 
     # REFINEMENT A: Use chroma-weighted hue statistics for more robust results
     hues = hue_deg_all[mask]
-    weights = chroma[mask]  # Use raw chroma for weighting
-
-    # Weighted circular statistics
+    hue_drift = _hue_drift_deg_per_l(L, hue_deg_all, mask)
+    # --- chroma-weighted circular stats ---
+    weights = chroma_norm[mask].astype(np.float32)  # in [0,1]
+    wsum = float(np.sum(weights)) or 1.0
     rad = np.deg2rad(hues)
-    w = weights.astype(np.float32)
-    w_sum = float(np.sum(w)) or 1.0
-    c = float(np.sum(np.cos(rad) * w) / w_sum)
-    s_ = float(np.sum(np.sin(rad) * w) / w_sum)
+    c = float(np.sum(np.cos(rad) * weights) / wsum) if hues.size else 1.0
+    s_ = float(np.sum(np.sin(rad) * weights) / wsum) if hues.size else 0.0
     R = float(np.hypot(c, s_))
-    # Handle R > 1 due to float precision
-    R = min(R, 1.0)
     hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
     mean_hue_deg = float((np.degrees(np.arctan2(s_, c)) + 360.0) % 360.0)
-
-    # Bimodality (doubled angles), also weighted
+    # bimodality (doubled angle), weighted
     rad2 = 2.0 * rad
-    c2 = float(np.sum(np.cos(rad2) * w) / w_sum)
-    s2 = float(np.sum(np.sin(rad2) * w) / w_sum)
+    c2 = float(np.sum(np.cos(rad2) * weights) / wsum) if hues.size else 1.0
+    s2 = float(np.sum(np.sin(rad2) * weights) / wsum) if hues.size else 0.0
     R2 = float(np.hypot(c2, s2))
 
     hue_drift = _hue_drift_deg_per_l(L, hue_deg_all, mask)
@@ -1000,7 +1011,51 @@ def _check_monochrome_lab(
         peak_hues = merged_hues
         peak_w = merged_weights
 
+    # --- post-merge two-peak separation & second mass ---
+    peak_delta_deg: Optional[float] = None
+    second_mass: float = 0.0
+    if peak_hues and peak_w and len(peak_hues) >= 2 and sum(peak_w) > 0:
+        order = np.argsort(peak_w)[::-1]
+        h1 = peak_hues[order[0]] % 360.0
+        h2 = peak_hues[order[1]] % 360.0
+        dh = abs((h1 - h2 + 180.0) % 360.0 - 180.0)
+        peak_delta_deg = float(dh)
+        total_w = float(sum(peak_w))
+        second_mass = float(peak_w[order[1]] / total_w)
     peak_names = [_name_color_from_hue(hh) or "unknown" for hh in peak_hues]
+
+    # --- highs vs shadows (L*) circular means & Δh ---
+    mean_hue_highs_deg: Optional[float] = None
+    mean_hue_shadows_deg: Optional[float] = None
+    delta_h_highs_shadows_deg: Optional[float] = None
+    if np.any(mask):
+        L_sel = L[mask]
+        q25, q75 = np.percentile(L_sel, [25, 75])
+        lows = L_sel <= q25
+        highs = L_sel >= q75
+        if np.any(lows):
+            rad_lo = np.deg2rad(hues[lows])
+            w_lo = weights[lows]
+            c_lo = float(np.sum(np.cos(rad_lo) * w_lo) / (float(np.sum(w_lo)) or 1.0))
+            s_lo = float(np.sum(np.sin(rad_lo) * w_lo) / (float(np.sum(w_lo)) or 1.0))
+            mean_hue_shadows_deg = float(
+                (np.degrees(np.arctan2(s_lo, c_lo)) + 360.0) % 360.0
+            )
+        if np.any(highs):
+            rad_hi = np.deg2rad(hues[highs])
+            w_hi = weights[highs]
+            c_hi = float(np.sum(np.cos(rad_hi) * w_hi) / (float(np.sum(w_hi)) or 1.0))
+            s_hi = float(np.sum(np.sin(rad_hi) * w_hi) / (float(np.sum(w_hi)) or 1.0))
+            mean_hue_highs_deg = float(
+                (np.degrees(np.arctan2(s_hi, c_hi)) + 360.0) % 360.0
+            )
+        if (mean_hue_highs_deg is not None) and (mean_hue_shadows_deg is not None):
+            delta_h_highs_shadows_deg = float(
+                min(
+                    abs(mean_hue_highs_deg - mean_hue_shadows_deg),
+                    360.0 - abs(mean_hue_highs_deg - mean_hue_shadows_deg),
+                )
+            )
 
     # REFINEMENT B: Calculate explicit two-peak separation and secondary mass
     peak_delta_deg: Optional[float] = None
@@ -1032,9 +1087,9 @@ def _check_monochrome_lab(
     # New: Lightness-based hue analysis for split-tone interpretation
     mean_hue_highs = _get_mean_hue_in_lightness_bands(L, hue_deg_all, mask, 25.0)
     mean_hue_shadows = _get_mean_hue_in_lightness_bands(L, hue_deg_all, mask, 25.0)
-    delta_hue_highs_shadows: Optional[float] = None
+    delta_h_highs_shadows: Optional[float] = None
     if mean_hue_highs is not None and mean_hue_shadows is not None:
-        delta_hue_highs_shadows = _circular_hue_delta(mean_hue_highs, mean_hue_shadows)
+        delta_h_highs_shadows = _circular_hue_delta(mean_hue_highs, mean_hue_shadows)
 
     shadow_mask = (L <= LAB_SHADOW_NEUTRAL_L) & (chroma <= LAB_SHADOW_NEUTRAL_CHROMA)
     shadow_share = float(np.mean(shadow_mask)) if shadow_mask.size else 0.0
@@ -1058,6 +1113,26 @@ def _check_monochrome_lab(
         and hue_std <= LAB_SHADOW_QUERY_HUE_STD
         and primary_share >= LAB_SHADOW_QUERY_PRIMARY_SHARE
         and chroma_ratio4 >= 0.05
+    )
+
+    # --- two-peak gating thresholds ---
+    MERGE_DEG = 12.0  # treat as one colour if <= this
+    FAIL_DEG = 15.0  # treat as genuine split if >= this and second_mass big enough
+    MINOR_MASS = 0.10  # second peak mass threshold (fraction of chroma-weighted pixels)
+    HILO_SPLIT_DEG = 45.0  # split signature between highs and shadows
+
+    merge_ok = (
+        (peak_delta_deg is None)
+        or (peak_delta_deg <= MERGE_DEG)
+        or (second_mass < MINOR_MASS)
+    )
+    fail_two_peak = (
+        (peak_delta_deg is not None)
+        and (peak_delta_deg >= FAIL_DEG)
+        and (second_mass >= MINOR_MASS)
+    )
+    hilo_split = (delta_h_highs_shadows_deg is not None) and (
+        delta_h_highs_shadows_deg >= HILO_SPLIT_DEG
     )
 
     # REFINEMENT B: Integrate two-peak logic into decisions
@@ -1115,7 +1190,7 @@ def _check_monochrome_lab(
         hue_weighting="chroma",
         mean_hue_highs_deg=mean_hue_highs,
         mean_hue_shadows_deg=mean_hue_shadows,
-        delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+        delta_h_highs_shadows_deg=delta_h_highs_shadows,
     )
 
     if chroma_p99 <= neutral_chroma:
@@ -1142,7 +1217,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1152,8 +1227,8 @@ def _check_monochrome_lab(
     # are in the same general hue family, it's a drifted single tone, not a split-tone.
     if (
         fail_two_peak
-        and delta_hue_highs_shadows is not None
-        and delta_hue_highs_shadows < 45.0
+        and delta_h_highs_shadows is not None
+        and delta_h_highs_shadows < 45.0
     ):
         # Reclassify as a toned pass or query, depending on hue_std
         verdict: Verdict = "pass"
@@ -1183,7 +1258,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             )
             + " "
             + reason_summary_base,
@@ -1206,7 +1281,7 @@ def _check_monochrome_lab(
             loader_diag=loader_diag,
             hue_clusters=len(peak_hues) if peak_hues else 1,
             split_tone_name=split_name,
-            delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+            delta_hue_highs_shadows_deg=delta_h_highs_shadows,
         )
         reason_summary += f" Large neutral-shadow region (~{shadow_share*100:.1f}%) with a single-hue subject—review lighting intent."
         return MonoResult(
@@ -1237,7 +1312,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1271,7 +1346,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
@@ -1307,16 +1382,14 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=confidence,
             **base_result_args,
         )
 
     # All paths from here lead to a fail verdict
-    if fail_two_peak:
-        failure_reason = "split_toning_suspected"
-    elif R < 0.4 and R2 > 0.6:
+    if fail_two_peak or hilo_split or (R < 0.4 and R2 > 0.6):
         failure_reason = "split_toning_suspected"
     elif cf >= 25.0 or chroma_p95 > neutral_chroma + 8.0:
         failure_reason = "multi_color"
@@ -1372,7 +1445,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=degrade_confidence or "review",
             **base_result_args,
@@ -1396,7 +1469,7 @@ def _check_monochrome_lab(
                 loader_diag=loader_diag,
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
-                delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+                delta_hue_highs_shadows_deg=delta_h_highs_shadows,
             ),
             confidence=degrade_confidence or "review",
             **base_result_args,
@@ -1422,7 +1495,7 @@ def _check_monochrome_lab(
         loader_diag=loader_diag,
         hue_clusters=len(peak_hues) if peak_hues else 0,
         split_tone_name=split_name,
-        delta_hue_highs_shadows_deg=delta_hue_highs_shadows,
+        delta_hue_highs_shadows_deg=delta_h_highs_shadows,
     )
     if force_fail:
         reason_summary += (

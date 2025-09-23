@@ -175,7 +175,7 @@ def _result_to_json(path: str, res: MonoResult) -> Dict[str, Any]:
         "hue_weighting": res.hue_weighting,
         "mean_hue_highs_deg": res.mean_hue_highs_deg,
         "mean_hue_shadows_deg": res.mean_hue_shadows_deg,
-        "delta_hue_highs_shadows_deg": res.delta_hue_highs_shadows_deg,
+        "delta_h_highs_shadows_deg": res.delta_h_highs_shadows_deg,
     }
     return obj
 
@@ -253,7 +253,7 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
                 f"Two-peak analysis shows Δh={peak_delta:.1f}° with secondary mass={second_mass*100:.1f}%."
             )
 
-    delta_highs_shadows = res.get("delta_hue_highs_shadows_deg")
+    delta_highs_shadows = res.get("delta_h_highs_shadows_deg")
     if isinstance(delta_highs_shadows, (int, float)):
         if delta_highs_shadows < 45.0:
             notes.append(
@@ -427,9 +427,8 @@ def _generate_heatmap_image(
             overlay = base * (1 - alpha) + heatmap * alpha
             out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
         else:
-            hue = (np.degrees(np.arctan2(b, a)) + 360.0) % 360.0
             hsv_vis = np.zeros((h, w, 3), dtype=np.uint8)
-            hsv_vis[..., 0] = (hue / 2.0).astype(np.uint8)
+            hsv_vis[..., 0] = (H / 2.0).astype(np.uint8)
             hsv_vis[..., 1] = (np.clip(norm, 0, 1) * 255).astype(np.uint8)
             hsv_vis[..., 2] = (np.clip(norm * 1.2, 0, 1) * 255).astype(np.uint8)
             color = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
@@ -674,7 +673,7 @@ def check(
                 "hue_weighting",
                 "mean_hue_highs_deg",
                 "mean_hue_shadows_deg",
-                "delta_hue_highs_shadows_deg",
+                "delta_h_highs_shadows_deg",
                 "loader_status",
                 "source_profile",
                 "scale_factor",
@@ -809,9 +808,7 @@ def check(
                 hue_weighting = res_dict.get("hue_weighting")
                 mean_hue_highs_deg = res_dict.get("mean_hue_highs_deg")
                 mean_hue_shadows_deg = res_dict.get("mean_hue_shadows_deg")
-                delta_hue_highs_shadows_deg = res_dict.get(
-                    "delta_hue_highs_shadows_deg"
-                )
+                delta_h_highs_shadows_deg = res_dict.get("delta_h_highs_shadows_deg")
                 csv_writer.writerow(
                     [
                         title,
@@ -888,8 +885,8 @@ def check(
                             else ""
                         ),
                         (
-                            f"{delta_hue_highs_shadows_deg:.2f}"
-                            if isinstance(delta_hue_highs_shadows_deg, (float, int))
+                            f"{delta_h_highs_shadows_deg:.2f}"
+                            if isinstance(delta_h_highs_shadows_deg, (float, int))
                             else ""
                         ),
                         res_dict.get("loader_status", ""),
