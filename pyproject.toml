@@ -32,7 +32,7 @@ imageworks-mono-xmp = "imageworks.tools.write_mono_xmp:app"
 
 #Centralized defaults for the mono CLI
 [tool.imageworks.mono]
-default_folder = "/mnt/d/Proper Photos/photos/ccc test images/pdi22425"
+default_folder = "/mnt/d/Proper Photos/photos/ccc test images/tones"
 default_exts = "jpg,jpeg,tif,tiff,png"
 default_jsonl = "mono_results.jsonl"
 default_xmp_script = "write_xmp.sh"

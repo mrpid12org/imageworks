@@ -152,6 +152,8 @@ def _result_to_json(path: str, res: MonoResult) -> Dict[str, Any]:
         "sat_median": res.sat_median,
         "colorfulness": res.colorfulness,
         "failure_reason": res.failure_reason,
+        "split_tone_name": res.split_tone_name,
+        "split_tone_description": res.split_tone_description,
         "top_hues_deg": res.top_hues_deg,
         "top_colors": res.top_colors,
         "top_weights": res.top_weights,
@@ -267,7 +269,14 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
 
     failure_tag = res.get("failure_reason")
     if failure_tag and res.get("verdict") == "fail":
-        lines.append(f"Failure tag: {failure_tag}")
+        split_name = res.get("split_tone_name")
+        split_desc = res.get("split_tone_description")
+        if failure_tag == "split_toning_suspected" and split_name:
+            lines.append(f"Failure tag: Split-Toning Suspected (likely {split_name}).")
+            if split_desc:
+                lines.append(f"Look: {split_desc}")
+        else:
+            lines.append(f"Failure tag: {failure_tag}")
 
     tip = _lightroom_tip(res)
     if tip:
@@ -635,6 +644,8 @@ def check(
                 "mode",
                 "reason_summary",
                 "failure_reason",
+                "split_tone_name",
+                "split_tone_description",
                 "dominant_color",
                 "hue_sigma_deg",
                 "chroma_p99",
@@ -683,6 +694,7 @@ def check(
         entry.setdefault("_path", str(p))
 
         r = res
+        counts["lab"].setdefault(r.verdict, 0)
         counts["lab"][r.verdict] += 1
         entry["lab"] = r.__dict__.copy()
         if not summary_only and not table_only:
@@ -789,6 +801,8 @@ def check(
                         res_dict.get("mode", ""),
                         res_dict.get("reason_summary", ""),
                         res_dict.get("failure_reason", ""),
+                        res_dict.get("split_tone_name", ""),
+                        res_dict.get("split_tone_description", ""),
                         res_dict.get("dominant_color", ""),
                         (
                             f"{hue_sigma:.2f}"

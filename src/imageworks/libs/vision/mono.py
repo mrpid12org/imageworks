@@ -81,6 +81,8 @@ class MonoResult:
     failure_reason: Optional[str] = (
         None  # e.g., 'split_toning_suspected', 'multi_color'
     )
+    split_tone_name: Optional[str] = None  # e.g., 'Teal-Orange', 'Yellow-Blue'
+    split_tone_description: Optional[str] = None
     # Top hue peaks (up to 3) for diagnostics
     top_hues_deg: Optional[List[float]] = None
     top_colors: Optional[List[str]] = None
@@ -110,6 +112,68 @@ class MonoResult:
     hue_peak_delta_deg: Optional[float] = None
     hue_second_mass: Optional[float] = None
     hue_weighting: Optional[str] = None
+
+
+@dataclass
+class SplitToneRecipe:
+    name: str
+    h1_range: Tuple[float, float]
+    h2_range: Tuple[float, float]
+    delta_range: Tuple[float, float]
+    description: str
+
+
+SPLIT_TONE_RECIPES = [
+    SplitToneRecipe(
+        name="Sepia-Cyanotype",
+        h1_range=(25, 45),
+        h2_range=(195, 215),
+        delta_range=(150, 185),
+        description="Historic darkroom look with aged highlights and cool, paper-like shadows.",
+    ),
+    SplitToneRecipe(
+        name="Teal-Orange",
+        h1_range=(20, 70),
+        h2_range=(170, 230),
+        delta_range=(130, 200),
+        description="Modern cinematic look with warm skin tones and cool, deep shadows.",
+    ),
+    SplitToneRecipe(
+        name="Yellow-Blue",
+        h1_range=(50, 80),
+        h2_range=(210, 260),
+        delta_range=(150, 200),
+        description="Classic complementary split with luminous highlights and clean, cool shadows.",
+    ),
+    SplitToneRecipe(
+        name="Yellow-Cyan",
+        h1_range=(40, 70),
+        h2_range=(175, 195),
+        delta_range=(120, 150),
+        description="Gentle, airy split with high-key feel and soft cool tones in the darks.",
+    ),
+    SplitToneRecipe(
+        name="Gold-Indigo",
+        h1_range=(45, 65),
+        h2_range=(250, 270),
+        delta_range=(140, 160),
+        description="Royal warmth in lights and inky, dramatic shadows, suited to night cityscapes.",
+    ),
+    SplitToneRecipe(
+        name="Magenta-Green",
+        h1_range=(290, 340),
+        h2_range=(90, 150),
+        delta_range=(150, 210),
+        description="High-impact, graphic look with electric shadows and vivid highlights.",
+    ),
+    SplitToneRecipe(
+        name="Red-Cyan",
+        h1_range=(350, 15),  # Wraps around 0
+        h2_range=(180, 200),
+        delta_range=(160, 180),
+        description="Maximum complementary punch for a graphic, high-contrast feel.",
+    ),
+]
 
 
 def _parse_xmp_text(node: Optional[ET.Element], ns: Dict[str, str]) -> Optional[str]:
@@ -431,6 +495,30 @@ def _name_color_from_hue(hue_deg: Optional[float]) -> Optional[str]:
         if h < cutoff:
             return name
     return "unknown"
+
+
+def _name_split_tone_recipe(
+    h1: float, h2: float, delta: float
+) -> Optional[Tuple[str, str]]:
+    """Name common split-tone recipes based on the two dominant hue peaks."""
+    # Ensure h1 is the warmer tone for easier comparison
+    if 120 < h1 < 300:
+        h1, h2 = h2, h1
+
+    for recipe in SPLIT_TONE_RECIPES:
+        # Handle red wrapping around 360/0
+        h1_in_range = (
+            recipe.h1_range[0] <= h1 <= recipe.h1_range[1]
+            if recipe.h1_range[0] < recipe.h1_range[1]
+            else (h1 >= recipe.h1_range[0] or h1 <= recipe.h1_range[1])
+        )
+        h2_in_range = recipe.h2_range[0] <= h2 <= recipe.h2_range[1]
+        delta_in_range = recipe.delta_range[0] <= delta <= recipe.delta_range[1]
+
+        if h1_in_range and h2_in_range and delta_in_range:
+            return recipe.name, recipe.description
+
+    return None
 
 
 def _top_hue_peaks(
@@ -846,6 +934,8 @@ def _check_monochrome_lab(
     # REFINEMENT B: Calculate explicit two-peak separation and secondary mass
     peak_delta_deg: Optional[float] = None
     second_mass = 0.0
+    split_name: Optional[str] = None
+    split_description: Optional[str] = None
     if peak_hues and len(peak_hues) >= 2 and peak_w and sum(peak_w) > 0:
         # sort by weight
         order = np.argsort(peak_w)[::-1]
@@ -857,6 +947,16 @@ def _check_monochrome_lab(
         total_w = float(sum(peak_w))
         if total_w > 0:
             second_mass = float(peak_w[order[1]] / total_w)
+        if peak_delta_deg >= 15.0 and second_mass >= 0.10:
+            recipe = _name_split_tone_recipe(h1, h2, peak_delta_deg)
+            if recipe:
+                split_name, split_description = recipe
+            else:
+                # Fallback to generic naming if no recipe matches
+                c1 = _name_color_from_hue(h1)
+                c2 = _name_color_from_hue(h2)
+                if c1 and c2:
+                    split_name = f"{c1}-{c2} Split"
 
     shadow_mask = (L <= LAB_SHADOW_NEUTRAL_L) & (chroma <= LAB_SHADOW_NEUTRAL_CHROMA)
     shadow_share = float(np.mean(shadow_mask)) if shadow_mask.size else 0.0
@@ -910,6 +1010,8 @@ def _check_monochrome_lab(
         hue_bimodality=R2,
         sat_median=sat_median_norm,
         colorfulness=cf,
+        split_tone_name=split_name,
+        split_tone_description=split_description,
         top_hues_deg=peak_hues,
         top_colors=peak_names,
         top_weights=peak_w,

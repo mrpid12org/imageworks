@@ -65,6 +65,15 @@ This document outlines the step-by-step logic the Imageworks Competition Checker
 - **Lenience on Borderline Cases:** The logic aims to flag ambiguous images for human review (`Query`) rather than failing them outright, especially when a color cast is very subtle or covers a microscopic area.
 - **Robust Split-Tone Detection:** A two-peak hue analysis is used to differentiate between an acceptable color wobble within a single tone and a true, multi-toned image.
 
+### A Note on Color Profiles
+
+For the most accurate analysis, the checker needs to understand the colors of an image in a standardized color space (`sRGB`).
+
+-   **Profiled Images:** If an image has an embedded color profile (e.g., Adobe RGB, ProPhoto RGB), the tool uses this profile to correctly convert the image's colors to sRGB before analysis. This is the ideal workflow.
+-   **Untagged Images:** If an image has **no** embedded color profile, the checker has no choice but to **assume** it uses a standard sRGB-like color space.
+
+**Why this matters:** If you provide an untagged image that was saved in a wide-gamut color space (like Adobe RGB), its colors will appear more saturated and may be misinterpreted by the checker. This can sometimes cause a subtly toned monochrome image to be flagged as having more color than it actually does. For best results, ensure your images are saved with their ICC color profiles embedded.
+
 ---
 
 ## The Decision Tree
@@ -129,6 +138,14 @@ The logic is applied after the image has been loaded and analyzed to gather key 
     -   ➡️ **VERDICT: FAIL (Split-Toning Suspected or Color Present)**.
 
 ---
+
+### Rationale for Two-Peak Thresholds
+
+The thresholds used in the two-peak analysis (`pass if delta < 12°`, `fail if delta ≥ 15°`) are based on common color grading and photographic printing practices.
+
+-   **Acceptable "Wobble" (`< 12°`):** A single light source or toning process can produce minor hue variations or "wobbles," typically staying within a 10-12° range. The logic treats these as a single, valid tone.
+-   **Intentional Split-Toning (`> 120°`):** Common artistic split-tones, such as the popular "teal-and-orange" look, use near-complementary colors. This results in hue separations of 120° to 180° on the color wheel.
+-   **The "Fail" Threshold (`≥ 15°`):** The 15° threshold for failure is chosen as a conservative boundary. It's wide enough to allow for natural wobbles but narrow enough to reliably catch even subtle, intentional split-toning that violates the "single hue" rule of monochrome competitions. Any separation greater than this, when the secondary tone has a significant presence (mass ≥ 10%), is flagged as a likely split-tone.
 
 ### Important Exceptions & Overrides
 
