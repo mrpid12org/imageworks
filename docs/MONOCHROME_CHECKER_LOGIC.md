@@ -3,23 +3,23 @@
 ```mermaid
 graph TD
     subgraph "Step 1: Neutral Check"
-        A{Is image neutral?<br>(Chroma-99th <= 2.0)};
+        A{"Is image neutral?<br>(Chroma-99th <= 2.0)"};
     end
 
     subgraph "Step 2: Hard-Fail Check"
-        B{Obvious widespread color?<br>(Large footprint AND high hue spread)};
+        B{"Obvious widespread color?<br>(Large footprint AND high hue spread)"};
     end
 
     subgraph "Step 3: Toned Pass Check"
-        C{Valid single tone?<br>(hue_std <= 10° AND passes two-peak check)};
+        C{"Valid single tone?<br>(hue_std <= 10° AND passes two-peak check)"};
     end
 
     subgraph "Step 4: Query/Borderline Check"
-        D{Borderline case?<br>(hue_std 10-14° OR borderline split-tone)};
+        D{"Borderline case?<br>(hue_std 10-14° OR borderline split-tone)"};
     end
 
     subgraph "Step 5: Final Failure Analysis"
-        E{Clear split-tone?<br>(Distant peaks AND significant mass)};
+        E{"Clear split-tone?<br>(Distant peaks AND significant mass)"};
     end
 
     subgraph "Verdicts"
