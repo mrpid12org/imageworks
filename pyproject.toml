@@ -1,89 +1,92 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "imageworks"
 version = "0.1.0"
-description = "Local photo utilities: monochrome validation, tagging, similarity."
-readme = "README.md"
-authors = [
-{ name = "Stewart Hopkins", email = "stewart.hopkins@gmail.com" }
-]
-requires-python = ">=3.12"
 dependencies = [
-"faiss-cpu>=1.12.0",
-"fastapi>=0.116.2",
-"open-clip-torch>=3.1.0",
-"opencv-python-headless>=4.12.0.88",
-"pillow>=11.3.0",
-"pydantic>=2.11.9",
-"rich>=14.1.0",
-"sentence-transformers>=5.1.0",
-"typer>=0.17.4",
-"uvicorn[standard]>=0.35.0",
-"torch==2.7.1+cu128",
-"torchvision==0.22.1+cu128",
-"torchaudio==2.7.1+cu128",
+  "typer",
+  "numpy",
+  "opencv-python-headless",
+  "Pillow",
+  "scikit-image",
+  "scipy",
+  "tomli; python_version < '3.11'",
 ]
+requires-python = ">=3.9"
 
 [project.scripts]
-
-#Typer app entry point for the mono checker
 imageworks-mono = "imageworks.apps.competition_checker.cli.mono:app"
-imageworks-mono-api = "imageworks.apps.competition_checker.api.main:run"
-imageworks-mono-xmp = "imageworks.tools.write_mono_xmp:app"
-imageworks-zip-ingest = "imageworks.tools.process_zip_downloads:app"
+imageworks-api = "imageworks.apps.competition_checker.api.main:start"
+imageworks-zip = "imageworks.tools.zip_extract:app"
 
-# ZIP extract tool
-imageworks-zip-extract = "imageworks.tools.zip_extract:app"
 
-#Centralized defaults for the mono CLI
-[tool.imageworks.mono]
-default_folder = "/mnt/d/Proper Photos/photos/ccc competition images"
-default_exts = "jpg,jpeg,tif,tiff,png"
-default_jsonl = "mono_results.jsonl"
-default_xmp_script = "write_xmp.sh"
-default_visualize_suffix = "_mono_vis"
-neutral_tol = 2
-toned_pass_deg = 6.0
-toned_query_deg = 10.0
-lab_toned_pass_deg = 10.0
-lab_toned_query_deg = 14.0
-lab_chroma_mask = 2.0
-
-[tool.imageworks.zip-extract]
-default_zip_dir = "/mnt/c/Users/stewa/Downloads/CCC comp zips" # <--- YOU WILL NEED TO SET THIS PATH
-default_extract_root = "/mnt/d/Proper Photos/photos/ccc competition images" # Optional, will use temp if not set
-
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-
-#Use the src/ layout
-package-dir = { "" = "src" }
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[dependency-groups]
-dev = [
-"black>=25.1.0",
-"huggingface-hub[cli]>=0.35.0",
-"isort>=6.0.1",
-"pre-commit>=4.3.0",
-"pytest>=8.4.2",
-"ruff>=0.13.0",
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "ruff>=0.5.4",
+    "pytest>=8.2.2",
+    "black>=24.4.2",
+    "mypy>=1.10.1",
+    "pre-commit>=3.7.1",
 ]
 
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
+[tool.hatch.metadata]
+allow-direct-references = true
 
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
+[tool.ruff]
+line-length = 88
+indent-width = 4
 
-[tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
-torchaudio = { index = "pytorch-cu128" }
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.imageworks.mono]
+# Default folder to scan when none is provided on the command line.
+# Can be an absolute path or relative to the project root.
+default_folder = "/mnt/d/Proper Photos/photos/ccc competition images"
+
+# Default file extensions to look for.
+default_exts = "jpg,jpeg,png,tif,tiff"
+
+# Default path for the JSONL output file.
+default_jsonl = "outputs/results/mono_results.jsonl"
+
+# Default path for the human-readable summary file.
+default_summary = "outputs/summaries/mono_summary.md"
+
+# --- CORE THRESHOLDS ---
+# Max channel diff (0-255) for a pixel to be considered neutral.
+neutral_tol = 2
+# Max chroma (C*) for an image to pass as neutral.
+lab_neutral_chroma = 2.0
+# Chroma (C*) threshold above which pixels are considered "colored" for hue stats.
+lab_chroma_mask = 2.0
+# Max hue standard deviation (degrees) for a clear PASS as toned.
+lab_toned_pass_deg = 10.0
+# Max hue standard deviation (degrees) for a PASS WITH QUERY.
+lab_toned_query_deg = 14.0
+
+# --- HARD FAIL THRESHOLDS ---
+# Force a FAIL if the percentage of pixels with chroma > 4 exceeds this.
+lab_fail_c4_ratio = 0.10
+# Force a FAIL if the largest single cluster of pixels with chroma > 4 exceeds this.
+lab_fail_c4_cluster = 0.08
+
+
+# --- HEATMAP VISUALIZATION DEFAULTS ---
+# Default suffix for generated heatmap images.
+default_visualize_suffix = "_mono_vis"
+# Overlay opacity for heatmaps.
+auto_heatmap_alpha = 0.6
+# JPEG quality for heatmaps.
+auto_heatmap_quality = 92
+# Saturation threshold for saturation/hue heatmaps.
+auto_heatmap_sat_threshold = 0.06
+# Chroma (C*) value that maps to maximum intensity in LAB heatmaps.
+lab_chroma_clip = 8.0
+
+# --- XMP WRITING DEFAULTS ---
+# Default name for the generated ExifTool script.
+default_xmp_script = "write_xmp.sh"
