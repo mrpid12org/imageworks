@@ -92,8 +92,18 @@ def analyze_image(image_path):
         print("WARNING: Large cluster of similar L values detected")
 
 
-# Analyze both problematic images
-images = ["01_036_SerialPrint1_2425.jpg", "01_002_SerialPrint3_2425.jpg"]
+# Get test images from test_images directory
+test_images_dir = Path(__file__).parent.parent / "test_images" / "samples"
+output_dir = Path(__file__).parent.parent / "output" / "analysis"
+output_dir.mkdir(parents=True, exist_ok=True)
 
-for img_path in images:
-    analyze_image(img_path)
+if __name__ == "__main__":
+    # Analyze all jpg files in the samples directory
+    images = list(test_images_dir.glob("*.jpg"))
+    if not images:
+        print(f"No jpg files found in {test_images_dir}")
+        exit(1)
+
+    print(f"Analyzing {len(images)} images from {test_images_dir}")
+    for img_path in images:
+        analyze_image(img_path)

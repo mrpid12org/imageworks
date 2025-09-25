@@ -2,39 +2,54 @@
 
 This document outlines the step-by-step logic the Imageworks Competition Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
 
-## Plain English Summary
+## Technical Summary
 
-This script determines if an image is monochrome. Here's a plain English summary of its logic:
+This script implements a sophisticated monochrome detection algorithm. Here's a technical breakdown of its logic:
 
-1.  **Image Loading and Preparation:**
-    *   It loads the image file and, for consistency, converts it into the sRGB color space, a standard for digital images.
-    *   To speed up the analysis, it resizes the image to a maximum of 1024 pixels on its longest side.
-    *   It also attempts to read any embedded metadata, like the image title or author.
+1.  **Image Loading and Color Space Transformation:**
+    *   Loads the image and converts to sRGB color space for standardization
+    *   Downsamples to 1024px on the longest edge for performance optimization
+    *   Extracts embedded metadata (EXIF, XMP) for additional context
 
-2.  **Color Analysis in LAB Space:**
-    *   The core of the detection happens in the CIELAB (or LAB) color space. This is a technical color model that separates pixel information into:
-        *   **L***: Lightness (from pure black to pure white).
-        *   **a***: The green-to-red axis.
-        *   **b***: The blue-to-yellow axis.
-    *   From the a* and b* values, it calculates two crucial metrics for every pixel:
-        *   **Chroma**: The amount of color or "colorfulness". A value of 0 is completely neutral (gray).
-        *   **Hue**: The actual color (e.g., red, green, blue-green).
+2.  **Color Analysis in CIELAB Space:**
+    *   Converts the image to CIELAB (CIELAB D50) color space for analysis:
+        *   **L***: Luminance channel (0-100)
+        *   **a***: Green-red axis (-128 to +127)
+        *   **b***: Blue-yellow axis (-128 to +127)
+    *   Calculates per-pixel metrics:
+        *   **Chroma**: sqrt(a*² + b*²)
+        *   **Hue**: arctan2(b*, a*)
+    *   Generates histograms for chroma and hue distributions
 
-3.  **The Monochrome Decision Engine:**
-    The script uses a series of checks to classify the image:
+3.  **Detection Algorithm:**
+    The script applies a cascading series of analytical checks:
 
-    *   **Is it perfectly neutral?** It first does a quick check to see if the image is a true, neutral grayscale. If the color channels (Red, Green, Blue) are all within a very tight tolerance of each other for every pixel, it's immediately classified as a **neutral monochrome** and passes.
+    *   **RGB Channel Delta Analysis:**
+        *   Calculates max channel difference per pixel
+        *   If all pixels < tight tolerance (~0.004), classifies as **neutral monochrome**
+        *   Uses integer comparison for optimization
 
-    *   **How much color is there?** If it's not perfectly neutral, it examines the chroma values. If the vast majority of pixels have very low chroma (i.e., they are very close to gray), it's also considered a **neutral monochrome**.
+    *   **Chroma Distribution Analysis:**
+        *   Examines chroma histogram percentiles (50th, 90th, 95th)
+        *   If majority of pixels have chroma < threshold (~2.5), classifies as **neutral monochrome**
+        *   Accounts for noise and compression artifacts
 
-    *   **Is it a single, consistent tone?** For images that do have some color, it checks if that color is consistent.
-        *   It calculates the "standard deviation" of the hue. A low value means all the colors are clustered together (like a sepia or cyanotype tint), which is characteristic of a **toned monochrome** image.
-        *   If the hue standard deviation is within a "pass" threshold, it's classified as a toned monochrome.
-        *   If the hue standard deviation is in a "query" range (a bit higher), it's flagged as **pass with query**, meaning it's likely a toned monochrome but might be a color image with very muted colors and should be reviewed by a human.
+    *   **Hue Consistency Analysis:**
+        *   For images with significant chroma:
+            *   Calculates circular statistics on hue distribution
+            *   Measures hue standard deviation and concentration
+            *   Identifies modal peaks in hue histogram
+        *   If hue std dev < threshold (~0.15), classifies as **toned monochrome**
+        *   If threshold < std dev < upper bound (~0.25), marks as **pass with query**
 
-    *   **Is it a color image?** If the chroma is high and the hues are spread out across different colors, it's classified as **not mono** and fails. The script has specific logic to detect:
-        *   **Multi-color images**: Where several distinct colors are present.
-        *   **Split-toning**: A common photographic effect where shadows are tinted one color and highlights another (e.g., blue shadows and yellow highlights). The script looks for two distinct peaks in the hue distribution to identify this.
+    *   **Multi-Color Detection:**
+        *   Identifies multiple significant peaks in hue histogram
+        *   Analyzes spatial distribution of hue values
+        *   Detects split-toning patterns through bimodal hue distribution
+        *   If multiple distinct color regions detected, classifies as **not mono**
+
+    The implementation uses vectorized operations (numpy) for performance and includes
+    robust handling of edge cases like near-neutral pixels and histogram analysis.
 
 4.  **Special Cases and Overrides:**
     The logic is sophisticated enough to handle tricky situations, such as:

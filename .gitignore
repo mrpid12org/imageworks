@@ -34,9 +34,22 @@ ai-models/
 *.bin
 *.ckpt
 
-# Run outputs
-mono_results*.jsonl
-*.csv
+# Output directories
+outputs/summaries/
+outputs/results/
+tests/output/
 
-# Generated scripts
+# Test outputs and temp files
+tests/test_images/samples/
+tests/test_images/synthetic/tmp_*.png
+tests/test_images/synthetic/stage.png
+
+# Generated scripts and analysis outputs
 write_xmp.sh
+*.csv
+*.jsonl
+
+# IDE and cache
+.ruff_cache/
+__pycache__/
+.pytest_cache/

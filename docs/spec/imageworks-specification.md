@@ -269,7 +269,7 @@ The emphasis is on privacy (local processing), speed, reproducibility, and a pat
 
 The checker labels each JPEG as `PASS`, `PASS (query)`, or `FAIL`. It measures LAB chroma and hue variation to decide whether colour is both strong and multi-hued (FIAP/PSA definition of colour) or simply a single tint.
 
-For a detailed, step-by-step explanation of the pass/fail logic, including thresholds and edge cases, please see the standalone [Monochrome Checker Logic Decision Tree](MONOCHROME_CHECKER_LOGIC.md).
+For a detailed, step-by-step explanation of the pass/fail logic, including thresholds and edge cases, please see the standalone [Monochrome Technical Documentation](../monochrome-technical.md).
 
 This sequence mirrors the competition definition: pure greyscale and single-hue toning pass; dual-hue or colour-on-grey mixtures fail; borderline/low-footprint cases require human review.
 

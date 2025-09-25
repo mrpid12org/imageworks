@@ -2,16 +2,45 @@
 
 Imageworks provides local-first photography utilities for two workflows:
 
-- **Competition Checker** – validates Cambridge Camera Club entries by confirming true monochrome images and flagging near-duplicates.
+- **Competition Checker** – A complete workflow for Cambridge Camera Club entries:
+  - Extracts and organizes competition images from downloaded zip files
+  - Embeds title and author metadata from XMP files
+  - Integrates with Lightroom for image management
+  - Validates true monochrome images
+  - Flags near-duplicates and generates overlay visualizations
+
 - **Personal Tagger** – enriches a personal Lightroom catalogue with concise keywords, optional captions/long descriptions, and similarity search tools.
 
 Both applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
 
+See [Competition Workflow](docs/COMPETITION_WORKFLOW.md) for detailed documentation of the complete competition checking process.
+
 ## Project Layout
-- `src/imageworks` – shared libraries plus CLI/Web entry points.
-- `tests/` – pytest suites covering core image analytics and environment checks.
-- `configs/` – sample configuration and experiment settings.
-- `mono_results.jsonl` – captured monochrome checker runs for analysis/regression.
+
+```
+imageworks/
+├── src/imageworks/          # Main package source code
+│   ├── apps/               # Application entry points (CLI/Web)
+│   ├── libs/               # Core libraries and utilities
+│   └── archive/           # Archived reference code
+├── tests/                  # Test suite and tools
+│   ├── analysis/          # Diagnostic and analysis tools
+│   ├── test_images/       # Test image files
+│   │   ├── synthetic/     # Generated test images
+│   │   └── samples/       # Sample photos for testing
+│   └── output/            # Test output files
+├── outputs/                # Production outputs
+│   ├── summaries/         # Human-readable outputs (MD, CSV)
+│   └── results/           # Data files (JSONL)
+└── configs/               # Configuration files
+```
+
+### Key Directories
+
+- `src/imageworks/` – Core package with shared libraries and entry points
+- `tests/` – Test suites, analysis tools, and test data
+- `outputs/` – Generated files and analysis results
+- `configs/` – Sample configuration and experiment settings
 
 ## Getting Started
 1. Install [uv](https://docs.astral.sh/uv/) following the steps in `docs/dev-env/ide-setup-wsl-vscode.md`.
@@ -60,6 +89,6 @@ To remove diagnostics/keywords later, generate a cleanup script:
 
 The logic for determining if an image is a valid monochrome is sophisticated, taking into account color variation, saturation, split-toning, and various edge cases.
 
-For a detailed, step-by-step explanation of the decision-making process, please refer to the [Monochrome Checker Logic Decision Tree](./docs/MONOCHROME_CHECKER_LOGIC.md).
+For a detailed, step-by-step explanation of the decision-making process, please refer to the [Monochrome Check Technical Documentation](./docs/monochrome-technical.md).
 
 For architecture or roadmap discussions, start with the specification and follow links into the docs folder.
