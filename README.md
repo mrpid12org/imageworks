@@ -2,7 +2,7 @@
 
 Imageworks provides local-first photography utilities for two workflows:
 
-- **Competition Checker** – A complete workflow for Camera Club entries:
+- **Monochrome Checker** – A complete workflow for Camera Club entries:
   - Extracts and organizes competition images from downloaded zip files
   - Embeds title and author metadata from XMP files
   - Integrates with Lightroom for image management
