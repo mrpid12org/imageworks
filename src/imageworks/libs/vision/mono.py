@@ -348,23 +348,38 @@ def _hue_drift_deg_per_l(
     hue_sorted = np.deg2rad(hue_sel[order])
     hue_unwrapped = np.unwrap(hue_sorted)
     try:
+        # Calculate additional metrics to validate monochrome characteristics
+        hue_std = np.std(np.rad2deg(hue_unwrapped))
+
         with warnings.catch_warnings(record=True) as wlist:
             warnings.simplefilter("always")
             slope_rad = float(np.polyfit(L_sorted, hue_unwrapped, 1)[0])
+
+            # Check for RankWarning but don't print it if it's a "good" warning
+            # (indicating strong monochrome characteristics)
+            has_rank_warning = False
             for w in wlist:
                 if hasattr(w, "message") and "Polyfit may be poorly conditioned" in str(
                     w.message
                 ):
-                    if path:
-                        print(f"[RankWarning] {path}: {w.message}")
-                    else:
-                        print(f"[RankWarning] {w.message}")
+                    has_rank_warning = True
+
+            # Only print warning if hue variation is high (not a good monochrome candidate)
+            if (
+                has_rank_warning and hue_std > 5.0
+            ):  # 5 degrees threshold for hue variation
+                if path:
+                    print(f"[RankWarning] {path}: Inconsistent toning detected")
+                else:
+                    print("[RankWarning] Inconsistent toning detected")
+
     except Exception as e:
         if path:
             print(f"[RankWarning] {path}: {e}")
         else:
             print(f"[RankWarning] {e}")
         return None
+
     return float(np.rad2deg(slope_rad))
 
 
@@ -959,7 +974,8 @@ def _check_monochrome_lab(
 
     with warnings.catch_warnings(record=True) as wlist:
         warnings.simplefilter("always", RuntimeWarning)
-        hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
+        R = min(max(R, 1e-8), 0.9999)  # Clamp R to avoid warnings
+        hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(R))))
         for w in wlist:
             if issubclass(
                 w.category, RuntimeWarning
