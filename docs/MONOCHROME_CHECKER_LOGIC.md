@@ -1,110 +1,51 @@
-# Monochrome Checker Logic: A Decision Tree
-
-*For a detailed technical mapping of the code logic, see: [Monochrome Checker Decision Tree](MONOCHROME_CHECKER_DECISION_TREE.md)*
----
-
-## Glossary
-
-- **Chroma**: The intensity or purity of color. In this context, low chroma means nearly neutral (gray), high chroma means strong color.
-- **Hue**: The attribute of a color that lets us classify it as red, yellow, green, etc. Hue is measured in degrees around a color wheel.
-- **Split-tone**: An image with two distinct color tones, often in highlights and shadows.
-- **Toned**: An image with a single, consistent color tint (e.g., sepia).
-- **Neutral**: An image with no discernible color tint—pure black, white, and gray.
-- **Query**: A result where the checker is unsure and flags the image for human review.
-- **Override**: A special rule that allows an image to pass or be flagged for review even if it would otherwise fail, based on specific characteristics (e.g., strong but uniform tone, stage lighting).
-- **Degrade**: The process of downgrading a fail to a pass or query if the color presence is minor or subtle.
-
----
-
-```mermaid
-graph TD
-    subgraph "Step 1: Neutral Check"
-        A{"Is image neutral?<br>(Chroma-99th <= 2.0)"};
-    end
-
-    subgraph "Step 2: Hard-Fail Check"
-        B{"Obvious widespread color?<br>(Large footprint AND high hue spread)"};
-    end
-
-    subgraph "Step 3: Toned Pass Check"
-        C{"Valid single tone?<br>(hue_std <= 10° AND passes two-peak check)"};
-    end
-
-    subgraph "Step 4: Query/Borderline Check"
-        D{"Borderline case?<br>(hue_std 10-14° OR borderline split-tone)"};
-    end
-
-    subgraph "Step 5: Final Failure Analysis"
-        E{"Clear split-tone?<br>(Distant peaks AND significant mass)"};
-    end
-
-    subgraph "Verdicts"
-        direction LR
-        P1[PASS - Neutral];
-        P2[PASS - Toned];
-        Q[PASS - Query];
-        F1[FAIL - Color Present];
-        F2[FAIL - Split-Toning Suspected];
-    end
-
-    A -- No --> B;
-    A -- Yes --> P1;
-
-    B -- Yes --> F1;
-    B -- No --> C;
-
-    C -- Yes --> P2;
-    C -- No --> D;
-
-    D -- Yes --> Q;
-    D -- No --> E;
-
-    E -- Yes --> F2;
-    E -- No --> F1;
-
-    classDef check fill:#fff,stroke:#333,stroke-width:2px,color:#333;
-    classDef verdict_pass fill:#dfd,stroke:#3a3,stroke-width:2px;
-    classDef verdict_query fill:#fdf,stroke:#a3a,stroke-width:2px;
-    classDef verdict_fail fill:#fdd,stroke:#a33,stroke-width:2px;
-
-    class A,B,C,D,E check;
-    class P1,P2 verdict_pass;
-    class Q verdict_query;
-    class F1,F2 verdict_fail;
-```
+# Monochrome Checker Logic
 
 This document outlines the step-by-step logic the Imageworks Competition Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
 
-### Guiding Principles
+## Plain English Summary
 
-- **Perceptual Accuracy:** All color and hue measurements are performed in the LAB color space and are weighted by chroma (color intensity) to better align with human perception.
-- **Lenience on Borderline Cases:** The logic aims to flag ambiguous images for human review (`Query`) rather than failing them outright, especially when a color cast is very subtle or covers a microscopic area.
-- **Robust Split-Tone Detection:** A two-peak hue analysis is used to differentiate between an acceptable color wobble within a single tone and a true, multi-toned image.
+This script determines if an image is monochrome. Here's a plain English summary of its logic:
 
-### A Note on Color Profiles
+1.  **Image Loading and Preparation:**
+    *   It loads the image file and, for consistency, converts it into the sRGB color space, a standard for digital images.
+    *   To speed up the analysis, it resizes the image to a maximum of 1024 pixels on its longest side.
+    *   It also attempts to read any embedded metadata, like the image title or author.
 
-For the most accurate analysis, the checker needs to understand the colors of an image in a standardized color space (`sRGB`).
+2.  **Color Analysis in LAB Space:**
+    *   The core of the detection happens in the CIELAB (or LAB) color space. This is a technical color model that separates pixel information into:
+        *   **L***: Lightness (from pure black to pure white).
+        *   **a***: The green-to-red axis.
+        *   **b***: The blue-to-yellow axis.
+    *   From the a* and b* values, it calculates two crucial metrics for every pixel:
+        *   **Chroma**: The amount of color or "colorfulness". A value of 0 is completely neutral (gray).
+        *   **Hue**: The actual color (e.g., red, green, blue-green).
 
--   **Profiled Images:** If an image has an embedded color profile (e.g., Adobe RGB, ProPhoto RGB), the tool uses this profile to correctly convert the image's colors to sRGB before analysis. This is the ideal workflow.
--   **Untagged Images:** If an image has **no** embedded color profile, the checker has no choice but to **assume** it uses a standard sRGB-like color space.
+3.  **The Monochrome Decision Engine:**
+    The script uses a series of checks to classify the image:
 
+    *   **Is it perfectly neutral?** It first does a quick check to see if the image is a true, neutral grayscale. If the color channels (Red, Green, Blue) are all within a very tight tolerance of each other for every pixel, it's immediately classified as a **neutral monochrome** and passes.
 
-**Why this matters:** If you provide an untagged image that was saved in a wide-gamut color space (like Adobe RGB), its colors will appear more saturated and may be misinterpreted by the checker. This can sometimes cause a subtly toned monochrome image to be flagged as having more color than it actually does. For best results, ensure your images are saved with their ICC color profiles embedded.
+    *   **How much color is there?** If it's not perfectly neutral, it examines the chroma values. If the vast majority of pixels have very low chroma (i.e., they are very close to gray), it's also considered a **neutral monochrome**.
 
----
+    *   **Is it a single, consistent tone?** For images that do have some color, it checks if that color is consistent.
+        *   It calculates the "standard deviation" of the hue. A low value means all the colors are clustered together (like a sepia or cyanotype tint), which is characteristic of a **toned monochrome** image.
+        *   If the hue standard deviation is within a "pass" threshold, it's classified as a toned monochrome.
+        *   If the hue standard deviation is in a "query" range (a bit higher), it's flagged as **pass with query**, meaning it's likely a toned monochrome but might be a color image with very muted colors and should be reviewed by a human.
 
-### Interpreting the Results: Judging the Output, Not the Method
+    *   **Is it a color image?** If the chroma is high and the hues are spread out across different colors, it's classified as **not mono** and fails. The script has specific logic to detect:
+        *   **Multi-color images**: Where several distinct colors are present.
+        *   **Split-toning**: A common photographic effect where shadows are tinted one color and highlights another (e.g., blue shadows and yellow highlights). The script looks for two distinct peaks in the hue distribution to identify this.
 
-A critical distinction for judges is that the checker analyzes the final rendered pixels of an image, not the photographer's editing process.
+4.  **Special Cases and Overrides:**
+    The logic is sophisticated enough to handle tricky situations, such as:
+    *   **Strongly Toned Images**: It can correctly pass an image with a very strong, but uniform, color tint.
+    *   **Stage-Lit Subjects**: It can identify an image that is mostly neutral black and white but has a subject lit with a single, strong color, and flag it for review instead of failing it outright.
 
-From pixels alone, we can reliably tell whether the resulting image reads as (i) neutral, (ii) single-toned, or (iii) split-toned. What we cannot do with certainty is prove whether the photographer applied a "split-toning" tool in their software.
-
-#### Many-to-One Mapping
-Different editing pipelines can lead to the same final result. A split-toning tool with a strong balance pushed to one side can create a single-toned output. Conversely, a single tint combined with complex curve adjustments can mimic a weak split-tone.
-
-**Competition Rules:** Salon rules (FIAP/PSA) are concerned with the final image. If the output exhibits a single, uniform tone, it should pass as monochrome, regardless of the tools used to create it. If the output shows two or more distinct tones, it should fail.
-
-The checker is aligned with this principle: it judges the result, not the artist’s intent or method.
+5.  **The Verdict:**
+    Finally, it returns a detailed `MonoResult` object containing:
+    *   A `verdict` of `pass`, `pass_with_query`, or `fail`.
+    *   A `mode` of `neutral`, `toned`, or `not_mono`.
+    *   A human-readable `reason_summary` that explains *why* it reached its conclusion, making the decision transparent.
 
 ---
 
@@ -168,6 +109,52 @@ The logic is applied after the image has been loaded and analyzed to gather key 
     2.  **General Color:** If it doesn't meet the split-tone criteria, it fails simply because its color variation (`hue_std`) was too high.
 -   **Result:**
     -   ➡️ **VERDICT: FAIL (Split-Toning Suspected or Color Present)**.
+
+---
+
+## Glossary
+
+- **Chroma**: The intensity or purity of color. In this context, low chroma means nearly neutral (gray), high chroma means strong color.
+- **Hue**: The attribute of a color that lets us classify it as red, yellow, green, etc. Hue is measured in degrees around a color wheel.
+- **Split-tone**: An image with two distinct color tones, often in highlights and shadows.
+- **Toned**: An image with a single, consistent color tint (e.g., sepia).
+- **Neutral**: An image with no discernible color tint—pure black, white, and gray.
+- **Query**: A result where the checker is unsure and flags the image for human review.
+- **Override**: A special rule that allows an image to pass or be flagged for review even if it would otherwise fail, based on specific characteristics (e.g., strong but uniform tone, stage lighting).
+- **Degrade**: The process of downgrading a fail to a pass or query if the color presence is minor or subtle.
+
+---
+
+### Guiding Principles
+
+- **Perceptual Accuracy:** All color and hue measurements are performed in the LAB color space and are weighted by chroma (color intensity) to better align with human perception.
+- **Lenience on Borderline Cases:** The logic aims to flag ambiguous images for human review (`Query`) rather than failing them outright, especially when a color cast is very subtle or covers a microscopic area.
+- **Robust Split-Tone Detection:** A two-peak hue analysis is used to differentiate between an acceptable color wobble within a single tone and a true, multi-toned image.
+
+### A Note on Color Profiles
+
+For the most accurate analysis, the checker needs to understand the colors of an image in a standardized color space (`sRGB`).
+
+-   **Profiled Images:** If an image has an embedded color profile (e.g., Adobe RGB, ProPhoto RGB), the tool uses this profile to correctly convert the image's colors to sRGB before analysis. This is the ideal workflow.
+-   **Untagged Images:** If an image has **no** embedded color profile, the checker has no choice but to **assume** it uses a standard sRGB-like color space.
+
+
+**Why this matters:** If you provide an untagged image that was saved in a wide-gamut color space (like Adobe RGB), its colors will appear more saturated and may be misinterpreted by the checker. This can sometimes cause a subtly toned monochrome image to be flagged as having more color than it actually does. For best results, ensure your images are saved with their ICC color profiles embedded.
+
+---
+
+### Interpreting the Results: Judging the Output, Not the Method
+
+A critical distinction for judges is that the checker analyzes the final rendered pixels of an image, not the photographer's editing process.
+
+From pixels alone, we can reliably tell whether the resulting image reads as (i) neutral, (ii) single-toned, or (iii) split-toned. What we cannot do with certainty is prove whether the photographer applied a "split-toning" tool in their software.
+
+#### Many-to-One Mapping
+Different editing pipelines can lead to the same final result. A split-toning tool with a strong balance pushed to one side can create a single-toned output. Conversely, a single tint combined with complex curve adjustments can mimic a weak split-tone.
+
+**Competition Rules:** Salon rules (FIAP/PSA) are concerned with the final image. If the output exhibits a single, uniform tone, it should pass as monochrome, regardless of the tools used to create it. If the output shows two or more distinct tones, it should fail.
+
+The checker is aligned with this principle: it judges the result, not the artist’s intent or method.
 
 ---
 

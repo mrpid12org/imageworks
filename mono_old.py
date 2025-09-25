@@ -1,80 +1,71 @@
 from __future__ import annotations
-import subprocess
-import json
-from typing import Optional, Tuple
-
+import io
 from dataclasses import dataclass
+import warnings
 from pathlib import Path
-from typing import Dict, List
-import numpy as np
+from typing import Dict, List, Literal, Optional, Tuple
+
 import cv2
+import numpy as np
 from PIL import Image
 from xml.etree import ElementTree as ET
-import warnings
-import io
-import os
 
 try:
-    from PIL import ImageCms
+    from PIL import ImageCms  # type: ignore
 
     _IMAGECMS_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on Pillow build
+    ImageCms = None  # type: ignore
     _IMAGECMS_AVAILABLE = False
+
+Verdict = Literal["pass", "pass_with_query", "fail"]
+Mode = Literal["neutral", "toned", "not_mono"]
+
+LAB_TONED_PASS_DEFAULT = 10.0
+LAB_TONED_QUERY_DEFAULT = 14.0
+# Allow exceptionally strong but uniform tones to pass if the hue spread remains
+# narrow and the frame stays single-hued.
+LAB_STRONG_TONE_HUE_STD = 14.0
+LAB_STRONG_TONE_CONCENTRATION = 0.85
+LAB_STRONG_TONE_PRIMARY_SHARE = 0.97
+LAB_STRONG_TONE_HUE_TOLERANCE = 15.0  # degrees
+# Stage-lit override: identify files where most of the frame is neutral shadow
+# but the lit subject carries a single hue.
+LAB_SHADOW_NEUTRAL_L = 24.0
+LAB_SHADOW_NEUTRAL_CHROMA = 2.0
+LAB_SHADOW_QUERY_SHARE = 0.55
+LAB_SHADOW_QUERY_HUE_STD = 24.0
+LAB_SHADOW_QUERY_PRIMARY_SHARE = 0.95
+# If strong colour covers more than ~4% of the frame we treat the image as a
+# definite failure unless the caller relaxes these limits.
+LAB_HARD_FAIL_C4_RATIO_DEFAULT = 0.10
+LAB_HARD_FAIL_C4_CLUSTER_DEFAULT = 0.08
+# Morphological kernel size (as a fraction of width/height) used when we merge
+# speckles while searching for chroma clusters.
+CLUSTER_KERNEL_FRACTION = 0.08
 
 
 @dataclass
 class LoaderDiagnostics:
+    """Metadata about how an image was standardised to sRGB."""
+
     icc_status: str
-    icc_profile_name: str | None
+    icc_profile_name: Optional[str]
     cms_available: bool
-    title: str | None = None
-    author: str | None = None
-    scale_factor: float = 1.0
-
-
-class Verdict:
-    pass
-
-
-class Mode:
-    pass
-
-
-CLUSTER_KERNEL_FRACTION = 0.1
-
-# --- Constants from pyproject.toml [tool.imageworks.mono] ---
-NEUTRAL_TOL = 2
-TONED_PASS_DEG = 6.0
-TONED_QUERY_DEG = 10.0
-LAB_TONED_PASS_DEFAULT = 10.0
-LAB_TONED_QUERY_DEFAULT = 14.0
-LAB_CHROMA_MASK = 2.0
-# The following are reasonable placeholder values; adjust if you have more precise ones:
-LAB_STRONG_TONE_HUE_TOLERANCE = 20.0
-LAB_SHADOW_NEUTRAL_L = 20.0
-LAB_SHADOW_NEUTRAL_CHROMA = 1.0
-LAB_STRONG_TONE_HUE_STD = 8.0
-LAB_STRONG_TONE_CONCENTRATION = 0.7
-LAB_STRONG_TONE_PRIMARY_SHARE = 0.5
-LAB_SHADOW_QUERY_SHARE = 0.2
-LAB_SHADOW_QUERY_HUE_STD = 12.0
-LAB_SHADOW_QUERY_PRIMARY_SHARE = 0.2
-LAB_HARD_FAIL_C4_RATIO_DEFAULT = 0.1
-LAB_HARD_FAIL_C4_CLUSTER_DEFAULT = 0.05
-
-
-@dataclass
-class SplitToneRecipe:
-    name: str
-    h1_range: Tuple[float, float]  # Warmer tone
-    h2_range: Tuple[float, float]  # Cooler tone
-    delta_range: Tuple[float, float]
-    description: str
+    title: Optional[str]
+    author: Optional[str]
+    scale_factor: float
 
 
 @dataclass
 class MonoResult:
-    """Result of the monochrome analysis."""
+    """Result of the monochrome analysis.
+
+    - verdict/mode are the primary labels.
+    - channel_max_diff and hue_std_deg are simple global metrics.
+    - extended fields explain "why" an image passed/failed (useful for UI,
+      Lightroom keywords, or tuning).
+    """
 
     verdict: Verdict
     mode: Mode
@@ -130,38 +121,13 @@ class MonoResult:
     hue_weighting: Optional[str] = None  # e.g., "chroma"
 
 
-def _read_jpg_metadata_exiftool(path: str) -> Tuple[Optional[str], Optional[str]]:
-    """Read title/author from JPEG using exiftool, matching zip_extract write logic."""
-    try:
-        result = subprocess.run(
-            ["exiftool", "-j", path],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        data = json.loads(result.stdout)[0]
-        # Try all reasonable keys for title
-        title = (
-            data.get("Title")
-            or data.get("ObjectName")
-            or data.get("Description")
-            or data.get("ImageDescription")
-            or data.get("XMP-dc:Title")
-            or data.get("IPTC:ObjectName")
-        )
-        # Try all reasonable keys for author/creator
-        author = (
-            data.get("Creator")
-            or data.get("Artist")
-            or data.get("XMP-dc:Creator")
-            or data.get("EXIF:Artist")
-        )
-        if isinstance(author, list):
-            author = author[0] if author else None
-        return title, author
-    except Exception:
-        return None, None
+@dataclass
+class SplitToneRecipe:
+    name: str
+    h1_range: Tuple[float, float]  # Warmer tone
+    h2_range: Tuple[float, float]  # Cooler tone
+    delta_range: Tuple[float, float]
+    description: str
 
 
 SPLIT_TONE_RECIPES = [
@@ -333,7 +299,7 @@ def _linear_to_srgb(arr: np.ndarray) -> np.ndarray:
 
 
 def _hue_drift_deg_per_l(
-    L: np.ndarray, hue_deg: np.ndarray, mask: np.ndarray, path: Optional[str] = None
+    L: np.ndarray, hue_deg: np.ndarray, mask: np.ndarray
 ) -> Optional[float]:
     if not np.any(mask):
         return None
@@ -347,24 +313,7 @@ def _hue_drift_deg_per_l(
         return None
     hue_sorted = np.deg2rad(hue_sel[order])
     hue_unwrapped = np.unwrap(hue_sorted)
-    try:
-        with warnings.catch_warnings(record=True) as wlist:
-            warnings.simplefilter("always")
-            slope_rad = float(np.polyfit(L_sorted, hue_unwrapped, 1)[0])
-            for w in wlist:
-                if hasattr(w, "message") and "Polyfit may be poorly conditioned" in str(
-                    w.message
-                ):
-                    if path:
-                        print(f"[RankWarning] {path}: {w.message}")
-                    else:
-                        print(f"[RankWarning] {w.message}")
-    except Exception as e:
-        if path:
-            print(f"[RankWarning] {path}: {e}")
-        else:
-            print(f"[RankWarning] {e}")
-        return None
+    slope_rad = float(np.polyfit(L_sorted, hue_unwrapped, 1)[0])
     return float(np.rad2deg(slope_rad))
 
 
@@ -373,14 +322,7 @@ def _load_srgb_array(
 ) -> Tuple[np.ndarray, LoaderDiagnostics]:
     """Load image as sRGB uint8, honouring embedded ICC profiles when possible."""
 
-    # Prefer EXIF/IPTC/XMP via exiftool for JPEGs, else fallback to XMP/sidecar
-    ext = Path(path).suffix.lower()
-    title = author = None
-    if ext in {".jpg", ".jpeg"}:
-        title, author = _read_jpg_metadata_exiftool(path)
-    if not title and not author:
-        # fallback to XMP/sidecar for all formats
-        title, author = _read_sidecar_metadata(path)
+    title, author = _read_sidecar_metadata(path)
 
     with Image.open(path) as im:
         if title is None or author is None:
@@ -946,29 +888,14 @@ def _check_monochrome_lab(
 
     # --- chroma-weighted circular stats ---
     hues = hue_deg_all[mask]
-    hue_drift = _hue_drift_deg_per_l(
-        L, hue_deg_all, mask, getattr(loader_diag, "path", None)
-    )
+    hue_drift = _hue_drift_deg_per_l(L, hue_deg_all, mask)
     weights = chroma_norm[mask].astype(np.float32)  # in [0,1]
     wsum = float(np.sum(weights)) or 1.0
     rad = np.deg2rad(hues)
     c = float(np.sum(np.cos(rad) * weights) / wsum) if hues.size else 1.0
     s_ = float(np.sum(np.sin(rad) * weights) / wsum) if hues.size else 0.0
     R = float(np.hypot(c, s_))
-    import warnings
-
-    with warnings.catch_warnings(record=True) as wlist:
-        warnings.simplefilter("always", RuntimeWarning)
-        hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
-        for w in wlist:
-            if issubclass(
-                w.category, RuntimeWarning
-            ) and "invalid value encountered in sqrt" in str(w.message):
-                path = getattr(loader_diag, "path", None)
-                if path:
-                    print(f"[RuntimeWarning] {path}: {w.message}")
-                else:
-                    print(f"[RuntimeWarning] {w.message}")
+    hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
     mean_hue_deg = float((np.degrees(np.arctan2(s_, c)) + 360.0) % 360.0)
     # bimodality (doubled angle), weighted
     rad2 = 2.0 * rad
@@ -1478,9 +1405,6 @@ def check_monochrome(
     """Single LAB-based pipeline (legacy/IR variants removed)."""
 
     rgb, loader_diag = _load_srgb_array(path, max_side=max_side)
-    # Attach path to loader_diag for warning reporting
-    if hasattr(loader_diag, "__dict__"):
-        loader_diag.path = path
 
     lab_pass = lab_toned_pass_deg if lab_toned_pass_deg is not None else toned_pass_deg
     lab_query = (
@@ -1497,148 +1421,3 @@ def check_monochrome(
         lab_hard_fail_c4_ratio,
         lab_hard_fail_c4_cluster,
     )
-
-
-def _generate_heatmap_image(
-    path: Path,
-    mode: str,
-    neutral_tol: int,
-    sat_threshold: float,
-    chroma_clip: float,
-    alpha: float,
-    quality: int,
-    out_suffix: str,
-    description: Optional[str] = None,
-    title: Optional[str] = None,
-    author: Optional[str] = None,
-) -> Optional[Path]:
-    """Generate a heatmap overlay and save it next to the original, copying title/author if provided."""
-    with Image.open(path) as im_src:
-        exif = im_src.getexif()
-        rgb = np.asarray(im_src.convert("RGB"), dtype=np.uint8)
-    h, w = rgb.shape[:2]
-    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-
-    out: Optional[np.ndarray] = None
-
-    if mode == "channel_diff":
-        r = rgb[..., 0].astype(np.int16)
-        g = rgb[..., 1].astype(np.int16)
-        b = rgb[..., 2].astype(np.int16)
-        diff = np.maximum(np.abs(r - g), np.maximum(np.abs(r - b), np.abs(g - b)))
-        norm = np.clip(
-            (diff.astype(np.float32) - neutral_tol) / max(1, 255 - neutral_tol),
-            0,
-            1,
-        )
-        heat = np.zeros_like(rgb, dtype=np.float32)
-        heat[..., 0] = norm
-        overlay = (gray_rgb.astype(np.float32) / 255.0) * (1 - alpha) + heat * alpha
-        out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
-    elif mode in {"saturation", "hue"}:
-        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-        H = hsv[..., 0].astype(np.float32) * (360.0 / 180.0)
-        S = hsv[..., 1].astype(np.float32) / 255.0
-        mask = S > float(sat_threshold)
-        if mode == "saturation":
-            heat = np.zeros_like(rgb, dtype=np.float32)
-            heat[..., 0] = np.clip(
-                (S - sat_threshold) / max(1e-6, 1 - sat_threshold), 0, 1
-            )
-            overlay = (gray_rgb.astype(np.float32) / 255.0) * (1 - alpha) + heat * alpha
-            out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
-        else:
-            hsv_vis = np.zeros((h, w, 3), dtype=np.uint8)
-            hsv_vis[..., 0] = (H / 2.0).astype(np.uint8)
-            hsv_vis[..., 1] = (np.clip(S, 0, 1) * 255).astype(np.uint8)
-            hsv_vis[..., 2] = 255
-            color_hue = (
-                cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
-            )
-            base = gray_rgb.astype(np.float32) / 255.0
-            m = mask.astype(np.float32)[..., None]
-            overlay = base * (1 - m * alpha) + color_hue * (m * alpha)
-            out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
-    elif mode in {"lab_chroma", "lab_residual"}:
-        lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
-        a = lab[..., 1] - 128.0
-        b = lab[..., 2] - 128.0
-        chroma = np.hypot(a, b)
-        norm = np.clip(chroma / max(1e-6, chroma_clip), 0.0, 1.0)
-        base = gray_rgb.astype(np.float32) / 255.0
-        if mode == "lab_chroma":
-            heatmap = cv2.applyColorMap(
-                (norm * 255.0).astype(np.uint8), cv2.COLORMAP_INFERNO
-            )
-            heatmap = (
-                cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-            )
-            overlay = base * (1 - alpha) + heatmap * alpha
-            out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
-        else:
-            hue = (np.degrees(np.arctan2(b, a)) + 360.0) % 360.0
-            hsv_vis = np.zeros((h, w, 3), dtype=np.uint8)
-            hsv_vis[..., 0] = (hue / 2.0).astype(np.uint8)
-            hsv_vis[..., 1] = (np.clip(norm, 0, 1) * 255).astype(np.uint8)
-            hsv_vis[..., 2] = (np.clip(norm * 1.2, 0, 1) * 255).astype(np.uint8)
-            color = cv2.cvtColor(hsv_vis, cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
-            m = (norm > 0).astype(np.float32)[..., None]
-            overlay = base * (1 - m * alpha) + color * (m * alpha)
-            out = np.clip(overlay * 255.0, 0, 255).astype(np.uint8)
-
-    if out is None:
-        return None
-
-    if out_suffix:
-        suffix = out_suffix
-        mode_suffix = {
-            "lab_chroma": "_chroma",
-            "lab_residual": "_residual",
-            "channel_diff": "_diff",
-            "saturation": "_sat",
-            "hue": "_hue",
-        }.get(mode.lower(), f"_{mode.lower()}")
-        if suffix.endswith(mode_suffix):
-            suffix = suffix[: -len(mode_suffix)]
-        suffix = suffix + mode_suffix
-    else:
-        suffix = {
-            "lab_chroma": "_lab_chroma",
-            "lab_residual": "_lab_residual",
-            "channel_diff": "_diff",
-            "saturation": "_sat",
-            "hue": "_hue",
-        }.get(mode.lower(), f"_{mode.lower()}")
-
-    out_path = path.with_name(path.stem + suffix + ".jpg")
-    out_img = Image.fromarray(out)
-    save_kwargs = {"quality": quality, "subsampling": 2}
-    if description:
-        exif[0x010E] = description
-    if exif:
-        save_kwargs["exif"] = exif.tobytes()
-    out_img.save(out_path, **save_kwargs)
-    try:
-        st = os.stat(path)
-        os.utime(out_path, (st.st_atime, st.st_mtime))
-    except Exception:
-        pass
-
-    # Set title/author in overlay using exiftool if provided
-    if title or author:
-        cmd = ["exiftool", "-overwrite_original"]
-        if title:
-            cmd.append(f"-XMP-dc:Title={title}")
-            cmd.append(f"-IPTC:ObjectName={title}")
-        if author:
-            cmd.append(f"-XMP-dc:Creator={author}")
-            cmd.append(f"-EXIF:Artist={author}")
-        cmd.append(str(out_path))
-        try:
-            subprocess.run(
-                cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        except Exception:
-            pass
-    return out_path

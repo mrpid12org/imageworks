@@ -29,10 +29,14 @@ dependencies = [
 imageworks-mono = "imageworks.apps.competition_checker.cli.mono:app"
 imageworks-mono-api = "imageworks.apps.competition_checker.api.main:run"
 imageworks-mono-xmp = "imageworks.tools.write_mono_xmp:app"
+imageworks-zip-ingest = "imageworks.tools.process_zip_downloads:app"
+
+# ZIP extract tool
+imageworks-zip-extract = "imageworks.tools.zip_extract:app"
 
 #Centralized defaults for the mono CLI
 [tool.imageworks.mono]
-default_folder = "/mnt/d/Proper Photos/photos/ccc test images/tones"
+default_folder = "/mnt/d/Proper Photos/photos/ccc competition images"
 default_exts = "jpg,jpeg,tif,tiff,png"
 default_jsonl = "mono_results.jsonl"
 default_xmp_script = "write_xmp.sh"
@@ -43,6 +47,10 @@ toned_query_deg = 10.0
 lab_toned_pass_deg = 10.0
 lab_toned_query_deg = 14.0
 lab_chroma_mask = 2.0
+
+[tool.imageworks.zip-extract]
+default_zip_dir = "/mnt/c/Users/stewa/Downloads/CCC comp zips" # <--- YOU WILL NEED TO SET THIS PATH
+default_extract_root = "/mnt/d/Proper Photos/photos/ccc competition images" # Optional, will use temp if not set
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

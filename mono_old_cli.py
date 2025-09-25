@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Optional, Any, Dict, List, Iterable
+from typing import Optional, Any, Dict, List, Tuple, Iterable
 import typer
 from rich.progress import track
 from imageworks.libs.vision.mono import (
@@ -27,14 +27,8 @@ app = typer.Typer(help="Competition Checker - Monochrome validation")
 
 def _iter_files(root: Path, exts_csv: str):
     exts = [e.strip().lstrip(".").lower() for e in exts_csv.split(",") if e.strip()]
-    import re
-
-    pattern = re.compile(r"^01_\d+")
     for p in root.rglob("*"):
         if p.is_file():
-            # Only process files where the stem matches exactly '01_' followed by 1+ digits
-            if not pattern.match(p.stem.lower()):
-                continue
             suf = p.suffix.lstrip(".").lower()
             if suf in exts:
                 yield p
@@ -305,43 +299,48 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
     return lines
 
 
-def _render_grouped_tables_by_dir(
-    results_by_dir: Dict[str, Dict[str, Any]],
+def _render_grouped_tables(
+    results_by_file: Dict[str, Dict[str, Dict[str, Any]]],
 ) -> List[str]:
     lines: List[str] = []
-    for dirpath, filedict in sorted(results_by_dir.items()):
-        # Count per verdict for this directory
-        dir_counts = {"pass": 0, "pass_with_query": 0, "fail": 0}
-        for entry in filedict.values():
-            verdict = entry["lab"].get("verdict", "")
-            if verdict in dir_counts:
-                dir_counts[verdict] += 1
-        lines.append(
-            f"\nDirectory: {dirpath}\n  PASS={dir_counts['pass']}  QUERY={dir_counts['pass_with_query']}  FAIL={dir_counts['fail']}"
-        )
-        # Group entries by verdict for this directory
-        for verdict in ("fail", "pass_with_query", "pass"):
-            verdict_entries = [
-                (fname, entry)
-                for fname, entry in filedict.items()
-                if entry["lab"].get("verdict", "") == verdict
-            ]
-            if verdict_entries:
-                lines.append(f"\n=== {verdict.upper()} ({len(verdict_entries)}) ===")
-                for fname, entry in verdict_entries:
-                    lab = entry["lab"]
-                    title = lab.get("title", "—")
-                    author = lab.get("author", "—")
-                    name = fname
-                    prefix = entry.get("_path", name)
-                    lines.append(f"Title: {title}")
-                    lines.append(f"Author: {author}")
-                    lines.append(f"Entry: {prefix} ({name})")
-                    lines_summary = _summarize_result(lab, "LAB")
-                    for line in lines_summary:
-                        lines.append("  " + line)
-                    lines.append("")
-    return lines
+    if not results_by_file:
+        return lines
+
+    sections: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {
+        "fail": [],
+        "query": [],
+        "pass": [],
+    }
+
+    for name, methods in sorted(results_by_file.items()):
+        lab = methods.get("lab", {})
+        verdict = lab.get("verdict")
+        bucket = verdict if verdict in {"fail", "pass_with_query", "pass"} else "pass"
+        bucket = {"pass_with_query": "query"}.get(bucket, bucket)
+        sections[bucket].append((name, lab))
+
+    for label in ("fail", "query", "pass"):
+        rows = sections[label]
+        if not rows:
+            continue
+        lines.append("")
+        lines.append(f"=== {label.upper()} ({len(rows)}) ===")
+        for name, lab in rows:
+            chosen = lab
+            title = (chosen or {}).get("title") or "—"
+            author = (chosen or {}).get("author") or "—"
+            prefix = name
+            marker = "_Serial"
+            if marker in name:
+                prefix = name.split(marker, 1)[0]
+            lines.append(f"Title: {title}")
+            lines.append(f"Author: {author}")
+            lines.append(f"Entry: {prefix} ({name})")
+            lines_summary = _summarize_result(lab, "LAB")
+            for line in lines_summary:
+                lines.append("  " + line)
+            lines.append("")
+
     return lines
 
 
@@ -476,21 +475,6 @@ def _generate_heatmap_image(
     except Exception:
         pass
     return out_path
-
-
-def add_verdict_keyword(path: Path, verdict: str):
-    """Append a verdict keyword ('pass', 'fail', 'pass_with_query') to the image using exiftool."""
-    tag = verdict if verdict in {"pass", "fail", "pass_with_query"} else "fail"
-    cmd = [
-        "exiftool",
-        "-overwrite_original",
-        f"-keywords+={tag}",
-        str(path),
-    ]
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except Exception:
-        pass
 
 
 @app.command()
@@ -696,7 +680,7 @@ def check(
             ]
         )
     counts = {"lab": {"pass": 0, "pass_with_query": 0, "fail": 0}}
-    results_by_dir: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    results_by_file: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     iterator: Iterable[Path]
     if table_only:
@@ -705,6 +689,8 @@ def check(
         iterator = track(paths, description="Checking")
 
     for p in iterator:
+        # Forward the tuned thresholds into the core checker so CLI flags and
+        # pyproject defaults are honoured in one place.
         res = check_monochrome(
             str(p),
             neutral_tol,
@@ -717,17 +703,16 @@ def check(
             lab_hard_fail_c4_ratio=lab_fail_ratio_val,
             lab_hard_fail_c4_cluster=lab_fail_cluster_val,
         )
-        dirpath = str(p.parent)
-        entry = results_by_dir.setdefault(dirpath, {}).setdefault(p.name, {})
-        entry["_path"] = str(p)
+
+        entry = results_by_file.setdefault(p.name, {})
+        entry.setdefault("_path", str(p))
+
         r = res
         counts["lab"].setdefault(r.verdict, 0)
         counts["lab"][r.verdict] += 1
         entry["lab"] = r.__dict__.copy()
-        # Add verdict keyword to original image
-        add_verdict_keyword(p, r.verdict)
         if not summary_only and not table_only:
-            typer.echo(f"{p.name:40s}  {{_format_method_result(r)}}")
+            typer.echo(f"{p.name:40s}  {_format_method_result(r)}")
         if out_f:
             out_f.write(json.dumps(_result_to_json(str(p), r)) + "\n")
 
@@ -735,19 +720,16 @@ def check(
         out_f.close()
 
     summary_count_lines: List[str] = []
-    summary_count_lines.append("Summary (lab):\n")
-    # Print and collect summary counts per directory
-    for dirpath, filedict in sorted(results_by_dir.items()):
-        dir_counts = {"pass": 0, "pass_with_query": 0, "fail": 0}
-        for entry in filedict.values():
-            verdict = entry["lab"].get("verdict", "")
-            if verdict in dir_counts:
-                dir_counts[verdict] += 1
-        line = f"Directory: {dirpath}\n  PASS={dir_counts['pass']}  QUERY={dir_counts['pass_with_query']}  FAIL={dir_counts['fail']}"
-        typer.echo(line)
-        summary_count_lines.append(line)
+    c = counts["lab"]
+    summary_line = (
+        f"Summary (lab): PASS={c['pass']}  "
+        f"QUERY={c['pass_with_query']}  "
+        f"FAIL={c['fail']}"
+    )
+    typer.echo(summary_line)
+    summary_count_lines.append(summary_line)
 
-    grouped_lines = _render_grouped_tables_by_dir(results_by_dir)
+    grouped_lines = _render_grouped_tables(results_by_file)
     final_lines: List[str] = summary_count_lines[:]
     if grouped_lines:
         if final_lines:
@@ -763,43 +745,146 @@ def check(
         (summary_text + "\n") if summary_text else "", encoding="utf-8"
     )
 
-    # Restore auto_heatmap logic for grouped output (regression fix)
     if auto_heatmap:
-        # Collect all images with verdict 'fail' or 'pass_with_query'
-        overlay_images = []
-        for dirpath, filedict in results_by_dir.items():
-            for fname, entry in filedict.items():
-                lab = entry.get("lab", {})
-                if lab.get("verdict") in {"fail", "pass_with_query"}:
-                    overlay_images.append((Path(dirpath) / fname, lab))
-        if overlay_images:
-            typer.echo(
-                f"Generating overlays for {len(overlay_images)} images (fail or pass_with_query)..."
-            )
-            for mode in auto_heatmap_modes:
-                for img_path, lab in overlay_images:
-                    try:
-                        description = lab.get("reason_summary")
-                        verdict = lab.get("verdict", "fail")
-                        out_path = _generate_heatmap_image(
-                            img_path,
-                            mode,
-                            neutral_tol,
-                            auto_heatmap_sat_threshold,
-                            auto_heatmap_chroma_clip,
-                            auto_heatmap_alpha,
-                            auto_heatmap_quality,
-                            auto_heatmap_suffix or "",
-                            description,
-                        )
-                        if out_path:
-                            add_verdict_keyword(out_path, verdict)
-                    except Exception as e:
-                        typer.echo(
-                            f"[red]Failed to generate overlay for {img_path}: {e}"
-                        )
+        fail_infos: List[Tuple[Path, Optional[str]]] = []
+        for entry in results_by_file.values():
+            base_path = entry.get("_path")
+            if not base_path:
+                continue
+            result_dict = entry.get("lab")
+            if isinstance(result_dict, dict):
+                verdict = result_dict.get("verdict")
+                if verdict in {"fail", "pass_with_query"}:
+                    desc = result_dict.get("reason_summary")
+                    fail_infos.append(
+                        (Path(base_path), desc if verdict != "pass" else desc)
+                    )
+        if fail_infos:
+            generated = 0
+            for p, summary in fail_infos:
+                for mode in auto_heatmap_modes:
+                    out_path = _generate_heatmap_image(
+                        p,
+                        mode,
+                        neutral_tol,
+                        auto_heatmap_sat_threshold,
+                        auto_heatmap_chroma_clip,
+                        auto_heatmap_alpha,
+                        auto_heatmap_quality,
+                        auto_heatmap_suffix or "",
+                        summary,
+                    )
+                    if out_path:
+                        generated += 1
+            typer.echo(f"Generated {generated} heatmap overlay(s) for review images")
 
-    # Skipping CSV output for grouped output for now
+    if csv_writer:
+        csv_methods = ["lab"]
+        for name in sorted(results_by_file.keys()):
+            entry = results_by_file[name]
+            file_path = entry.get("_path", "")
+            chosen = entry.get("lab")
+            title = (chosen or {}).get("title") or ""
+            author = (chosen or {}).get("author") or ""
+            entry_number = _extract_entry_number(name)
+            for method_key in csv_methods:
+                res_dict = entry.get(method_key)
+                if not isinstance(res_dict, dict):
+                    continue
+                hue_sigma = res_dict.get("hue_std_deg")
+                hue_peak_delta = res_dict.get("hue_peak_delta_deg")
+                hue_second_mass = res_dict.get("hue_second_mass")
+                hilo_delta = res_dict.get("delta_h_highs_shadows_deg")
+                chroma_p99 = res_dict.get("chroma_p99")
+                chroma_max = res_dict.get("chroma_max")
+                chroma_ratio_2 = res_dict.get("chroma_ratio_2")
+                chroma_ratio_4 = res_dict.get("chroma_ratio_4")
+                cluster_max_2 = res_dict.get("chroma_cluster_max_2")
+                cluster_max_4 = res_dict.get("chroma_cluster_max_4")
+                hue_drift = res_dict.get("hue_drift_deg_per_l")
+                scale_factor = res_dict.get("scale_factor")
+                confidence = res_dict.get("confidence")
+
+                csv_writer.writerow(
+                    [
+                        title,
+                        author,
+                        entry_number,
+                        name,
+                        method_key,
+                        res_dict.get("verdict", ""),
+                        res_dict.get("mode", ""),
+                        res_dict.get("reason_summary", ""),
+                        res_dict.get("failure_reason", ""),
+                        res_dict.get("split_tone_name", ""),
+                        res_dict.get("split_tone_description", ""),
+                        res_dict.get("dominant_color", ""),
+                        (
+                            f"{hue_sigma:.2f}"
+                            if isinstance(hue_sigma, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_peak_delta:.2f}"
+                            if isinstance(hue_peak_delta, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_second_mass:.4f}"
+                            if isinstance(hue_second_mass, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hilo_delta:.2f}"
+                            if isinstance(hilo_delta, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{chroma_p99:.2f}"
+                            if isinstance(chroma_p99, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{chroma_max:.2f}"
+                            if isinstance(chroma_max, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{chroma_ratio_2:.4f}"
+                            if isinstance(chroma_ratio_2, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{chroma_ratio_4:.4f}"
+                            if isinstance(chroma_ratio_4, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{cluster_max_2:.4f}"
+                            if isinstance(cluster_max_2, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{cluster_max_4:.4f}"
+                            if isinstance(cluster_max_4, (float, int))
+                            else ""
+                        ),
+                        (
+                            f"{hue_drift:.2f}"
+                            if isinstance(hue_drift, (float, int))
+                            else ""
+                        ),
+                        res_dict.get("loader_status", ""),
+                        res_dict.get("source_profile", ""),
+                        (
+                            f"{scale_factor:.3f}"
+                            if isinstance(scale_factor, (float, int))
+                            else ""
+                        ),
+                        confidence or "",
+                        file_path,
+                    ]
+                )
 
     if write_xmp:
         if not jsonl_out:
