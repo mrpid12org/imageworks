@@ -35,8 +35,7 @@ ai-models/
 *.ckpt
 
 # Output directories
-outputs/summaries/
-outputs/results/
+outputs/
 tests/output/
 
 # Test outputs and temp files
