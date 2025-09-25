@@ -116,6 +116,7 @@ class MonoResult:
     author: Optional[str] = None
     scale_factor: float = 1.0
     hue_drift_deg_per_l: Optional[float] = None
+    confidence: Optional[str] = None
     # New diagnostics for split-tone gating
     hue_peak_delta_deg: Optional[float] = None  # Δh between top 2 peaks (deg)
     hue_second_mass: Optional[float] = None  # mass of 2nd peak (0–1, chroma-weighted)
@@ -347,23 +348,23 @@ def _hue_drift_deg_per_l(
     hue_sorted = np.deg2rad(hue_sel[order])
     hue_unwrapped = np.unwrap(hue_sorted)
     try:
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True) as wlist:
             warnings.simplefilter("always")
             slope_rad = float(np.polyfit(L_sorted, hue_unwrapped, 1)[0])
-
-            # Check if polyfit issued a poorly conditioned warning
-            for warning in w:
-                if "Polyfit may be poorly conditioned" in str(warning.message):
-                    # Data is poorly conditioned, return None like the old version
-                    return None
-
+            for w in wlist:
+                if hasattr(w, "message") and "Polyfit may be poorly conditioned" in str(
+                    w.message
+                ):
+                    if path:
+                        print(f"[RankWarning] {path}: {w.message}")
+                    else:
+                        print(f"[RankWarning] {w.message}")
     except Exception as e:
         if path:
-            print(f"[Polyfit Error] {path}: {e}")
+            print(f"[RankWarning] {path}: {e}")
         else:
-            print(f"[Polyfit Error] {e}")
+            print(f"[RankWarning] {e}")
         return None
-
     return float(np.rad2deg(slope_rad))
 
 
@@ -485,7 +486,7 @@ def _toned_monochrome_hue_std(rgb: np.ndarray) -> float:
     h_sel = h[mask]
     radians = np.deg2rad(h_sel)
     C = np.hypot(np.mean(np.cos(radians)), np.mean(np.sin(radians)))
-    C = float(np.clip(C, 1e-8, 0.999999))
+    C = float(np.clip(C, 1e-8, 1.0))
     circ_std_deg = float(np.rad2deg(np.sqrt(-2.0 * np.log(C))))
     return circ_std_deg
 
@@ -497,7 +498,7 @@ def _circular_std_deg_from_angles(angles_deg: np.ndarray) -> float:
         return 0.0
     radians = np.deg2rad(angles_deg)
     C = np.hypot(np.mean(np.cos(radians)), np.mean(np.sin(radians)))
-    C = float(np.clip(C, 1e-8, 0.999999))
+    C = float(np.clip(C, 1e-8, 1.0))
     return float(np.rad2deg(np.sqrt(-2.0 * np.log(C))))
 
 
@@ -666,49 +667,62 @@ def _top_hue_peaks(
 
 def _qualitative_chroma(value: float) -> str:
     if value < 1.5:
-        return "nearly neutral"
+        return "barely above neutral"
     if value < 3.0:
-        return "slightly tinted"
+        return "a faint but measurable tint"
     if value < 6.0:
-        return "noticeably colored"
-    return "strongly colored"
+        return "clearly coloured"
+    return "strongly coloured"
 
 
 def _describe_hue_spread(hue_std: float) -> str:
     if hue_std < 12.0:
-        return "Colors are very consistent throughout the image."
+        return f"Hue variation stays tight (≈{hue_std:.1f}°), consistent with a single tint."
     if hue_std < 45.0:
-        return "Colors vary slightly but remain harmonious."
-    return "Multiple color families are present in the image."
+        return f"Hue variation covers about {hue_std:.1f}°; the tint wanders but stays related."
+    return f"Hue variation spans about {hue_std:.1f}°, so multiple colour families are in play."
 
 
 def _describe_chroma_percentiles(chroma_p99: float, chroma_max: Optional[float]) -> str:
     desc = _qualitative_chroma(chroma_p99)
     if chroma_max is not None and chroma_max > 0:
-        return f"The brightest areas show {desc} tinting."
-    return f"Overall the image appears {desc}."
+        return (
+            f"Bright regions reach chroma {chroma_max:.2f} and the 99th percentile sits near "
+            f"{chroma_p99:.2f}, which looks {desc}."
+        )
+    return f"The 99th percentile chroma is {chroma_p99:.2f}, which looks {desc}."
 
 
 def _describe_chroma_footprint(chroma_ratio2: float, chroma_ratio4: float) -> str:
     mild_pct = chroma_ratio2 * 100.0
+    strong_pct = chroma_ratio4 * 100.0
     if chroma_ratio2 < 0.005:
-        return "Only tiny traces of color remain."
+        return "Only trace pixels (under 0.5%) creep past the C*2 threshold."
     if chroma_ratio2 < 0.02:
-        return f"About {mild_pct:.1f}% of the image has slight color tinting."
+        return (
+            f"About {mild_pct:.1f}% of pixels nudge past C*2, with {strong_pct:.1f}% showing "
+            "stronger colour (C*4)."
+        )
     if chroma_ratio2 < 0.1:
-        return f"Roughly {mild_pct:.1f}% of the frame shows some color tinting."
-    return f"Around {mild_pct:.1f}% of the image contains noticeable color."
+        return (
+            f"Roughly {mild_pct:.1f}% of the frame carries a mild tint (C*2) and {strong_pct:.1f}% "
+            "pushes into stronger colour."
+        )
+    return (
+        f"Around {mild_pct:.1f}% of pixels sit beyond C*2 and {strong_pct:.1f}% exceed C*4, so the "
+        "cast touches a noticeable portion of the frame."
+    )
 
 
 def _describe_hue_drift(hue_drift: float) -> str:
     drift_abs = abs(hue_drift)
     if drift_abs < 10.0:
-        return "Colors remain consistent from shadows to highlights."
+        return "Hue stays consistent from shadows to highlights."
     if drift_abs < 45.0:
-        return "Colors shift gently from shadows to highlights."
+        return f"Hue shifts gently (≈{hue_drift:.1f}°) across the tonal range."
     if drift_abs < 120.0:
-        return "Colors change notably between dark and bright areas."
-    return "Colors change dramatically from shadows to highlights."
+        return f"Hue swings by about {hue_drift:.1f}° between darks and lights, so tones respond differently."
+    return f"Hue flips by roughly {hue_drift:.1f}° through the tonal range, a strong split-tone signature."
 
 
 def _describe_median_chroma(chroma_med: float) -> str:
@@ -765,39 +779,71 @@ def _summarize_reason(
     pieces: List[str] = []
 
     if verdict == "pass" and mode == "neutral":
-        pieces.append("Image appears neutral with minimal color tinting.")
+        pieces.append(
+            "Neutral monochrome detected; residual chroma sits inside tolerance."
+        )
     elif verdict in {"pass", "pass_with_query"} and mode == "toned":
-        tone = dominant_color or "single tone"
-        if verdict == "pass":
-            pieces.append(f"Image has acceptable {tone} toning.")
+        tone = dominant_color or (
+            f"{dominant_hue:.0f}°" if dominant_hue is not None else "single hue"
+        )
+        if verdict == "pass" and hue_std <= LAB_TONED_PASS_DEFAULT:
+            pieces.append(
+                f"Toned monochrome with a dominant {tone} tint; hue variation stays within the relaxed limit."
+            )
+        elif verdict == "pass":
+            pieces.append(
+                f"Toned monochrome with a dominant {tone} tint; hue variation is narrow but stronger than the standard toned limit."
+            )
         else:
             pieces.append(
-                f"Image has {tone} toning that's close to the review threshold."
+                f"Borderline toned image dominated by {tone}; hue variation is close to the review threshold."
             )
+        pieces.append(_describe_median_chroma(chroma_med))
         if hue_clusters > 1:
             pieces.append(
-                "Multiple color areas detected—confirm the toning is intentional."
+                "Multiple hue clusters detected—confirm the toning is intentional."
             )
     else:
         failure_map = {
-            "split_toning_suspected": "Image shows split-toning with different colors in highlights and shadows.",
-            "near_neutral_color_cast": "Image has a subtle color cast that should be removed.",
-            "multi_color": "Image contains multiple distinct colors instead of a single tone.",
-            "color_present": "Color variation exceeds acceptable limits for monochrome.",
+            "split_toning_suspected": "Split-toned image with distinct hue families across the frame.",
+            "near_neutral_color_cast": "Subtle colour cast remains measurable even though the file is near neutral.",
+            "multi_color": "Multiple strong colours appear instead of a single tint.",
+            "color_present": "Colour variation exceeds the toned limits for this class.",
         }
         reason_text = failure_map.get(
             failure_reason,
-            "Image doesn't meet monochrome criteria.",
+            "Colour structure inconsistent with monochrome criteria.",
         )
         if split_tone_name:
-            reason_text += f" (appears to be {split_tone_name})"
+            reason_text += f" (likely {split_tone_name})"
         pieces.append(reason_text)
+        if dominant_color:
+            pieces.append(f"Dominant tone around {dominant_color}.")
 
-    # Skip redundant hue drift analysis - already covered in main description
+    if hue_drift_deg_per_l is not None and abs(hue_drift_deg_per_l) >= 10.0:
+        drift_abs = abs(hue_drift_deg_per_l)
+        if drift_abs < 45.0:
+            pieces.append("Hue shifts gently as tones brighten.")
+        elif drift_abs < 120.0:
+            pieces.append("Hue changes noticeably between darks and lights.")
+        else:
+            pieces.append("Hue flips between hue families across the tonal range.")
 
-    # Skip redundant highlights/shadows analysis - already covered in main description
+    if delta_hue_highs_shadows_deg is not None:
+        if delta_hue_highs_shadows_deg < 45.0:
+            pieces.append(
+                f"Highlights and shadows hues are close (Δh={delta_hue_highs_shadows_deg:.1f}°), indicating a drifted single tone."
+            )
+        else:
+            pieces.append(
+                f"Highlights and shadows hues are distinct (Δh={delta_hue_highs_shadows_deg:.1f}°), supporting a split-tone interpretation."
+            )
 
-    # Skip ICC profile info - now handled in dedicated section
+    icc_status = loader_diag.icc_status or ""
+    if icc_status.startswith("no_profile"):
+        pieces.append("ICC profile missing; assumed sRGB.")
+    elif icc_status.startswith("embedded_assumed"):
+        pieces.append("Embedded profile ignored (LittleCMS unavailable).")
 
     return " ".join(pieces).strip()
 
@@ -913,8 +959,7 @@ def _check_monochrome_lab(
 
     with warnings.catch_warnings(record=True) as wlist:
         warnings.simplefilter("always", RuntimeWarning)
-        R = min(max(R, 1e-8), 0.999999)  # Clamp R to avoid warnings
-        hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(R))))
+        hue_std = float(np.rad2deg(np.sqrt(-2.0 * np.log(max(R, 1e-8)))))
         for w in wlist:
             if issubclass(
                 w.category, RuntimeWarning
@@ -1122,6 +1167,12 @@ def _check_monochrome_lab(
     )
 
     if chroma_p99 <= neutral_chroma:
+        confidence = (
+            "low"
+            if loader_diag.icc_status.startswith("no_profile")
+            or loader_diag.icc_status.startswith("embedded_assumed")
+            else "normal"
+        )
         return MonoResult(
             verdict="pass",
             mode="neutral",
@@ -1141,6 +1192,7 @@ def _check_monochrome_lab(
                 split_tone_name=split_name,
                 delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
             ),
+            confidence=confidence,
             **base_result_args,
         )
 
@@ -1179,6 +1231,7 @@ def _check_monochrome_lab(
             )
             + " "
             + reason_summary_base,
+            confidence="review",
             **base_result_args,
         )
 
@@ -1204,6 +1257,7 @@ def _check_monochrome_lab(
             mode="toned",
             failure_reason=None,
             reason_summary=reason_summary,
+            confidence="review",
             **base_result_args,
         )
 
@@ -1227,6 +1281,7 @@ def _check_monochrome_lab(
                 split_tone_name=split_name,
                 delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
             ),
+            confidence="review",
             **base_result_args,
         )
 
@@ -1249,6 +1304,12 @@ def _check_monochrome_lab(
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
                 delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
+            ),
+            confidence=(
+                "low"
+                if loader_diag.icc_status.startswith("no_profile")
+                or loader_diag.icc_status.startswith("embedded_assumed")
+                else "normal"
             ),
             **base_result_args,
         )
@@ -1279,6 +1340,12 @@ def _check_monochrome_lab(
                 hue_clusters=len(peak_hues) if peak_hues else 1,
                 split_tone_name=split_name,
                 delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
+            ),
+            confidence=(
+                "low"
+                if loader_diag.icc_status.startswith("no_profile")
+                or loader_diag.icc_status.startswith("embedded_assumed")
+                else "review"
             ),
             **base_result_args,
         )
@@ -1326,6 +1393,7 @@ def _check_monochrome_lab(
                     split_tone_name=split_name,
                     delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
                 ),
+                confidence="review",
                 **base_result_args,
             )
         if (
@@ -1353,6 +1421,7 @@ def _check_monochrome_lab(
                     split_tone_name=split_name,
                     delta_hue_highs_shadows_deg=delta_h_highs_shadows_deg,
                 ),
+                confidence="review",
                 **base_result_args,
             )
 
@@ -1382,6 +1451,12 @@ def _check_monochrome_lab(
         mode="not_mono",
         failure_reason=failure_reason,
         reason_summary=reason_summary,
+        confidence=(
+            "low"
+            if loader_diag.icc_status.startswith("no_profile")
+            or loader_diag.icc_status.startswith("embedded_assumed")
+            else "normal"
+        ),
         **base_result_args,
     )
 

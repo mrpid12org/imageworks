@@ -31,7 +31,12 @@ def _iter_files(root: Path, exts_csv: str):
         if p.is_file():
             suf = p.suffix.lstrip(".").lower()
             if suf in exts:
-                yield p
+                # Filter for mono competition entries: filename starts with "01_" followed by number
+                stem = p.stem
+                if stem.startswith("01_") and len(stem) > 3:
+                    # Check if character after "01_" is a digit
+                    if stem[3].isdigit():
+                        yield p
 
 
 def _find_pyproject(start: Path) -> Optional[Path]:
@@ -205,14 +210,40 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
 
     verdict = res.get("verdict", "n/a").upper()
     mode = res.get("mode", "-").replace("_", " ")
-    method = res.get("analysis_method") or label.lower()
-    confidence = res.get("confidence")
 
-    header = f"{label} result: {verdict} ({mode}) via {method}"
-    if confidence and confidence not in {"normal", ""}:
-        header += f" [{confidence}]"
+    header = f"{label} result: {verdict} ({mode})"
 
     lines = [header]
+
+    # Add ICC profile section right after the header
+    loader_diag = res.get("loader_diag", {}) or {}
+    icc_status = loader_diag.get("icc_status") or ""
+    if icc_status.startswith("no_profile"):
+        lines.append("ICC Profile: None (sRGB assumed)")
+    elif icc_status.startswith("embedded_assumed"):
+        lines.append("ICC Profile: Embedded profile ignored (LittleCMS unavailable)")
+    elif icc_status and not icc_status.startswith("ok"):
+        lines.append(f"ICC Profile: {icc_status}")
+    else:
+        # Check if we have ICC profile name from loader_diag
+        icc_name = loader_diag.get("icc_profile_name") or loader_diag.get(
+            "profile_name"
+        )
+        if icc_name:
+            lines.append(f"ICC Profile: {icc_name}")
+        else:
+            lines.append("ICC Profile: Present")
+
+    # Add tones section
+    tones: List[str] = []
+    dominant = res.get("dominant_color")
+    if dominant:
+        tones.append(f"dominant tone ≈ {dominant}")
+    top_colors = res.get("top_colors") or []
+    if top_colors:
+        tones.append("other tones: " + ", ".join(top_colors[:3]))
+    if tones:
+        lines.append("Tones: " + "; ".join(tones))
 
     notes: List[str] = []
     hue_std = res.get("hue_std_deg")
@@ -228,69 +259,46 @@ def _summarize_result(res: Dict[str, Any], label: str) -> List[str]:
         )
     ratio2 = res.get("chroma_ratio_2")
     ratio4 = res.get("chroma_ratio_4")
-    cluster2 = res.get("chroma_cluster_max_2")
-    cluster4 = res.get("chroma_cluster_max_4")
     if isinstance(ratio2, (int, float)) and isinstance(ratio4, (int, float)):
         if ratio2 > 0 or ratio4 > 0:
             notes.append(_describe_chroma_footprint(float(ratio2), float(ratio4)))
-        if isinstance(cluster4, (int, float)) and cluster4 > 0:
-            notes.append(
-                f"Largest C*4 cluster covers {cluster4*100:.1f}% of the frame."
-            )
-        elif isinstance(cluster2, (int, float)) and cluster2 > 0:
-            notes.append(
-                f"Largest C*2 cluster covers {cluster2*100:.1f}% of the frame."
-            )
+        # Skip cluster size details - covered by footprint description above
     drift = res.get("hue_drift_deg_per_l")
     if isinstance(drift, (int, float)):
         notes.append(_describe_hue_drift(float(drift)))
 
-    peak_delta = res.get("hue_peak_delta_deg")
-    second_mass = res.get("hue_second_mass")
-    if isinstance(peak_delta, (int, float)) and isinstance(second_mass, (int, float)):
-        if peak_delta > 0 or second_mass > 0:
-            notes.append(
-                f"Two-peak analysis shows Δh={peak_delta:.1f}° with secondary mass={second_mass*100:.1f}%."
-            )
+    # Skip technical peak analysis details
 
-    delta_highs_shadows = res.get("delta_h_highs_shadows_deg")
-    if isinstance(delta_highs_shadows, (int, float)):
-        if delta_highs_shadows < 45.0:
-            notes.append(
-                f"Highlights and shadows hues are close (Δh={delta_highs_shadows:.1f}°), indicating a drifted single tone."
-            )
+    # Check for split-toning indicators and add to notes
+    failure_reason = res.get("failure_reason")
+    split_tone_name = res.get("split_tone_name")
+    verdict = res.get("verdict", "").lower()
+    if failure_reason == "split_toning_suspected" or split_tone_name:
+        if split_tone_name:
+            if verdict == "fail":
+                notes.append(
+                    f"Split-toning detected (appears to be {split_tone_name})."
+                )
+            else:
+                notes.append(
+                    f"Possible split-toning detected (may be {split_tone_name})."
+                )
         else:
-            notes.append(
-                f"Highlights and shadows hues are distinct (Δh={delta_highs_shadows:.1f}°), supporting a split-tone interpretation."
-            )
+            notes.append("Possible split-toning detected.")
 
+    # Skip redundant highlights/shadows analysis - covered by drift description
+
+    # Combine notes and reason into a single section
+    combined_description = []
     if notes:
-        lines.append("Notes: " + " ".join(notes))
-
-    tones: List[str] = []
-    dominant = res.get("dominant_color")
-    if dominant:
-        tones.append(f"dominant tone ≈ {dominant}")
-    top_colors = res.get("top_colors") or []
-    if top_colors:
-        tones.append("other tones: " + ", ".join(top_colors[:3]))
-    if tones:
-        lines.append("Tones: " + "; ".join(tones))
+        combined_description.extend(notes)
 
     reason = res.get("reason_summary")
     if reason:
-        lines.append("Reason: " + reason)
+        combined_description.append(reason)
 
-    failure_tag = res.get("failure_reason")
-    if failure_tag and res.get("verdict") == "fail":
-        split_name = res.get("split_tone_name")
-        split_desc = res.get("split_tone_description")
-        if failure_tag == "split_toning_suspected" and split_name:
-            lines.append(f"Failure tag: Split-Toning Suspected (likely {split_name}).")
-            if split_desc:
-                lines.append(f"Look: {split_desc}")
-        else:
-            lines.append(f"Failure tag: {failure_tag}")
+    if combined_description:
+        lines.append("Description: " + " ".join(combined_description))
 
     tip = _lightroom_tip(res)
     if tip:
@@ -306,40 +314,69 @@ def _render_grouped_tables(
     if not results_by_file:
         return lines
 
-    sections: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {
-        "fail": [],
-        "query": [],
-        "pass": [],
-    }
+    # Group by subdirectory first, then by verdict within each subdirectory
+    subdirs: Dict[str, Dict[str, List[Tuple[str, Dict[str, Any]]]]] = {}
 
     for name, methods in sorted(results_by_file.items()):
         lab = methods.get("lab", {})
         verdict = lab.get("verdict")
         bucket = verdict if verdict in {"fail", "pass_with_query", "pass"} else "pass"
         bucket = {"pass_with_query": "query"}.get(bucket, bucket)
-        sections[bucket].append((name, lab))
 
-    for label in ("fail", "query", "pass"):
-        rows = sections[label]
-        if not rows:
+        # Extract subdirectory from file path
+        file_path = methods.get("_path", "")
+        if file_path:
+            subdir = str(Path(file_path).parent.name)
+        else:
+            subdir = "Unknown"
+
+        # Initialize subdirectory structure if needed
+        if subdir not in subdirs:
+            subdirs[subdir] = {"fail": [], "query": [], "pass": []}
+
+        subdirs[subdir][bucket].append((name, lab))
+
+    # Render by subdirectory, then by verdict within each
+    for subdir in sorted(subdirs.keys()):
+        verdict_sections = subdirs[subdir]
+
+        # Count total files and individual verdict counts
+        fail_count = len(verdict_sections["fail"])
+        query_count = len(verdict_sections["query"])
+        pass_count = len(verdict_sections["pass"])
+        total_files = fail_count + query_count + pass_count
+
+        if total_files == 0:
             continue
+
         lines.append("")
-        lines.append(f"=== {label.upper()} ({len(rows)}) ===")
-        for name, lab in rows:
-            chosen = lab
-            title = (chosen or {}).get("title") or "—"
-            author = (chosen or {}).get("author") or "—"
-            prefix = name
-            marker = "_Serial"
-            if marker in name:
-                prefix = name.split(marker, 1)[0]
-            lines.append(f"Title: {title}")
-            lines.append(f"Author: {author}")
-            lines.append(f"Entry: {prefix} ({name})")
-            lines_summary = _summarize_result(lab, "LAB")
-            for line in lines_summary:
-                lines.append("  " + line)
+        lines.append(
+            f"## {subdir} ({total_files} files, {fail_count} Fail, {query_count} Query, {pass_count} Pass)"
+        )
+        lines.append("")
+
+        for label in ("fail", "query", "pass"):
+            rows = verdict_sections[label]
+            if not rows:
+                continue
+            lines.append(f"### {label.upper()} ({len(rows)})")
             lines.append("")
+            for name, lab in rows:
+                chosen = lab
+                title = (chosen or {}).get("title") or "—"
+                author = (chosen or {}).get("author") or "—"
+                prefix = name
+                marker = "_Serial"
+                if marker in name:
+                    prefix = name.split(marker, 1)[0]
+                lines.append(f"**{prefix}**")
+                lines.append(f"- Title: {title}")
+                lines.append(f"- Author: {author}")
+                lines.append(f"- File: {name}")
+                lines_summary = _summarize_result(lab, "LAB")
+                for line in lines_summary:
+                    lines.append("  - " + line)
+                lines.append("")
 
     return lines
 
@@ -685,7 +722,6 @@ def check(
                 "loader_status",
                 "source_profile",
                 "scale_factor",
-                "confidence",
                 "image_path",
             ]
         )
@@ -728,6 +764,39 @@ def check(
         out_f.close()
 
     summary_count_lines: List[str] = []
+
+    # Generate per-subdirectory summary for CLI output
+    subdirs: Dict[str, Dict[str, int]] = {}
+    for name, methods in sorted(results_by_file.items()):
+        lab = methods.get("lab", {})
+        verdict = lab.get("verdict")
+        bucket = verdict if verdict in {"fail", "pass_with_query", "pass"} else "pass"
+        bucket = {"pass_with_query": "query"}.get(bucket, bucket)
+
+        # Extract subdirectory from file path
+        file_path = methods.get("_path", "")
+        if file_path:
+            subdir = str(Path(file_path).parent.name)
+        else:
+            subdir = "Unknown"
+
+        # Initialize subdirectory counts if needed
+        if subdir not in subdirs:
+            subdirs[subdir] = {"fail": 0, "query": 0, "pass": 0}
+
+        subdirs[subdir][bucket] += 1
+
+    # Print per-subdirectory summaries
+    for subdir in sorted(subdirs.keys()):
+        counts_sub = subdirs[subdir]
+        fail_count = counts_sub["fail"]
+        query_count = counts_sub["query"]
+        pass_count = counts_sub["pass"]
+        total_files = fail_count + query_count + pass_count
+
+        subdir_line = f"{subdir} ({total_files} files, {fail_count} Fail, {query_count} Query, {pass_count} Pass)"
+        typer.echo(subdir_line)
+
     c = counts["lab"]
     summary_line = (
         f"Summary (lab): PASS={c['pass']}  "
@@ -812,7 +881,6 @@ def check(
                 cluster_max_4 = res_dict.get("chroma_cluster_max_4")
                 hue_drift = res_dict.get("hue_drift_deg_per_l")
                 scale_factor = res_dict.get("scale_factor")
-                confidence = res_dict.get("confidence")
 
                 csv_writer.writerow(
                     [
@@ -890,7 +958,6 @@ def check(
                             if isinstance(scale_factor, (float, int))
                             else ""
                         ),
-                        confidence or "",
                         file_path,
                     ]
                 )
