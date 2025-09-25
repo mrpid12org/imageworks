@@ -499,6 +499,11 @@ def _generate_heatmap_image(
         }.get(mode.lower(), f"_{mode.lower()}")
 
     out_path = path.with_name(path.stem + suffix + ".jpg")
+
+    # Skip generation if overlay already exists
+    if out_path.exists():
+        return None
+
     out_img = Image.fromarray(out)
     save_kwargs = {"quality": quality, "subsampling": 2}
     if description:
@@ -839,6 +844,7 @@ def check(
                     )
         if fail_infos:
             generated = 0
+            skipped = 0
             for p, summary in fail_infos:
                 for mode in auto_heatmap_modes:
                     out_path = _generate_heatmap_image(
@@ -854,7 +860,19 @@ def check(
                     )
                     if out_path:
                         generated += 1
-            typer.echo(f"Generated {generated} heatmap overlay(s) for review images")
+                    else:
+                        skipped += 1
+
+            if generated > 0 and skipped > 0:
+                typer.echo(
+                    f"Generated {generated} heatmap overlay(s) for review images ({skipped} already existed)"
+                )
+            elif generated > 0:
+                typer.echo(
+                    f"Generated {generated} heatmap overlay(s) for review images"
+                )
+            elif skipped > 0:
+                typer.echo(f"Overlays already exist for {skipped} review images")
 
     if csv_writer:
         csv_methods = ["lab"]
