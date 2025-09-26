@@ -3,36 +3,29 @@
 __pycache__/
 *.pyc
 
-# Model & cache dirs (adjust if your model dirs differ)
-ai-models/
-*.safetensors
-*.pt
-*.bin
-*.ckpt
-
-# OS / IDE
-.DS_Store
-.vscode/
-# Python / env
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-
 # Build artifacts
 *.egg-info/
 src/*.egg-info/
+.pytest_cache/
 
 # Editor/IDE
 .vscode/
 .DS_Store
 
-# Model weights & caches (adjust to your folders)
-ai-models/
+# Model directories and files (exclude all models from git)
+models/
 *.safetensors
 *.pt
 *.bin
 *.ckpt
+*.gguf
+
+# Test images and test data (exclude from git)
+test_color_narrator/images/
+test_color_narrator/overlays/
+test_color_narrator/production_images/
+test_color_narrator/*.jsonl
+test_color_narrator/*.log
 
 # Output directories
 outputs/
@@ -48,7 +41,8 @@ write_xmp.sh
 *.csv
 *.jsonl
 
-# IDE and cache
+# VLM server logs
+vllm_server*.log
 .ruff_cache/
 __pycache__/
 .pytest_cache/
