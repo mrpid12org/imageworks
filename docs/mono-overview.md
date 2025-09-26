@@ -1,6 +1,6 @@
 # Monochrome Checker Logic
 
-This document outlines the step-by-step logic the Imageworks Competition Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
+This document outlines the step-by-step logic the Imageworks Mono Checker uses to determine if an image is a valid monochrome. The logic is designed to be consistent with FIAP/PSA definitions, which allow for neutral black-and-white images as well as images toned with a single, consistent hue.
 
 ## Technical Summary
 

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from imageworks.libs.vision.mono import check_monochrome
 
 
-app = FastAPI(title="Imageworks - Competition Checker API", version="0.1.0")
+app = FastAPI(title="Imageworks - Mono Checker API", version="0.1.0")
 
 
 def _iter_files(root: Path, exts: Iterable[str]) -> Iterable[Path]:
@@ -84,7 +84,7 @@ def run(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
     import uvicorn
 
     uvicorn.run(
-        "imageworks.apps.competition_checker.api.main:app",
+        "imageworks.apps.mono_checker.api.main:app",
         host=host,
         port=port,
         reload=reload,

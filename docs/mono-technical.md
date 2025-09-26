@@ -684,7 +684,7 @@ class MonoResult:
 ```
 
 ### Command-line Interface
-Located in `src/imageworks/apps/competition_checker/cli/mono.py`:
+Located in `src/imageworks/apps/mono_checker/cli/mono.py`:
 ```python
 mono check IMAGE [OPTIONS]
 Options:

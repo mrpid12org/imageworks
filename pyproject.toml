@@ -17,8 +17,8 @@ dependencies = [
 requires-python = ">=3.9"
 
 [project.scripts]
-imageworks-mono = "imageworks.apps.competition_checker.cli.mono:app"
-imageworks-api = "imageworks.apps.competition_checker.api.main:start"
+imageworks-mono = "imageworks.apps.mono_checker.cli.mono:app"
+imageworks-api = "imageworks.apps.mono_checker.api.main:start"
 imageworks-zip = "imageworks.tools.zip_extract:app"
 
 

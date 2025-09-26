@@ -22,7 +22,7 @@ from PIL import Image
 import cv2
 import tomllib
 
-app = typer.Typer(help="Competition Checker - Monochrome validation")
+app = typer.Typer(help="Mono Checker - Monochrome validation")
 
 
 def _iter_files(root: Path, exts_csv: str):

@@ -28,7 +28,7 @@ This guide explains the repository layout and where to find things.
 Top-level package: `imageworks`
 
 - `imageworks/apps/`
-  - `competition_checker/`
+  - `mono_checker/`
     - `cli/mono.py` – Typer CLI for running checks and generating overlays.
     - `api/main.py` – FastAPI app exposing `/mono/check`, `/mono/batch`, `/healthz`.
     - `__init__.py` – package markers.
@@ -82,4 +82,4 @@ Declared in `pyproject.toml` and available via `uv run <script>`:
 - CLI usage: see `README.md` (Running the Applications).
 - Analysis logic: `src/imageworks/libs/vision/mono.py` (extensively documented).
 - XMP export: `src/imageworks/tools/write_mono_xmp.py` and `configs/exiftool`.
-- API endpoints: `src/imageworks/apps/competition_checker/api/main.py`.
+- API endpoints: `src/imageworks/apps/mono_checker/api/main.py`.

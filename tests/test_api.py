@@ -5,7 +5,7 @@ import pytest
 
 try:
     from fastapi.testclient import TestClient
-    from imageworks.apps.competition_checker.api.main import app
+    from imageworks.apps.mono_checker.api.main import app
 
     client = TestClient(app)
 except Exception:  # pragma: no cover - optional dependency in dev

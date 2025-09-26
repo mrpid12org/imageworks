@@ -4,13 +4,13 @@ _Version 1.0 – consolidated and approved_
 
 ## Table of Contents
 - [1. Scope and Objectives](#1-scope-and-objectives)
-  - [1.1 Competition Checker (CCC)](#11-competition-checker-ccc)
+  - [1.1 Mono Checker (CCC)](#11-mono-checker-ccc)
   - [1.2 Personal Photo-Library Tagger](#12-personal-photo-library-tagger)
 - [2. Source Volumes and Formats](#2-source-volumes-and-formats)
 - [3. High-Level Architecture](#3-high-level-architecture)
 - [4. Functional Requirements](#4-functional-requirements)
   - [4.1 Common Ingest](#41-common-ingest)
-  - [4.2 Competition Checker](#42-competition-checker)
+  - [4.2 Mono Checker](#42-mono-checker)
   - [4.3 Personal Photo-Library Tagger](#43-personal-photo-library-tagger)
 - [5. Web Interfaces](#5-web-interfaces)
 - [6. Development & Testing Facilities](#6-development--testing-facilities)
@@ -24,7 +24,7 @@ _Version 1.0 – consolidated and approved_
 
 Two related but distinct projects share common technology.
 
-### 1.1 Competition Checker (CCC)
+### 1.1 Mono Checker (CCC)
 Tools to assist Cambridge Camera Club (CCC) competition officers in validating entries.
 
 Goals:
@@ -96,7 +96,7 @@ ingest & preprocessing → analysis engines → metadata writer
 - Honour embedded ICC profile; do not change colour profiles in originals.
 - Create transient inference view for analysis; optionally use Lightroom previews if accessible.
 
-### 4.2 Competition Checker
+### 4.2 Mono Checker
 
 **Phase 1 – True Monochrome**
 - Analyse newly downloaded CCC submissions.
@@ -344,7 +344,7 @@ Two applications share a common core, plus a separate Tagging/Description Servic
 
 | Container | Purpose | Deployment Notes |
 |-----------|---------|------------------|
-| Web UI / API – Competition Checker | Minimal browser UI for CCC officers/admins to run mono checks and near-duplicate screening on manually downloaded images (short/medium term). | Local machine initially; later can be hosted on CCC infrastructure. No CLI expected for CCC users. |
+| Web UI / API – Mono Checker | Minimal browser UI for CCC officers/admins to run mono checks and near-duplicate screening on manually downloaded images (short/medium term). | Local machine initially; later can be hosted on CCC infrastructure. No CLI expected for CCC users. |
 | Web UI / API – Personal Review | Optional browser UI for reviewing proposed tags/captions, similarity/duplicate results, and failures. | Local workstation; complements CLI. |
 | CLI (Personal only) | Power-user entry point for bulk runs, automation, scripting (tag propose/commit/revert, build/search indexes). | Local WSL/Ubuntu. Not aimed at CCC officers. |
 | Core Processing Engine | Library/workers used by Web UIs and CLI: ingestion, mono, hashing/embeddings, similarity matcher, XMP write. | Scales from CPU-only to GPU. |
