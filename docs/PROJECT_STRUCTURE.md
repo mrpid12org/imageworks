@@ -16,7 +16,7 @@ This guide explains the repository layout and where to find things.
 - `exiftool/.ExifTool_config` – defines the custom XMP `MW` namespace used by the exporter to write structured monochrome diagnostics.
 
 ## `docs/`
-- `COMPETITION_WORKFLOW.md` - complete competition checking workflow
+- `MONO_WORKFLOW.md` - complete mono checking workflow
 - `processing-downloads.md` - detailed file processing documentation
 - `monochrome-overview.md` - monochrome detection algorithm overview
 - `monochrome-technical.md` - detailed monochrome classification logic
