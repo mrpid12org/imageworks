@@ -13,7 +13,8 @@ src/*.egg-info/
 .DS_Store
 
 # Model directories and files (exclude all models from git)
-models/
+models/*
+!models/README.md
 *.safetensors
 *.pt
 *.bin
