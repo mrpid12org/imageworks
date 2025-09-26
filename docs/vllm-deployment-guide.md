@@ -14,10 +14,12 @@ torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB
 
 **Solution**: Switch to Qwen2-VL-2B-Instruct (4.2GB) which fits comfortably:
 - Model weights: 4.15 GiB
-- Total GPU usage: ~11 GiB (fits in 16GB with room for overhead)
+- Peak activation: 2.65 GiB
+- CUDA graphs: 4.06 GiB
+- **Total usage: 10.88 GiB** (fits in 16GB with room for KV cache)
 - Performance: Still excellent for color description tasks
 
-**Memory Rule**: For vision models, allocate ~2.5x model size in VRAM for safety.
+**Memory Breakdown**: The model itself is only 4.15GB, but vLLM needs additional memory for activations (2.65GB) and CUDA graph compilation (4.06GB) which optimizes inference speed. This explains why the total is ~2.6x the model size.
 
 ### 2. GGUF Quantization Limitation (Major Discovery)
 **Problem**: Attempted GGUF quantization (Q6_K) to reduce memory usage.
@@ -66,6 +68,12 @@ nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
 - `--disable-log-requests` (makes debugging harder)
 - `--max-num-seqs 2` (unnecessary with good VRAM)
 - Values > 0.9 for `gpu-memory-utilization` (risks OOM)
+
+### 5. Model Size Exploration (Future Work)
+**Current Gap**: We only tested 2B (works) and 7B (OOM). There's likely a sweet spot with intermediate models:
+- Qwen2-VL-3B or 4B models might fit comfortably in 16GB VRAM
+- Could offer significantly better performance than 2B
+- Worth experimenting with if available on Hugging Face
 
 ## Deployment Process
 
@@ -135,11 +143,15 @@ vlm_base_url = "http://localhost:8000/v1"
 ## Performance Benchmarks
 
 ### Model Comparison (RTX 4080 16GB)
-| Model | Size | VRAM Usage | Status | Quality |
-|-------|------|------------|---------|---------|
+| Model | Model Size | Total VRAM | Status | Quality |
+|-------|------------|-------------|---------|---------|
 | Qwen2-VL-7B-Instruct | 13.6GB | >16GB | ❌ OOM | N/A |
 | Qwen2.5-VL-7B-Q6K-GGUF | 7.6GB | N/A | ❌ Not Supported | N/A |
-| Qwen2-VL-2B-Instruct | 4.2GB | ~11GB | ✅ Works | Excellent |
+| Qwen2-VL-2B-Instruct | 4.15GB | 10.88GB* | ✅ Works | Excellent |
+
+*Total includes: 4.15GB weights + 2.65GB activation + 4.06GB CUDA graphs + 0.02GB other
+
+**Note**: Only tested extremes (2B and 7B). Intermediate sizes (3B, 4B, 5B) untested but may work fine within 16GB VRAM and offer better performance than 2B.
 
 ### Startup Times
 - Model loading: ~0.7 seconds
