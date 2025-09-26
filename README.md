@@ -9,7 +9,8 @@ Imageworks provides local-first photography utilities for two workflows:
   - Validates true monochrome images
   - Flags near-duplicates and generates overlay visualizations
 
-- **Personal Tagger** – enriches a personal Lightroom catalogue with concise keywords, optional captions/long descriptions, and similarity search tools.
+- **Personal Tagger** – enriches a personal Lightroom catalogue with concise keywords, optional captions/long descriptions, and similarity search tools:
+  - **Color-Narrator** – VLM-guided natural language descriptions of residual color in monochrome images using Qwen2-VL-7B inference
 
 Both applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
 
@@ -84,6 +85,8 @@ To remove diagnostics/keywords later, generate a cleanup script:
 - Developer Environment: `docs/dev-env/ide-setup-wsl-vscode.md`
 - Project Specification: `docs/spec/imageworks-specification.md`
 - Project Structure: `docs/PROJECT_STRUCTURE.md`
+- Color-Narrator Reference: `docs/color-narrator-reference.md`
+- **vLLM Deployment Guide**: `docs/vllm-deployment-guide.md` ⭐ *Essential for setting up vision models*
 
 ### Monochrome Checker Logic
 

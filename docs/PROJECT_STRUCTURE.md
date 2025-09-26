@@ -32,9 +32,23 @@ Top-level package: `imageworks`
     - `cli/mono.py` – Typer CLI for running checks and generating overlays.
     - `api/main.py` – FastAPI app exposing `/mono/check`, `/mono/batch`, `/healthz`.
     - `__init__.py` – package markers.
+  - `personal_tagger/`
+    - `color_narrator/`
+      - `cli/main.py` – Typer CLI for VLM-guided color narration.
+      - `api/` – FastAPI endpoints for color narration services.
+      - `core/` – core processing modules:
+        - `vlm.py` – VLM client for Qwen2-VL-7B inference.
+        - `data_loader.py` – JPEG/overlay/JSONL data loading and validation.
+        - `narrator.py` – main processing orchestration.
+        - `metadata.py` – XMP metadata reading and writing.
+      - `__init__.py` – package markers.
 
 - `imageworks/libs/`
   - `vision/mono.py` – core monochrome analysis logic and diagnostics.
+  - `personal_tagger/` – shared utilities for personal tagger applications:
+    - `color_analysis.py` – color space analysis and statistical utilities.
+    - `vlm_utils.py` – VLM inference management and prompt handling.
+    - `image_utils.py` – image loading, processing, and batch operations.
   - `__init__.py` – package markers.
 
 - `imageworks/tools/`
@@ -46,6 +60,13 @@ Top-level package: `imageworks`
 - `analysis/` – diagnostic and analysis tools
   - `analyze_hue_lum.py` – hue/luminance relationship analysis
   - `analyze_polyfit.py` – polyfit warning analysis
+- `personal_tagger/color_narrator/` – color-narrator test suite
+  - `test_vlm.py` – VLM client and inference tests
+  - `test_data_loader.py` – data loading and validation tests
+  - `test_narrator.py` – main processing orchestration tests
+  - `test_metadata.py` – XMP metadata handling tests
+  - `test_cli.py` – CLI command tests
+  - `conftest.py` – shared test fixtures and utilities
 - `test_images/` – test image files
   - `synthetic/` – generated test images for unit tests
   - `samples/` – real photo samples for testing
@@ -73,6 +94,9 @@ Declared in `pyproject.toml` and available via `uv run <script>`:
   - `imageworks-mono visualize <folder>` – write heatmap overlays next to images.
 - `imageworks-mono-api` – run the FastAPI app (`api/main.py`).
 - `imageworks-mono-xmp` – XMP writer/cleanup tool (`tools/write_mono_xmp.py`).
+- `imageworks-color-narrator` – color narration CLI (`personal_tagger/color_narrator/cli/main.py`).
+  - `imageworks-color-narrator narrate` – generate VLM color descriptions for images.
+  - `imageworks-color-narrator validate` – validate existing color descriptions.
 
 ## Typical Outputs
 - `mono_results.jsonl` – produced by the CLI when using `--jsonl-out`, contains per-image verdicts and diagnostics (tone names, failure reasons, etc.).

@@ -13,6 +13,17 @@ dependencies = [
   "scikit-image",
   "scipy",
   "tomli; python_version < '3.11'",
+  # Color-narrator VLM dependencies
+  "torch>=2.3.0",
+  "requests",
+  "aiohttp",
+  # Image metadata dependencies
+  "exifread",
+  "python-xmp-toolkit; sys_platform != 'win32'",
+  # Additional utilities
+  "tqdm",
+  "rich",
+  "vllm[vision]>=0.10.2",
 ]
 requires-python = ">=3.9"
 
@@ -20,6 +31,7 @@ requires-python = ">=3.9"
 imageworks-mono = "imageworks.apps.mono_checker.cli.mono:app"
 imageworks-api = "imageworks.apps.mono_checker.api.main:start"
 imageworks-zip = "imageworks.tools.zip_extract:app"
+imageworks-color-narrator = "imageworks.apps.personal_tagger.color_narrator.cli.main:app"
 
 
 [tool.rye]
@@ -90,3 +102,42 @@ lab_chroma_clip = 8.0
 # --- XMP WRITING DEFAULTS ---
 # Default name for the generated ExifTool script.
 default_xmp_script = "write_xmp.sh"
+
+
+[tool.imageworks.color_narrator]
+# VLM server configuration
+vlm_base_url = "http://localhost:8000/v1"
+vlm_model = "Qwen2-VL-2B-Instruct"
+vlm_timeout = 120
+vlm_max_tokens = 300
+vlm_temperature = 0.1
+
+# Processing configuration
+default_batch_size = 4
+min_contamination_level = 0.1
+require_overlays = true
+max_concurrent_requests = 4
+
+# Data paths (relative to project root)
+default_images_dir = "outputs/originals"
+default_overlays_dir = "outputs/overlays"
+default_mono_jsonl = "outputs/results/mono_results.jsonl"
+
+# Output configuration
+backup_original_files = true
+overwrite_existing_metadata = false
+metadata_version = "1.0"
+
+# Color analysis thresholds
+chroma_threshold = 5.0
+min_region_size = 100
+high_chroma_threshold = 15.0
+
+# Debug and development settings
+debug_save_intermediate = false
+debug_output_dir = "outputs/debug"
+log_level = "INFO"
+
+# Prompt templates
+default_prompt_template = "color_narration"
+validation_prompt_template = "color_validation"
