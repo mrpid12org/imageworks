@@ -27,6 +27,8 @@ _Version 1.0 – Personal Tagger: VLM-guided color localization_
 
 Color-Narrator converts **mono-checker** color evidence into **concise, plain-English** statements that say *where* residual color appears and *what it looks like*. CN **does not** re-compute color; it consumes mono-checker's JSON + overlays and uses a **vision-language model (VLM)** for natural phrasing, then validates the language against mono-checker's numbers. Phase 1 targets **competition JPEGs** and writes **embedded XMP** (no sidecars). The module is **uv-managed** and **environment-isolated** from mono-checker.
 
+> **Implementation status:** The shipping build standardises on **Qwen2-VL-2B-Instruct** as the runtime model. The larger 7B variant remains an optional upgrade path for higher-VRAM environments.
+
 ## 2. Design Tenets
 
 1. **Single source of truth** for color → **mono-checker** (Lab masks, clusters, overlays, JSON metrics).

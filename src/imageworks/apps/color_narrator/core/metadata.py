@@ -15,14 +15,14 @@ import json
 try:
     from libxmp import XMPFiles, XMPMeta, XMPError
 
-    # XMP available but some JPEG files may have compatibility issues
-    # For now, prefer sidecar files for reliability
-    XMP_AVAILABLE = False  # Will enable when XMP write issues resolved
+    XMP_AVAILABLE = True
 except ImportError:
     # Fallback for development/testing
     XMPFiles = XMPMeta = XMPError = None
     XMP_AVAILABLE = False
-    logging.getLogger(__name__).info("Using sidecar JSON files for metadata storage")
+    logging.getLogger(__name__).info(
+        "XMP toolkit not available; using sidecar JSON metadata"
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,15 @@ class XMPMetadataWriter:
 
             # Use actual XMP if available, otherwise fallback to sidecar
             if XMP_AVAILABLE:
-                self._write_xmp_metadata(image_path, metadata)
+                try:
+                    self._write_xmp_metadata(image_path, metadata)
+                except Exception as exc:
+                    logger.warning(
+                        "XMP write failed for %s (%s); falling back to sidecar JSON",
+                        image_path,
+                        exc,
+                    )
+                    self._write_sidecar_json(image_path, metadata)
             else:
                 self._write_sidecar_json(image_path, metadata)
 

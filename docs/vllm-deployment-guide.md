@@ -1,272 +1,90 @@
-# vLLM Deployment Guide for Color-Narrator\n\n> **📚 For comprehensive AI model information**: See [AI Models and Prompting Guide](./ai-models-and-prompting.md) for complete coverage of all models used across imageworks, experimentation details, and prompting strategies.\n\n## Overview
-This guide documents the process and learnings from deploying vLLM with Qwen2-VL vision models for the Color-Narrator system. Based on real deployment experience with RTX 4080 16GB and CUDA 12.9.
+# vLLM Deployment Guide
 
-## Key Learnings & Gotchas
+This guide captures the practical steps and lessons from hosting Qwen2 vision-language models for Color Narrator using [vLLM](https://vllm.ai/).
 
-### 1. Memory Constraints (Critical)
-**Problem**: Initial attempt with Qwen2-VL-7B-Instruct (13.6GB) failed with CUDA OOM errors.
+## Table of Contents
+
+1. [Environment Requirements](#environment-requirements)
+2. [Model Selection](#model-selection)
+3. [Server Setup](#server-setup)
+4. [Operational Playbook](#operational-playbook)
+5. [Troubleshooting](#troubleshooting)
+6. [Further Reading](#further-reading)
+
+## Environment Requirements
+
+- Ubuntu 22.04+ or WSL2 with CUDA pass-through
+- NVIDIA driver supporting **CUDA 12.8** or later
+- Python tooling managed via `uv`
+- `vllm` `>=0.4` installed in the project environment (`uv sync` handles this)
+- Network access for model downloads (unless weights are pre-cached)
+
+## Model Selection
+
+| Model | VRAM Footprint (16 GB GPU) | Status |
+|-------|----------------------------|--------|
+| `Qwen2-VL-2B-Instruct` | ~11 GB total (weights + activations + CUDA graphs) | ✅ Recommended default |
+| `Qwen2-VL-7B-Instruct` | >20 GB | ❌ Out-of-memory on 16 GB GPUs |
+| Quantised GGUF variants | N/A | ❌ Unsupported for vision models in vLLM `0.10.x` |
+
+**Recommendation:** Ship with `Qwen2-VL-2B-Instruct` unless you have ≥48 GB VRAM. Match the value in `pyproject.toml` (`vlm_model`) to the deployed server.
+
+## Server Setup
+
+### 1. Prepare the Environment
 ```bash
-# FAILS - 7B model too large for 16GB VRAM
-torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB
+uv run pip install --upgrade vllm
+uv run python -c "import vllm, torch; print(vllm.__version__)"
 ```
 
-**Solution**: Switch to Qwen2-VL-2B-Instruct (4.2GB) which fits comfortably:
-- Model weights: 4.15 GiB
-- Peak activation: 2.65 GiB
-- CUDA graphs: 4.06 GiB
-- **Total usage: 10.88 GiB** (fits in 16GB with room for KV cache)
-- Performance: Still excellent for color description tasks
-
-**Memory Breakdown**: The model itself is only 4.15GB, but vLLM needs additional memory for activations (2.65GB) and CUDA graph compilation (4.06GB) which optimizes inference speed. This explains why the total is ~2.6x the model size.
-
-### 2. GGUF Quantization Limitation (Major Discovery)
-**Problem**: Attempted GGUF quantization (Q6_K) to reduce memory usage.
+### 2. Download Model Weights
 ```bash
-# FAILS - GGUF not supported for vision models yet
-ValueError: GGUF format is not supported for vision models in vLLM
+uv run python -m vllm.entrypoints.openai.pull \
+  --model Qwen2-VL-2B-Instruct
 ```
 
-**Status**: GGUF quantization for vision models is not yet supported in vLLM v0.10.2. This is a known limitation.
-
-**Workaround**: Use smaller base models (2B instead of 7B) rather than quantization.
-
-### 3. Server Startup & Stability
-**Problem**: Server would shut down unexpectedly or fail to stay running.
-
-**Solutions**:
+### 3. Launch the Server
 ```bash
-# Wrong - server dies when terminal closes
-vllm serve ./models/Qwen2-VL-2B-Instruct
-
-# Right - persistent background server
 nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
   --served-model-name Qwen2-VL-2B-Instruct \
   --host 0.0.0.0 --port 8000 \
   --trust-remote-code \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.8 \
+  --max-num-seqs 16 \
   > vllm_server.log 2>&1 &
 ```
 
-**Key Points**:
-- Use `nohup` and `&` for background execution
-- Must use `uv run` prefix to access the correct Python environment
-- Redirect output to log file for debugging
-
-### 4. Configuration Parameters
-**Optimal settings for RTX 4080 16GB with 2B model**:
+### 4. Validate the Deployment
 ```bash
---gpu-memory-utilization 0.8    # Use 80% of VRAM
---max-model-len 4096            # Sufficient for image+text context
---trust-remote-code             # Required for Qwen2-VL
---host 0.0.0.0                  # Accept connections from any interface
+curl http://localhost:8000/v1/models
+uv run python - <<'PY'
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
+print(client.models.list())
+PY
 ```
 
-**Avoid**:
-- `--disable-log-requests` (makes debugging harder)
-- `--max-num-seqs 2` (unnecessary with good VRAM)
-- Values > 0.9 for `gpu-memory-utilization` (risks OOM)
+## Operational Playbook
 
-### 5. Model Size Exploration (Future Work)
-**Current Gap**: We only tested 2B (works) and 7B (OOM). There's likely a sweet spot with intermediate models:
-- Qwen2-VL-3B or 4B models might fit comfortably in 16GB VRAM
-- Could offer significantly better performance than 2B
-- Worth experimenting with if available on Hugging Face
-
-## Deployment Process
-
-### 1. Install Dependencies
-```bash
-# Install vLLM with CUDA support
-uv add "vllm[cuda]>=0.10.0"
-
-# Verify installation
-uv run python -c "import vllm; print('vLLM version:', vllm.__version__)"
-```
-
-### 2. Download Model
-```bash
-# Download 2B model (recommended for 16GB VRAM)
-uv run huggingface-cli download Qwen/Qwen2-VL-2B-Instruct \
-  --local-dir ./models/Qwen2-VL-2B-Instruct
-
-# Verify download
-du -sh ./models/Qwen2-VL-2B-Instruct/  # Should be ~4.2GB
-```
-
-### 3. Start Server
-```bash
-# Start persistent server
-cd /path/to/project
-nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
-  --served-model-name Qwen2-VL-2B-Instruct \
-  --host 0.0.0.0 --port 8000 \
-  --trust-remote-code \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.8 \
-  > vllm_server.log 2>&1 &
-
-echo "Server PID: $!"  # Note the process ID
-```
-
-### 4. Verify Deployment
-```bash
-# Wait for initialization (takes ~60 seconds)
-sleep 60
-
-# Test API endpoint
-curl -s http://localhost:8000/v1/models | python3 -m json.tool
-
-# Should return:
-{
-    "object": "list",
-    "data": [
-        {
-            "id": "Qwen2-VL-2B-Instruct",
-            "object": "model",
-            ...
-        }
-    ]
-}
-```
-
-### 5. Update Configuration
-Update `pyproject.toml`:
-```toml
-[tool.imageworks.color_narrator]
-vlm_model = "Qwen2-VL-2B-Instruct"  # Changed from 7B to 2B
-vlm_base_url = "http://localhost:8000/v1"
-```
-
-## Performance Benchmarks
-
-### Model Comparison (RTX 4080 16GB)
-| Model | Model Size | Total VRAM | Status | Quality |
-|-------|------------|-------------|---------|---------|
-| Qwen2-VL-7B-Instruct | 13.6GB | >16GB | ❌ OOM | N/A |
-| Qwen2.5-VL-7B-Q6K-GGUF | 7.6GB | N/A | ❌ Not Supported | N/A |
-| Qwen2-VL-2B-Instruct | 4.15GB | 10.88GB* | ✅ Works | Excellent |
-
-*Total includes: 4.15GB weights + 2.65GB activation + 4.06GB CUDA graphs + 0.02GB other
-
-**Note**: Only tested extremes (2B and 7B). Intermediate sizes (3B, 4B, 5B) untested but may work fine within 16GB VRAM and offer better performance than 2B.
-
-### Startup Times
-- Model loading: ~0.7 seconds
-- CUDA graph compilation: ~3 seconds
-- Total initialization: ~60 seconds
-
-### Inference Performance
-- Simple color descriptions: ~2-3 seconds
-- Complex scene analysis: ~5-7 seconds
-- Concurrent requests: Up to 4 (max_concurrent_requests)
+- **Process Supervision** – Wrap the launch command with `systemd`, `supervisord`, or `tmux` for durability.
+- **Logging** – Tail `vllm_server.log` for request stats; raise `--log-level` to `DEBUG` for investigations.
+- **Health Checks** – Reuse `VLMClient.health_check()` (see `core/vlm.py`) or add an HTTP probe hitting `/v1/models`.
+- **Scaling Requests** – Tune `--max-num-seqs` and `max_concurrent_requests` (client-side) to balance throughput and latency.
+- **Upgrades** – Validate new vLLM releases in a separate environment; compatibility across minor versions is good but not guaranteed.
 
 ## Troubleshooting
 
-### Server Won't Start
-```bash
-# Check if port is in use
-lsof -i :8000
+| Symptom | Diagnosis | Mitigation |
+|---------|-----------|------------|
+| `CUDA out of memory` | Model too large or concurrent load too high | Drop batch size, reduce `--max-num-seqs`, or migrate to a larger GPU. |
+| `ValueError: GGUF format is not supported` | Attempting to use quantised GGUF weights | Use native Hugging Face safetensors; GGUF VLMs remain unsupported in vLLM. |
+| Server exits when shell closes | Process tied to login session | Use `nohup`, a process manager, or run under `systemd`. |
+| Slow first request | CUDA graph compilation on cold start | Allow the warm-up request to finish; subsequent calls run at normal speed. |
+| `429 Too Many Requests` | Client saturates concurrency | Lower `max_concurrent_requests` in Color Narrator or raise server limits. |
 
-# Check logs
-tail -f vllm_server.log
+## Further Reading
 
-# Kill existing server
-pkill -f vllm
-```
-
-### CUDA Out of Memory
-```bash
-# Check GPU usage
-nvidia-smi
-
-# Reduce memory utilization
---gpu-memory-utilization 0.7
-
-# Use smaller model
-# Switch from 7B to 2B variant
-```
-
-### Connection Refused
-```bash
-# Ensure server is running
-ps aux | grep vllm
-
-# Check if API is responding
-curl http://localhost:8000/health
-
-# Verify firewall/networking
-netstat -tlnp | grep 8000
-```
-
-## Integration Testing
-
-### Test Color-Narrator Integration
-```bash
-# Run with real vLLM server
-cd /path/to/project
-uv run imageworks-color-narrator narrate \
-  -i test_color_narrator/images \
-  -o test_color_narrator/overlays \
-  -j test_color_narrator/test_mono_results.jsonl \
-  --debug
-
-# Validate results
-uv run imageworks-color-narrator validate \
-  -i test_color_narrator/images \
-  -j test_color_narrator/test_mono_results.jsonl
-```
-
-Expected output:
-```
-🎨 Color-Narrator - Narrate command
-🤖 VLM: Qwen2-VL-2B-Instruct at http://localhost:8000/v1
-📷 Processing: [filename]
-🤖 Calling VLM for color description...
-📝 VLM Response: [Natural language color description]
-💾 Writing metadata to image...
-✅ Metadata written successfully
-```
-
-## Hardware Requirements
-
-### Minimum
-- GPU: 8GB VRAM (for 2B model)
-- RAM: 16GB system RAM
-- Storage: 10GB free space for models
-
-### Recommended
-- GPU: 16GB+ VRAM (RTX 4080/4090, RTX A4000+)
-- RAM: 32GB system RAM
-- Storage: 50GB+ for multiple models
-- CUDA: 12.0+ with compatible drivers
-
-### Tested Configurations
-- **RTX 4080 16GB + CUDA 12.9**: ✅ Works perfectly with 2B model
-- **RTX 6000 Pro 48GB + CUDA 12.8**: ✅ Should handle 7B+ models
-
-## Production Deployment Notes
-
-### Security
-- Change `--host 0.0.0.0` to `--host 127.0.0.1` for localhost-only access
-- Consider reverse proxy (nginx) for production
-- Monitor GPU temperature and usage
-
-### Monitoring
-```bash
-# Monitor server logs
-tail -f vllm_server.log
-
-# Monitor GPU usage
-watch nvidia-smi
-
-# Monitor system resources
-htop
-```
-
-### Backup Strategy
-- Keep multiple model versions in `./models/`
-- Backup working vLLM server configuration
-- Document model-specific settings
-
-This deployment guide should prevent future deployment pain and help others avoid the same pitfalls we encountered!
+- [AI Models and Prompting Guide](ai-models-and-prompting.md)
+- [Color Narrator Reference](color-narrator-reference.md)
+- [vLLM Documentation](https://docs.vllm.ai/)

@@ -55,7 +55,7 @@ def sample_color_narration_metadata():
         color_regions=["background", "clothing"],
         processing_timestamp=datetime.now().isoformat(),
         mono_contamination_level=0.35,
-        vlm_model="Qwen/Qwen2-VL-7B-Instruct",
+        vlm_model="Qwen2-VL-2B-Instruct",
         vlm_processing_time=1.2,
         hue_analysis="Warm cast detected",
         chroma_analysis="Low chroma levels",

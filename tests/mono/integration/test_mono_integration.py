@@ -8,9 +8,9 @@ import pytest
 from pathlib import Path
 
 # Shared test asset locations
-SHARED_IMAGES = Path("tests/shared/images")
-SHARED_OVERLAYS = Path("tests/shared/overlays")
-SHARED_DATA = Path("tests/shared/sample_data")
+SHARED_IMAGES = Path("tests/shared/sample_production_images")
+SHARED_OVERLAYS = SHARED_IMAGES
+SHARED_DATA = Path("tests/shared/sample_production_mono_json_output")
 TEST_OUTPUT = Path("tests/test_output")
 
 
@@ -28,8 +28,8 @@ class TestMonoIntegration:
     def test_mono_analysis_production_images(self):
         """Test mono analysis with real competition images."""
         # Skip if shared assets not available (CI environments)
-        if not (SHARED_IMAGES / "production_images").exists():
-            pytest.skip("Production test images not available")
+        if not any(SHARED_IMAGES.glob("*.jpg")):
+            pytest.skip("Sample production images not available")
 
         # TODO: Implement integration test using shared production images
         # This would test the full mono analysis pipeline

@@ -4,7 +4,7 @@ This module provides the core functionality for VLM-guided color narration,
 including data loading, VLM inference, metadata handling, and orchestration.
 
 Key modules:
-- vlm: VLM inference client for Qwen2-VL-7B
+- vlm: VLM inference client for Qwen2-VL-2B (default)
 - data_loader: JPEG/overlay/JSONL data loading and validation
 - narrator: Main processing orchestration
 - metadata: XMP metadata reading and writing

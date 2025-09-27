@@ -7,9 +7,8 @@ This directory contains all tests organized by module with consistent naming and
 ```
 tests/
 ├── shared/                           # Shared test assets (NOT in git)
-│   ├── images/                       # Real competition images for integration tests
-│   ├── overlays/                     # Corresponding overlay files
-│   └── sample_data/                  # Shared sample mono results, metadata, etc.
+│   ├── sample_production_images/     # Real competition images and overlays for integration tests
+│   └── sample_production_mono_json_output/  # Shared sample mono results, metadata, etc.
 ├── test_output/                      # Shared test output directory (NOT in git)
 ├── mono/                            # Mono checker tests
 │   ├── unit/                        # Small unit tests (tracked in git)
@@ -76,8 +75,8 @@ pytest tests/mono/unit/test_mono_core.py
 ### Using Shared Assets in Integration Tests
 ```python
 # In integration tests, reference shared assets
-SHARED_IMAGES = Path("tests/shared/images")
-SHARED_DATA = Path("tests/shared/sample_data")
+SHARED_IMAGES = Path("tests/shared/sample_production_images")
+SHARED_DATA = Path("tests/shared/sample_production_mono_json_output")
 TEST_OUTPUT = Path("tests/test_output")
 ```
 
@@ -117,15 +116,15 @@ analyze-regions --output tests/test_output/manual_grid_test.jsonl
 --results-json tests/test_output/analysis.json
 
 # Use shared directory for reusable test assets
---images tests/shared/images/production_images
---mono-jsonl tests/shared/sample_data/production_sample.jsonl
+--images tests/shared/sample_production_images
+--mono-jsonl tests/shared/sample_production_mono_json_output/production_sample.jsonl
 ```
 
 ## Migration Notes
 
 This structure was created by reorganizing:
 - `test_color_narrator/` → Distributed to appropriate module directories
-- Production images → `tests/shared/images/`
+- Production images → `tests/shared/sample_production_images/`
 - Experimental JSONL files → `tests/*/experimental_results/`
 - Unit test fixtures → `tests/*/unit/fixtures/`
 

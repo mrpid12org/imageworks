@@ -29,7 +29,7 @@ class TestColorNarrationMetadata:
             color_regions=["background", "skin"],
             processing_timestamp="2024-01-15T10:30:00",
             mono_contamination_level=0.3,
-            vlm_model="Qwen/Qwen2-VL-7B-Instruct",
+            vlm_model="Qwen2-VL-2B-Instruct",
             vlm_processing_time=1.5,
         )
 
@@ -38,7 +38,7 @@ class TestColorNarrationMetadata:
         assert metadata.color_regions == ["background", "skin"]
         assert metadata.processing_timestamp == "2024-01-15T10:30:00"
         assert metadata.mono_contamination_level == 0.3
-        assert metadata.vlm_model == "Qwen/Qwen2-VL-7B-Instruct"
+        assert metadata.vlm_model == "Qwen2-VL-2B-Instruct"
         assert metadata.vlm_processing_time == 1.5
 
     def test_metadata_optional_fields(self):
@@ -107,7 +107,7 @@ class TestXMPMetadataWriter:
             color_regions=["background", "foreground"],
             processing_timestamp=datetime.now().isoformat(),
             mono_contamination_level=0.4,
-            vlm_model="Qwen/Qwen2-VL-7B-Instruct",
+            vlm_model="Qwen2-VL-2B-Instruct",
             vlm_processing_time=2.1,
         )
 
@@ -119,19 +119,36 @@ class TestXMPMetadataWriter:
         writer = XMPMetadataWriter(backup_original=False)
         assert writer.backup_original is False
 
-    def test_write_metadata_success(self, temp_image_file, sample_metadata):
-        """Test successful metadata writing (sidecar implementation)."""
+    def test_write_metadata_prefers_xmp(self, temp_image_file, sample_metadata):
+        """Ensure metadata writer uses XMP when the toolkit is available."""
         writer = XMPMetadataWriter(backup_original=False)
 
-        result = writer.write_metadata(temp_image_file, sample_metadata)
+        with (
+            patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", True),
+            patch.object(
+                XMPMetadataWriter, "_write_xmp_metadata", return_value=None
+            ) as mock_xmp,
+            patch.object(XMPMetadataWriter, "_write_sidecar_json") as mock_sidecar,
+        ):
+            result = writer.write_metadata(temp_image_file, sample_metadata)
 
         assert result is True
+        mock_xmp.assert_called_once()
+        mock_sidecar.assert_not_called()
 
-        # Check sidecar file was created
+    def test_write_metadata_falls_back_to_sidecar(
+        self, temp_image_file, sample_metadata
+    ):
+        """Fallback to sidecar when XMP is unavailable or fails."""
+        writer = XMPMetadataWriter(backup_original=False)
+
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            result = writer.write_metadata(temp_image_file, sample_metadata)
+
+        assert result is True
         sidecar_path = writer._get_sidecar_path(temp_image_file)
         assert sidecar_path.exists()
 
-        # Verify sidecar content
         with open(sidecar_path) as f:
             data = json.load(f)
 
@@ -145,11 +162,9 @@ class TestXMPMetadataWriter:
         """Test successful metadata reading (sidecar implementation)."""
         writer = XMPMetadataWriter(backup_original=False)
 
-        # Write metadata first
-        writer.write_metadata(temp_image_file, sample_metadata)
-
-        # Read it back
-        read_metadata = writer.read_metadata(temp_image_file)
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            writer.write_metadata(temp_image_file, sample_metadata)
+            read_metadata = writer.read_metadata(temp_image_file)
 
         assert read_metadata is not None
         assert read_metadata.description == sample_metadata.description
@@ -160,7 +175,8 @@ class TestXMPMetadataWriter:
         """Test reading metadata when none exists."""
         writer = XMPMetadataWriter()
 
-        metadata = writer.read_metadata(temp_image_file)
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            metadata = writer.read_metadata(temp_image_file)
 
         assert metadata is None
 
@@ -168,22 +184,19 @@ class TestXMPMetadataWriter:
         """Test checking for existing color narration metadata."""
         writer = XMPMetadataWriter(backup_original=False)
 
-        # Initially should not have metadata
-        assert writer.has_color_narration(temp_image_file) is False
-
-        # After writing, should have metadata
-        writer.write_metadata(temp_image_file, sample_metadata)
-        assert writer.has_color_narration(temp_image_file) is True
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            assert writer.has_color_narration(temp_image_file) is False
+            writer.write_metadata(temp_image_file, sample_metadata)
+            assert writer.has_color_narration(temp_image_file) is True
 
     def test_remove_metadata(self, temp_image_file, sample_metadata):
         """Test metadata removal."""
         writer = XMPMetadataWriter(backup_original=False)
 
-        # Write metadata first
-        writer.write_metadata(temp_image_file, sample_metadata)
-        assert writer.has_color_narration(temp_image_file) is True
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            writer.write_metadata(temp_image_file, sample_metadata)
+            assert writer.has_color_narration(temp_image_file) is True
 
-        # Remove metadata
         result = writer.remove_metadata(temp_image_file)
 
         assert result is True
@@ -286,7 +299,8 @@ class TestXMPMetadataBatch:
         writer = XMPMetadataWriter(backup_original=False)
         batch = XMPMetadataBatch(writer)
 
-        results = batch.batch_write(temp_files_and_metadata)
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            results = batch.batch_write(temp_files_and_metadata)
 
         assert results["total"] == 3
         assert results["successful"] == 3
@@ -295,7 +309,10 @@ class TestXMPMetadataBatch:
 
         # Verify all files have metadata
         for file_path, _ in temp_files_and_metadata:
-            assert writer.has_color_narration(file_path)
+            with patch(
+                "imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False
+            ):
+                assert writer.has_color_narration(file_path)
 
     def test_batch_write_partial_failure(self, temp_files_and_metadata):
         """Test batch write with some failures."""
@@ -321,11 +338,13 @@ class TestXMPMetadataBatch:
         batch = XMPMetadataBatch(writer)
 
         # Write metadata first
-        batch.batch_write(temp_files_and_metadata)
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            batch.batch_write(temp_files_and_metadata)
 
         # Read back
         file_paths = [fp for fp, _ in temp_files_and_metadata]
-        results = batch.batch_read(file_paths)
+        with patch("imageworks.apps.color_narrator.core.metadata.XMP_AVAILABLE", False):
+            results = batch.batch_read(file_paths)
 
         assert len(results) == 3
         for file_path in file_paths:

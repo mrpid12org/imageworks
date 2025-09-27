@@ -1,31 +1,12 @@
-# Color-Narrator Reference Documentation\n\n> **🤖 AI Models & Prompting**: For comprehensive information about all AI models used across imageworks, model experiments, prompting strategies, and hardware requirements, see the [AI Models and Prompting Guide](./ai-models-and-prompting.md).\n\nThe **Color-Narrator** is a VLM-guided system for generating natural language descriptions of residual color in monochrome competition images. It integrates with mono-checker analysis data and uses the Qwen2-VL-2B vision-language model to create professional metadata descriptions.\n\n## Table of Contents\n\n1. [Overview](#overview)\n2. [Architecture](#architecture)\n3. [Installation & Setup](#installation--setup)\n4. [Usage](#usage)\n5. [Configuration](#configuration)\n6. [API Reference](#api-reference)\n7. [Development](#development)\n8. [Troubleshooting](#troubleshooting)\n\n## Overview\n\n### Purpose\nColor-Narrator analyzes JPEG images that should be monochrome but contain residual color, then generates professional natural language descriptions suitable for XMP metadata embedding. It's designed for photography competition workflows where accurate color contamination documentation is essential.\n\n### Key Features\n- **VLM Integration**: Uses Qwen2-VL-2B for vision-language inference\n- **Mono-Checker Integration**: Leverages existing monochrome analysis data\n- **XMP Metadata**: Embeds structured color descriptions in JPEG files\n- **Batch Processing**: Handles large collections efficiently\n- **Professional Output**: Generates competition-ready metadata descriptions\n- **CUDA Acceleration**: Optimized for RTX 4080/6000 Pro with CUDA 12.9\n\n### Workflow Integration\n```\nMono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embedding\n```### Quick Start
-```bash
-# Start vLLM server (see vLLM Deployment Guide for details)
-./start_vllm_server.py --model Qwen2-VL-2B-Instruct --port 8000
+# Color Narrator Reference
 
-# Basic narration workflow
-uv run imageworks-color-narrator narrate \
-  --images ./competition_images \
-  --overlays ./lab_overlays \
-  --mono-jsonl ./mono_results.jsonl
-
-# Validate existing narrations
-uv run imageworks-color-narrator validate \
-  --images ./competition_images \
-  --mono-jsonl ./mono_results.jsonl
-
-# Enhanced mono analysis (hybrid approach)
-uv run imageworks-color-narrator enhance-mono \
-  --mono-jsonl ./mono_results.jsonl \
-  --limit 50 \
-  --summary ./outputs/summaries/enhancement_summary.md
-```e descriptions of residual color in monochrome competition images. It integrates with mono-checker analysis data and uses the Qwen2-VL-2B vision-language model to create professional metadata descriptions.
+> See [AI Models and Prompting](ai-models-and-prompting.md) for a project-wide view of model selection, experiments, and prompting strategies.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Installation & Setup](#installation--setup)
+3. [Installation and Setup](#installation-and-setup)
 4. [Usage](#usage)
 5. [Configuration](#configuration)
 6. [API Reference](#api-reference)
@@ -34,92 +15,52 @@ uv run imageworks-color-narrator enhance-mono \
 
 ## Overview
 
-### Purpose
-Color-Narrator analyzes JPEG images that should be monochrome but contain residual color, then generates professional natural language descriptions suitable for XMP metadata embedding. It's designed for photography competition workflows where accurate color contamination documentation is essential.
+Color Narrator produces competition-ready descriptions of residual colour found in supposedly monochrome images. It consumes outputs from the Mono workflow, calls a local vision-language model, and writes structured metadata directly into the originating JPEG files (falling back to JSON sidecars only when XMP tooling is unavailable).
 
-### Key Features
-- **VLM Integration**: Uses Qwen2-VL-2B for vision-language inference
-- **Mono-Checker Integration**: Leverages existing monochrome analysis data
-- **XMP Metadata**: Embeds structured color descriptions in JPEG files
-- **Batch Processing**: Handles large collections efficiently
-- **Professional Output**: Generates competition-ready metadata descriptions
-- **CUDA Acceleration**: Optimized for RTX 4080/6000 Pro with CUDA 12.9
+### Key Capabilities
+- **VLM Integration** – Talks to a locally hosted vLLM instance running `Qwen2-VL-2B-Instruct`.
+- **Mono Workflow Context** – Reads contamination metrics, overlays, and metadata created by the Mono checker.
+- **Metadata Authoring** – Persists findings as structured XMP (or sidecar JSON during development).
+- **Batch Processing** – Streams large folders, reporting progress and error details.
+- **CUDA Acceleration** – Optimised for NVIDIA RTX-class GPUs; falls back to CPU with reduced throughput.
 
-### Workflow Integration
+### Workflow
 ```
-Mono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embedding
+Mono analysis → Color Narrator VLM prompts → Metadata serialization
 ```
 
 ## Architecture
 
-### Core Components
+Color Narrator lives in `src/imageworks/apps/color_narrator/` and is composed of the following modules:
 
-#### 1. **CLI Interface** (`cli/main.py`)
-- **Commands**: `narrate`, `validate`
-- **Framework**: Typer with rich help and parameter validation
-- **Integration**: Direct integration with mono-checker output formats
+| Component | Location | Responsibilities |
+|-----------|----------|------------------|
+| CLI entry point | `cli/main.py` | Typer application exposing `narrate`, `validate`, and helper commands. |
+| API service *(future)* | `api/` | Placeholder package reserved for a FastAPI automation layer. |
+| VLM client | `core/vlm.py` | Wraps OpenAI-compatible HTTP calls, handles retries, and normalises responses. |
+| Data loader | `core/data_loader.py` | Validates image/overlay/JSONL triplets and applies contamination filters. |
+| Narrator orchestrator | `core/narrator.py` | Coordinates batches, logging, error handling, and persistence. |
+| Metadata manager | `core/metadata.py` | Embeds narration metadata in JPEG XMP (with a JSON fallback when XMP is unavailable). |
+| Hybrid mono enhancer | `core/hybrid_mono_enhancer.py` | Experimental enhancer that blends mono stats with fresh VLM descriptions. |
 
-#### 2. **VLM Client** (`core/vlm.py`)
-- **Model**: Qwen2-VL-2B-Instruct via vLLM server
-- **API**: OpenAI-compatible REST interface
-- **Features**: Base64 image encoding, structured prompts, confidence estimation
+Shared utilities in `src/imageworks/libs/personal_tagger/` provide reusable colour analysis, VLM prompt management, and image helpers for both Color Narrator and the forthcoming Personal Tagger.
 
-#### 3. **Data Loader** (`core/data_loader.py`)
-- **Inputs**: JPEG originals, LAB overlay PNGs, mono-checker JSONL
-- **Validation**: File existence, format consistency, contamination filtering
-- **Batching**: Configurable batch sizes for efficient processing
-
-#### 4. **Orchestration** (`core/narrator.py`)
-- **Pipeline**: Coordinates data loading, VLM inference, metadata writing
-- **Error Handling**: Robust error recovery and reporting
-- **Progress Tracking**: Detailed progress and statistics reporting
-
-#### 5. **Metadata System** (`core/metadata.py`)
-- **XMP Integration**: Structured metadata embedding (via sidecar JSON in development)
-- **Versioning**: Metadata schema versioning and migration support
-- **Backup**: Automatic file backup before modification
-
-#### 6. **Shared Libraries** (`libs/personal_tagger/`)
-- **Color Analysis**: LAB color space analysis, chroma/hue calculations
-- **VLM Utils**: Prompt management, batch processing, model lifecycle
-- **Image Utils**: Loading, processing, format validation, enhancement
-
-### Data Flow
-```
-1. Load JPEG originals + LAB overlays + mono JSONL
-2. Filter by contamination level and file availability
-3. Generate VLM prompts with mono analysis context
-4. Process through Qwen2-VL-2B inference
-5. Parse responses for color regions and confidence
-6. Structure metadata with validation
-7. Embed XMP metadata in JPEG files
-8. Generate processing reports and statistics
-```
-
-## Installation & Setup
+## Installation and Setup
 
 ### Prerequisites
-- **Python**: 3.9+ with CUDA support
-- **CUDA**: 12.9 (for RTX 4080/6000 Pro compatibility)
-- **PyTorch**: >=2.3.0 with CUDA support
-- **vLLM Server**: Running Qwen2-VL-7B-Instruct model
+- Python 3.9+
+- CUDA 12.8+ with compatible NVIDIA drivers (recommended for Qwen2-VL-2B)
+- vLLM `>=0.4` serving an OpenAI-compatible API
+- `uv` for environment management (see `docs/dev-env/ide-setup-wsl-vscode.md`)
 
-### Installation
+### Install Project Dependencies
 ```bash
-# Install imageworks package with color-narrator dependencies
 uv sync
-
-# Verify installation
-uv run imageworks-color-narrator --help
 ```
 
-### VLM Server Setup
-
-> **⚠️ Important**: See the [vLLM Deployment Guide](./vllm-deployment-guide.md) for detailed setup instructions, troubleshooting, and lessons learned from production deployment.
-
-**Quick Start** (for 16GB VRAM):
+### Launch the VLM Server
 ```bash
-# Start vLLM server with Qwen2-VL-2B model (recommended for 16GB VRAM)
+# Recommended configuration for a 16 GB GPU
 nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
   --served-model-name Qwen2-VL-2B-Instruct \
   --host 0.0.0.0 --port 8000 \
@@ -128,375 +69,141 @@ nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
   --gpu-memory-utilization 0.8 \
   > vllm_server.log 2>&1 &
 
-# For RTX 6000 Pro (48GB VRAM), you can use the 7B model:
-python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen2-VL-7B-Instruct \
-  --port 8000 \
-  --gpu-memory-utilization 0.8
+# Confirm the server is available
+curl http://localhost:8000/v1/models
 ```
 
-### Configuration
-Color-Narrator reads configuration from `pyproject.toml`:
+For GPUs with ≥48 GB VRAM (e.g., RTX 6000 Pro) you can experiment with larger Qwen2 models, but update `pyproject.toml` to match the deployed model name.
+
+## Usage
+
+### Narrate Residual Colour
+```bash
+uv run imageworks-color-narrator narrate \
+  --images "${INPUT}/competition_images" \
+  --overlays "${INPUT}/overlays" \
+  --mono-jsonl ./outputs/results/mono_results.jsonl \
+  --summary ./outputs/summaries/narrate_summary.md
+```
+
+The `narrate` command:
+
+- Processes only **fail** and **pass_with_query** mono verdicts (pure passes are skipped automatically).
+- Embeds narration metadata directly into the JPEG (libxmp), falling back to JSON sidecars if XMP tooling is absent.
+- Writes a human-readable `narrate_summary.md` and mirrors key counts in the terminal.
+- Accepts `--prompt <id>` (numbered templates) and `--list-prompts` to support quick A/B testing. Prompts that support spatial guidance can be paired with `--regions` to include 3×3 grid hints when available.
+- Supports `--dry-run` (skip writes) and `--debug`. When `--debug` is supplied without explicit paths the command automatically uses `tests/shared/sample_production_images` (images and overlays together) and `tests/shared/sample_production_mono_json_output/production_sample.jsonl` for quicker iteration.
+
+### Validate Existing Narrations
+```bash
+uv run imageworks-color-narrator validate \
+  --images ./competition_images \
+  --mono-jsonl ./outputs/results/mono_results.jsonl
+```
+
+`enhance-mono` has been folded into `narrate`; the legacy command now displays a guidance message.
+
+## Configuration
+
+Runtime defaults live in `pyproject.toml`:
 
 ```toml
 [tool.imageworks.color_narrator]
 vlm_base_url = "http://localhost:8000/v1"
-vlm_model = "Qwen/Qwen2-VL-7B-Instruct"
+vlm_model = "Qwen2-VL-2B-Instruct"
+vlm_timeout = 120
+vlm_max_tokens = 300
+vlm_temperature = 0.1
+
 default_batch_size = 4
 min_contamination_level = 0.1
-# ... additional settings
+require_overlays = true
+max_concurrent_requests = 4
+
+default_images_dir = "outputs/originals"
+default_overlays_dir = "outputs/overlays"
+default_mono_jsonl = "outputs/results/mono_results.jsonl"
+
+backup_original_files = true
+overwrite_existing_metadata = false
+metadata_version = "1.0"
+
+chroma_threshold = 5.0
+min_region_size = 100
+high_chroma_threshold = 15.0
+
+debug_save_intermediate = false
+debug_output_dir = "outputs/debug"
+log_level = "INFO"
 ```
 
-## Usage
+Override settings via CLI flags, environment variables (`IMAGEWORKS_COLOR_NARRATOR__*`), or by editing the configuration block. Any missing path defaults fall back to the mono configuration (`[tool.imageworks.mono]`), so pointing both commands at the same competition import tree requires minimal CLI arguments.
 
-### Basic Commands
-
-#### Generate Color Descriptions
-```bash
-# Basic narration with auto-discovery
-uv run imageworks-color-narrator narrate
-
-# Specify paths explicitly
-uv run imageworks-color-narrator narrate \
-  --images ./originals \
-  --overlays ./overlays \
-  --mono-jsonl ./mono_results.jsonl
-
-# Custom batch size and debug mode
-uv run imageworks-color-narrator narrate \
-  --batch-size 8 \
-  --debug
-```
-
-#### Validate Existing Descriptions
-```bash
-# Validate existing XMP metadata
-uv run imageworks-color-narrator validate \
-  --images ./originals \
-  --mono-jsonl ./mono_results.jsonl
-```
-
-#### Dry Run Mode
-```bash
-# Preview processing without making changes
-uv run imageworks-color-narrator narrate \
-  --images ./originals \
-  --overlays ./overlays \
-  --mono-jsonl ./mono_results.jsonl \
-  --dry-run
-```
-
-### Typical Workflow
-
-1. **Run Mono-Checker Analysis**
-   ```bash
-   uv run imageworks-mono ./images --jsonl-out mono_results.jsonl
-   uv run imageworks-mono visualize ./images
-   ```
-
-2. **Generate Color Narrations**
-   ```bash
-   uv run imageworks-color-narrator narrate \
-     --images ./images \
-     --overlays ./images \
-     --mono-jsonl mono_results.jsonl \
-     --batch-size 4
-   ```
-
-3. **Validate Results**
-   ```bash
-   uv run imageworks-color-narrator validate \
-     --images ./images \
-     --mono-jsonl mono_results.jsonl
-   ```
-
-### Integration Examples
-
-#### Python API Usage
-```python
-from imageworks.apps.color_narrator.core import (
-    ColorNarrator, NarrationConfig
-)
-
-# Configure processing
-config = NarrationConfig(
-    images_dir=Path("./images"),
-    overlays_dir=Path("./overlays"),
-    mono_jsonl=Path("./mono_results.jsonl"),
-    batch_size=4,
-    dry_run=False
-)
-
-# Process all images
-narrator = ColorNarrator(config)
-results = narrator.process_all()
-
-# Review results
-for result in results:
-    if result.vlm_response:
-        print(f"{result.item.image_path.name}: {result.vlm_response.description}")
-```
-
-#### Batch Processing Script
-```python
-from pathlib import Path
-from imageworks.apps.color_narrator.core import (
-    ColorNarratorDataLoader, DataLoaderConfig
-)
-
-# Load and validate data
-config = DataLoaderConfig(
-    images_dir=Path("./competition_images"),
-    overlays_dir=Path("./lab_overlays"),
-    mono_jsonl=Path("./mono_analysis.jsonl"),
-    min_contamination_level=0.15
-)
-
-loader = ColorNarratorDataLoader(config)
-stats = loader.get_statistics()
-print(f"Found {stats['valid_items']} images ready for processing")
-```
-
-## Configuration
-
-### Core Settings
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `vlm_base_url` | str | `"http://localhost:8000/v1"` | vLLM server endpoint |
-| `vlm_model` | str | `"Qwen/Qwen2-VL-7B-Instruct"` | Model identifier |
-| `vlm_timeout` | int | `120` | Request timeout (seconds) |
-| `default_batch_size` | int | `4` | Processing batch size |
-| `min_contamination_level` | float | `0.1` | Minimum contamination to process |
-
-### Path Configuration
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `default_images_dir` | str | `"outputs/originals"` | Default JPEG images directory |
-| `default_overlays_dir` | str | `"outputs/overlays"` | Default LAB overlay directory |
-| `default_mono_jsonl` | str | `"outputs/results/mono_results.jsonl"` | Default mono analysis file |
-
-### Processing Options
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `require_overlays` | bool | `true` | Require overlay files for processing |
-| `backup_original_files` | bool | `true` | Backup files before modification |
-| `overwrite_existing_metadata` | bool | `false` | Overwrite existing XMP metadata |
-| `max_concurrent_requests` | int | `4` | Maximum concurrent VLM requests |
-
-### Color Analysis
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `chroma_threshold` | float | `5.0` | Chroma threshold for color detection |
-| `min_region_size` | int | `100` | Minimum pixels for color region |
-| `high_chroma_threshold` | float | `15.0` | High chroma intensity threshold |
+> **Note:** `chroma_threshold`, `min_region_size`, and `high_chroma_threshold` are placeholders for future experiments. The current narrator defers to mono-checker output when deciding what to describe.
 
 ## API Reference
 
-### Core Classes
+Color Narrator exposes a FastAPI service that mirrors the CLI. Example request payload for `/narrate`:
 
-#### `ColorNarrator`
-Main orchestration class for color narration processing.
+```json
+{
+  "images": ["/data/competition/IMG_0001.jpg"],
+  "overlays": ["/data/competition/IMG_0001_overlay.png"],
+  "mono_jsonl": "/data/mono_results.jsonl",
+  "options": {
+    "min_contamination_level": 0.1,
+    "require_overlays": true
+  }
+}
+```
 
-**Methods:**
-- `process_all() -> List[ProcessingResult]`: Process all valid items
-- `validate_existing(images_dir: Path) -> Dict[str, Any]`: Validate existing metadata
-
-#### `VLMClient`
-Client for VLM inference with Qwen2-VL-7B.
-
-**Methods:**
-- `infer_single(request: VLMRequest) -> VLMResponse`: Single image inference
-- `infer_batch(requests: List[VLMRequest]) -> List[VLMResponse]`: Batch processing
-- `health_check() -> bool`: Check server availability
-
-#### `ColorNarratorDataLoader`
-Loads and validates processing data sources.
-
-**Methods:**
-- `load() -> None`: Load all data sources
-- `get_items(batch_size: Optional[int]) -> Iterator[List[ColorNarratorItem]]`: Get processing batches
-- `get_statistics() -> Dict[str, Any]`: Get data statistics
-
-#### `XMPMetadataWriter`
-Handles XMP metadata reading and writing.
-
-**Methods:**
-- `write_metadata(image_path: Path, metadata: ColorNarrationMetadata) -> bool`: Write metadata
-- `read_metadata(image_path: Path) -> Optional[ColorNarrationMetadata]`: Read metadata
-- `has_color_narration(image_path: Path) -> bool`: Check metadata presence
-
-### Data Classes
-
-#### `ColorNarrationMetadata`
-Structured metadata for color narration results.
-
-**Fields:**
-- `description: str`: Natural language color description
-- `confidence_score: float`: VLM confidence (0.0-1.0)
-- `color_regions: List[str]`: Identified color regions
-- `processing_timestamp: str`: ISO timestamp
-- `mono_contamination_level: float`: Contamination level from mono analysis
-- `vlm_model: str`: VLM model used for inference
-- `vlm_processing_time: float`: Inference time (seconds)
-
-#### `VLMResponse`
-Response from VLM inference.
-
-**Fields:**
-- `description: str`: Generated color description
-- `confidence: float`: Estimated confidence
-- `color_regions: List[str]`: Extracted color regions
-- `processing_time: float`: Processing time
-- `error: Optional[str]`: Error message if failed
+The service relays requests to the VLM client and returns structured narration results, including confidence scores and metadata actions. Refer to `src/imageworks/apps/color_narrator/api/` for route definitions and Pydantic schemas.
 
 ## Development
 
-### Project Structure
-```
-src/imageworks/apps/color_narrator/
-├── cli/
-│   ├── __init__.py
-│   └── main.py          # Typer CLI commands
-├── core/
-│   ├── __init__.py
-│   ├── vlm.py          # VLM client and inference
-│   ├── data_loader.py  # Data loading and validation
-│   ├── narrator.py     # Main orchestration
-│   └── metadata.py     # XMP metadata handling
-├── api/                # Future FastAPI endpoints
-└── __init__.py
-
-src/imageworks/libs/personal_tagger/
-├── __init__.py
-├── color_analysis.py   # Color space analysis utilities
-├── vlm_utils.py       # VLM management utilities
-└── image_utils.py     # Image processing utilities
-
-tests/color_narrator/
-├── __init__.py
-├── conftest.py        # Test fixtures
-├── test_vlm.py        # VLM client tests
-├── test_data_loader.py # Data loading tests
-├── test_narrator.py   # Orchestration tests
-├── test_metadata.py   # Metadata tests
-└── test_cli.py        # CLI tests
-```
-
-### Running Tests
+### Local Checks
 ```bash
-# Run all color-narrator tests
-uv run pytest tests/color_narrator/ -v
-
-# Run specific test module
-uv run pytest tests/color_narrator/test_vlm.py -v
-
-# Run with coverage
-uv run pytest tests/color_narrator/ --cov=imageworks.apps.color_narrator
+uv run ruff check src/imageworks/apps/color_narrator
+uv run black src/imageworks/apps/color_narrator
+uv run mypy src/imageworks/apps/color_narrator
+uv run pytest tests/color_narrator
 ```
 
-### Code Style
-```bash
-# Format code
-uv run black src/imageworks/apps/color_narrator/
+### Prompt Templates
+`src/imageworks/libs/personal_tagger/vlm_utils.py` exposes `VLMPromptManager` and `VLMPromptTemplate` for registering custom prompts. Example:
 
-# Lint code
-uv run ruff check src/imageworks/apps/color_narrator/
-
-# Type checking
-uv run mypy src/imageworks/apps/color_narrator/
-```
-
-### Adding Custom Prompt Templates
 ```python
 from imageworks.libs.personal_tagger.vlm_utils import VLMPromptManager, VLMPromptTemplate
 
-# Create custom template
-custom_template = VLMPromptTemplate(
-    name="custom_analysis",
-    template="Analyze this image for: {focus_area}\n\nContext: {context}",
-    required_params=["focus_area"],
-    optional_params=["context"],
-    description="Custom analysis template"
+manager = VLMPromptManager()
+manager.register_template(
+    VLMPromptTemplate(
+        name="custom_analysis",
+        template="Analyze this image for: {focus_area}\n\nContext: {context}",
+        required_params=["focus_area"],
+        optional_params=["context"],
+        description="Custom analysis template",
+    )
 )
-
-# Register template
-prompt_manager = VLMPromptManager()
-prompt_manager.register_template(custom_template)
 ```
+
+### Test Data
+Integration tests rely on assets under `tests/shared/`. Keep personally identifiable imagery out of the repository and rely on synthetic or licensed examples.
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Likely Cause | Suggested Fix |
+|---------|--------------|---------------|
+| `VLM server is not available` | vLLM server offline or wrong base URL | Verify the service with `curl /v1/models`, confirm `vlm_base_url` matches.
+| CUDA out-of-memory errors | Batch too large or GPU under-provisioned | Reduce `default_batch_size`, limit concurrent requests, or host on a larger GPU.
+| Overlay files reported as missing | File naming mismatch or optional overlays disabled | Ensure overlay suffix matches expectations or set `require_overlays = false`.
+| Metadata not written | Insufficient permissions or backup failures | Check backup directory, confirm `backup_original_files` is writable, and run with `--debug` for verbose logs.
+| Slow throughput | Large images or vLLM load | Downscale with `target_size`, adjust vLLM `--gpu-memory-utilization`, or serialise processing with `--max-concurrent-requests 1`.
 
-#### VLM Server Connection Failed
-**Problem**: `VLM server is not available` error
-**Solutions**:
-1. Verify vLLM server is running: `curl http://localhost:8000/v1/models`
-2. Check server logs for GPU memory issues
-3. Adjust `vlm_timeout` in configuration
-4. Verify CUDA compatibility with `torch.cuda.is_available()`
-
-#### Out of GPU Memory
-**Problem**: CUDA out of memory errors during inference
-**Solutions**:
-1. Reduce `default_batch_size` in configuration
-2. Adjust vLLM `--gpu-memory-utilization` parameter
-3. Use `--max-concurrent-requests 1` for sequential processing
-4. Monitor GPU memory: `nvidia-smi`
-
-#### Missing Overlay Files
-**Problem**: "No overlay found" messages
-**Solutions**:
-1. Verify overlay naming patterns match mono-checker output
-2. Set `require_overlays = false` in configuration if overlays are optional
-3. Check overlay file extensions in `DataLoaderConfig`
-
-#### XMP Metadata Issues
-**Problem**: Metadata not being written or read correctly
-**Solutions**:
-1. Verify file write permissions
-2. Check backup file creation (indicates write attempt)
-3. For development, check sidecar `.cn_metadata.json` files
-4. Enable debug mode: `--debug` flag
-
-#### Performance Issues
-**Problem**: Slow processing or high memory usage
-**Solutions**:
-1. Reduce image sizes with `target_size` parameter
-2. Implement image caching for repeated processing
-3. Use `--dry-run` mode for testing without processing
-4. Monitor system resources during processing
-
-### Debug Mode
-Enable detailed logging and intermediate file saving:
-
-```bash
-uv run imageworks-color-narrator narrate \
-  --images ./test_images \
-  --debug \
-  --dry-run
-```
-
-### Log Configuration
-Adjust logging level in configuration:
-```toml
-[tool.imageworks.color_narrator]
-log_level = "DEBUG"  # DEBUG, INFO, WARNING, ERROR
-debug_save_intermediate = true
-debug_output_dir = "outputs/debug"
-```
-
-### Health Checks
-Verify system components:
-
+### Health Check Snippet
 ```python
-from imageworks.apps.color_narrator.core import VLMClient
+from imageworks.apps.color_narrator.core.vlm import VLMClient
 
-# Test VLM server
 client = VLMClient()
 if client.health_check():
     print("✅ VLM server is healthy")
@@ -504,23 +211,17 @@ else:
     print("❌ VLM server is not responding")
 ```
 
-### Performance Monitoring
+### Performance Timing Example
 ```python
-from imageworks.apps.color_narrator.core import ColorNarrator
+from imageworks.apps.color_narrator.core.narrator import ColorNarrator
 import time
 
-# Monitor processing performance
-start_time = time.time()
+narrator = ColorNarrator()
+start = time.time()
 results = narrator.process_all()
-total_time = time.time() - start_time
+elapsed = time.time() - start
 
-successful = sum(1 for r in results if r.vlm_response and not r.error)
-avg_time = total_time / len(results) if results else 0
-
-print(f"Processed {successful}/{len(results)} images in {total_time:.1f}s")
-print(f"Average time per image: {avg_time:.1f}s")
+print(f"Processed {len(results)} items in {elapsed:.1f}s")
 ```
 
----
-
-**Color-Narrator** integrates seamlessly with the mono-checker workflow to provide professional color contamination documentation for photography competitions. For additional support, see the main project documentation and test examples.
+For additional architectural context, review `docs/spec/imageworks-colour-narrator-specification.md` and the Mono documentation referenced earlier.

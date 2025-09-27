@@ -1,7 +1,7 @@
 """Tests for VLM inference client and response handling.
 
 Tests VLM client initialization, request formatting, response parsing,
-and error handling for Qwen2-VL-7B inference.
+and error handling for Qwen2-VL-2B inference.
 """
 
 import pytest
@@ -24,7 +24,7 @@ class TestVLMClient:
         client = VLMClient()
 
         assert client.base_url == "http://localhost:8000/v1"
-        assert client.model_name == "Qwen/Qwen2-VL-7B-Instruct"
+        assert client.model_name == "Qwen2-VL-2B-Instruct"
         assert client.api_key == "EMPTY"
         assert client.timeout == 120
 

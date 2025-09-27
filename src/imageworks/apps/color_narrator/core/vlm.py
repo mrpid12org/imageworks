@@ -1,7 +1,8 @@
 """VLM (Vision-Language Model) inference module.
 
-Handles vLLM server communication for Qwen2-VL-7B inference with OpenAI-compatible API.
-Provides batch processing capabilities and structured output parsing for color narration.
+Handles vLLM server communication for the default Qwen2-VL-2B model using an
+OpenAI-compatible API. Provides batch processing capabilities and structured
+output parsing for color narration.
 """
 
 from typing import List, Dict, Optional, Any
@@ -38,7 +39,7 @@ class VLMClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000/v1",
-        model_name: str = "Qwen/Qwen2-VL-7B-Instruct",
+        model_name: str = "Qwen2-VL-2B-Instruct",
         api_key: str = "EMPTY",
         timeout: int = 120,
     ):

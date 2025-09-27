@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vLLM server startup script for Qwen2-VL-7B-Instruct.
+vLLM server startup script for Qwen2-VL-2B-Instruct (default deployment).
 Optimized for vision-language tasks with OpenAI API compatibility.
 """
 

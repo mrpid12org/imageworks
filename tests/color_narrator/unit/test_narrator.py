@@ -11,6 +11,7 @@ from datetime import datetime
 import tempfile
 import shutil
 
+from imageworks.apps.color_narrator.core import prompts
 from imageworks.apps.color_narrator.core.narrator import (
     ColorNarrator,
     NarrationConfig,
@@ -37,11 +38,14 @@ class TestNarrationConfig:
         )
 
         assert config.vlm_base_url == "http://localhost:8000/v1"
-        assert config.vlm_model == "Qwen/Qwen2-VL-7B-Instruct"
+        assert config.vlm_model == "Qwen2-VL-2B-Instruct"
         assert config.vlm_timeout == 120
         assert config.batch_size == 4
         assert config.min_contamination_level == 0.1
         assert config.require_overlays is True
+        assert config.prompt_id == prompts.CURRENT_PROMPT_ID
+        assert config.use_regions is False
+        assert config.allowed_verdicts is None
         assert config.dry_run is False
         assert config.debug is False
         assert config.overwrite_existing is False
@@ -57,6 +61,9 @@ class TestNarrationConfig:
             batch_size=8,
             dry_run=True,
             debug=True,
+            prompt_id=3,
+            use_regions=True,
+            allowed_verdicts={"fail"},
         )
 
         assert config.vlm_base_url == "http://custom:9000/v1"
@@ -64,6 +71,9 @@ class TestNarrationConfig:
         assert config.batch_size == 8
         assert config.dry_run is True
         assert config.debug is True
+        assert config.prompt_id == 3
+        assert config.use_regions is True
+        assert config.allowed_verdicts == {"fail"}
 
 
 class TestProcessingResult:
@@ -156,6 +166,7 @@ class TestColorNarrator:
         assert narrator.vlm_client is not None
         assert narrator.metadata_writer is not None
 
+    @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.infer_single")
     @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.health_check")
     @patch(
         "imageworks.apps.color_narrator.core.data_loader.ColorNarratorDataLoader.load"
@@ -167,7 +178,13 @@ class TestColorNarrator:
         "imageworks.apps.color_narrator.core.data_loader.ColorNarratorDataLoader.get_items"
     )
     def test_process_all_dry_run(
-        self, mock_get_items, mock_get_stats, mock_load, mock_health, sample_config
+        self,
+        mock_get_items,
+        mock_get_stats,
+        mock_load,
+        mock_health,
+        mock_infer_single,
+        sample_config,
     ):
         """Test process_all in dry run mode."""
         # Setup mocks
@@ -182,14 +199,22 @@ class TestColorNarrator:
         )
         mock_get_items.return_value = [[mock_item]]  # Single batch with one item
 
+        mock_infer_single.return_value = VLMResponse(
+            description="Mock dry-run description",
+            confidence=0.9,
+            color_regions=["region"],
+            processing_time=1.2,
+            error=None,
+        )
+
         narrator = ColorNarrator(sample_config)
         results = narrator.process_all()
 
         assert len(results) == 1
-        assert results[0].vlm_response is not None
-        assert "[DRY RUN]" in results[0].vlm_response.description
+        assert results[0].vlm_response.description == "Mock dry-run description"
         assert results[0].metadata_written is False
         assert results[0].error is None
+        mock_infer_single.assert_called_once()
 
     @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.health_check")
     def test_process_all_vlm_server_unavailable(self, mock_health, sample_config):
@@ -208,9 +233,7 @@ class TestColorNarrator:
 
         assert isinstance(template, str)
         assert len(template) > 0
-        assert "{hue_analysis}" in template
-        assert "{chroma_analysis}" in template
-        assert "{contamination_level}" in template
+        assert "You are a precise technical image analyst" in template
 
     def test_create_metadata(self, sample_config):
         """Test metadata creation from processing results."""

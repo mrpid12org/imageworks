@@ -4,7 +4,7 @@ Handles loading and validation of JPEG originals, lab overlay PNGs, and mono-che
 Provides batching and filtering capabilities for VLM processing pipeline.
 """
 
-from typing import List, Dict, Optional, Iterator, Any
+from typing import List, Dict, Optional, Iterator, Any, Iterable
 from pathlib import Path
 from dataclasses import dataclass
 import json
@@ -34,12 +34,22 @@ class DataLoaderConfig:
     overlay_extensions: List[str] = None
     min_contamination_level: float = 0.1
     require_overlays: bool = True
+    allowed_verdicts: Optional[Iterable[str]] = None
 
     def __post_init__(self):
         if self.image_extensions is None:
             self.image_extensions = [".jpg", ".jpeg", ".JPG", ".JPEG"]
         if self.overlay_extensions is None:
-            self.overlay_extensions = [".png", ".PNG"]
+            self.overlay_extensions = [
+                ".png",
+                ".PNG",
+                ".jpg",
+                ".JPG",
+                ".jpeg",
+                ".JPEG",
+            ]
+        if self.allowed_verdicts is not None:
+            self.allowed_verdicts = {v.lower() for v in self.allowed_verdicts}
 
 
 class ColorNarratorDataLoader:
@@ -89,6 +99,10 @@ class ColorNarratorDataLoader:
                     try:
                         data = json.loads(line.strip())
                         filename = data.get("filename")
+                        if not filename:
+                            source_path = data.get("path")
+                            if source_path:
+                                filename = Path(str(source_path)).name
                         if filename:
                             self._mono_data[filename] = data
                     except json.JSONDecodeError as e:
@@ -124,10 +138,10 @@ class ColorNarratorDataLoader:
 
     def _iter_valid_items(self) -> Iterator[ColorNarratorItem]:
         """Iterate over valid items that meet filtering criteria."""
-        # Find all image files
-        image_files = []
+        # Find all image files (recursive to support nested competition folders)
+        image_files: List[Path] = []
         for ext in self.config.image_extensions:
-            image_files.extend(self.config.images_dir.glob(f"*{ext}"))
+            image_files.extend(self.config.images_dir.rglob(f"*{ext}"))
 
         for image_path in image_files:
             # Check if we have mono data for this image
@@ -136,8 +150,22 @@ class ColorNarratorDataLoader:
                 logger.debug(f"No mono data for {image_path.name}, skipping")
                 continue
 
+            verdict = str(mono_data.get("verdict", "")).lower()
+            if (
+                self.config.allowed_verdicts
+                and verdict not in self.config.allowed_verdicts
+            ):
+                logger.debug(
+                    "Verdict %s not allowed for %s, skipping",
+                    verdict,
+                    image_path.name,
+                )
+                continue
+
             # Check contamination level filter
-            contamination = mono_data.get("contamination_level", 0.0)
+            contamination = mono_data.get("contamination_level")
+            if contamination is None:
+                contamination = mono_data.get("chroma_max", 0.0)
             if contamination < self.config.min_contamination_level:
                 logger.debug(
                     f"Contamination {contamination} below threshold for {image_path.name}"
@@ -165,23 +193,29 @@ class ColorNarratorDataLoader:
         # Try different naming patterns
         base_name = image_path.stem
 
-        # Pattern 1: exact match with different extension
-        for ext in self.config.overlay_extensions:
-            overlay_path = self.config.overlays_dir / f"{base_name}{ext}"
-            if overlay_path.exists():
-                return overlay_path
+        search_dirs = [self.config.overlays_dir]
+        if image_path.parent not in search_dirs:
+            search_dirs.insert(0, image_path.parent)
 
-        # Pattern 2: with '_lab_chroma' suffix (common mono-checker output)
-        for ext in self.config.overlay_extensions:
-            overlay_path = self.config.overlays_dir / f"{base_name}_lab_chroma{ext}"
-            if overlay_path.exists():
-                return overlay_path
+        def _find_with_suffix(suffix: str = "") -> Optional[Path]:
+            for directory in search_dirs:
+                for ext in self.config.overlay_extensions:
+                    candidate = directory / f"{base_name}{suffix}{ext}"
+                    if candidate.exists() and candidate != image_path:
+                        return candidate
+            return None
 
-        # Pattern 3: with '_residual' suffix
-        for ext in self.config.overlay_extensions:
-            overlay_path = self.config.overlays_dir / f"{base_name}_residual{ext}"
-            if overlay_path.exists():
-                return overlay_path
+        overlay_path = _find_with_suffix()
+        if overlay_path:
+            return overlay_path
+
+        overlay_path = _find_with_suffix("_lab_chroma")
+        if overlay_path:
+            return overlay_path
+
+        overlay_path = _find_with_suffix("_lab_residual")
+        if overlay_path:
+            return overlay_path
 
         return None
 
@@ -203,9 +237,16 @@ class ColorNarratorDataLoader:
         # Count valid items
         valid_items = list(self._iter_valid_items())
 
+        def _count_files(root: Path, extensions: List[str]) -> int:
+            return sum(1 for ext in extensions for _ in root.rglob(f"*{ext}"))
+
         # Calculate statistics
-        total_images = len(list(self.config.images_dir.glob("*.*")))
-        total_overlays = len(list(self.config.overlays_dir.glob("*.*")))
+        total_images = _count_files(
+            self.config.images_dir, self.config.image_extensions
+        )
+        total_overlays = _count_files(
+            self.config.overlays_dir, self.config.overlay_extensions
+        )
 
         contamination_levels = [
             item.mono_data.get("contamination_level", 0.0) for item in valid_items
@@ -235,7 +276,11 @@ class ColorNarratorDataLoader:
         issues = []
 
         # Check for orphaned mono results
-        image_names = {f.name for f in self.config.images_dir.iterdir() if f.is_file()}
+        image_names = {
+            path.name
+            for ext in self.config.image_extensions
+            for path in self.config.images_dir.rglob(f"*{ext}")
+        }
         for filename in self._mono_data.keys():
             if filename not in image_names:
                 issues.append(f"Orphaned mono result: {filename}")

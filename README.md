@@ -1,20 +1,21 @@
 # Imageworks
 
-Imageworks provides local-first photography utilities for two workflows:
+Imageworks provides local-first photography tooling for competition compliance and metadata enrichment.
 
-- **Monochrome Checker** – A complete workflow for Camera Club entries:
-  - Extracts and organizes competition images from downloaded zip files
-  - Embeds title and author metadata from XMP files
-  - Integrates with Lightroom for image management
+- **Mono (Competition Checker)** – Complete workflow for Camera Club entries:
+  - Extracts and organises competition images from downloaded ZIP files
+  - Embeds title and author metadata from XMP sidecars
+  - Integrates with Lightroom for managed ingest
   - Validates true monochrome images
-  - Flags near-duplicates and generates overlay visualizations
+  - Flags near-duplicates and generates overlay visualisations
 
-- **Personal Tagger** – enriches a personal Lightroom catalogue with concise keywords, optional captions/long descriptions, and similarity search tools:
-  - **Color-Narrator** – VLM-guided natural language descriptions of residual color in monochrome images using Qwen2-VL-2B inference
+- **Color Narrator** – VLM-guided natural language descriptions of residual colour in monochrome images using Qwen2-VL-2B inference.
 
-Both applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
+- **Personal Tagger** *(in development)* – Lightroom enrichment utilities that will reuse the shared libraries; current modules provide scaffolding only.
 
-See [Competition Workflow](docs/COMPETITION_WORKFLOW.md) for detailed documentation of the complete competition checking process.
+All applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
+
+See [Mono Workflow](docs/mono-workflow.md) for detailed documentation of the complete competition checking process.
 
 ## Project Layout
 
@@ -45,17 +46,19 @@ imageworks/
 
 ## Documentation
 
-### Core Documentation
-- [Competition Workflow](docs/COMPETITION_WORKFLOW.md) - Complete competition checking process
-- [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed codebase organization
-- [AI Models and Prompting](docs/ai-models-and-prompting.md) - **Comprehensive guide to all AI models, experiments, and prompting strategies**
+### Core Guides
+- [Mono Workflow](docs/mono-workflow.md) - Complete competition checking process
+- [Project Structure](docs/project-structure.md) - Detailed codebase organization
+- [AI Models and Prompting](docs/ai-models-and-prompting.md) - Comprehensive guide to models, experiments, and prompting strategies
 
-### Component-Specific Guides
+### Component Guides
 - [Color-Narrator Reference](docs/color-narrator-reference.md) - VLM-based color analysis system
 - [vLLM Deployment Guide](docs/vllm-deployment-guide.md) - Production AI model deployment
-- [Mono Workflow](docs/MONO_WORKFLOW.md) - Monochrome image analysis workflow
 
-### Development Setup\n- [IDE Setup (WSL/VSCode)](docs/dev-env/ide-setup-wsl-vscode.md) - Development environment configuration\n\n## Getting Started
+### Developer Environment
+- [IDE Setup (WSL/VSCode)](docs/dev-env/ide-setup-wsl-vscode.md) - Development environment configuration
+
+## Getting Started
 1. Install [uv](https://docs.astral.sh/uv/) following the steps in `docs/dev-env/ide-setup-wsl-vscode.md`.
 2. From the repository root run `uv sync` to create the virtual environment and install dependencies.
 3. Activate tools with `uv run ...` or `uvx ...` so commands use the project environment.
@@ -93,17 +96,10 @@ To remove diagnostics/keywords later, generate a cleanup script:
 - Ensure the NVIDIA driver on your workstation provides CUDA 12.8 support (required for RTX 6000 PRO / Blackwell).
 - CPU-only environments can remove or override these packages if needed; otherwise expect a ~1 GB download the first time the environment is locked.
 
-## Documentation
-- Developer Environment: `docs/dev-env/ide-setup-wsl-vscode.md`
-- Project Specification: `docs/spec/imageworks-specification.md`
-- Project Structure: `docs/PROJECT_STRUCTURE.md`
-- Color-Narrator Reference: `docs/color-narrator-reference.md`
-- **vLLM Deployment Guide**: `docs/vllm-deployment-guide.md` ⭐ *Essential for setting up vision models*
-
 ### Monochrome Checker Logic
 
 The logic for determining if an image is a valid monochrome is sophisticated, taking into account color variation, saturation, split-toning, and various edge cases.
 
-For a detailed, step-by-step explanation of the decision-making process, please refer to the [Monochrome Check Technical Documentation](./docs/monochrome-technical.md).
+For a detailed, step-by-step explanation of the decision-making process, see [Mono Technical](docs/mono-technical.md).
 
 For architecture or roadmap discussions, start with the specification and follow links into the docs folder.

@@ -4,22 +4,24 @@ This module provides the primary CLI for color-narrator functionality,
 following the same patterns as the mono-checker CLI.
 """
 
+import os
+import re
 import typer
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 import tomllib  # Built-in since Python 3.11
 import logging
 import json
 import requests
-import base64
 from PIL import Image
-import io
 import time
 import subprocess
 from datetime import datetime
-from typing import Dict, Any
+from collections import Counter
 
-from ..core.metadata import XMPMetadataWriter, ColorNarrationMetadata
+from ..core import prompts
+from ..core.metadata import XMPMetadataWriter
+from ..core.narrator import ColorNarrator, NarrationConfig, ProcessingResult
 from ..core.region_based_vlm import (
     RegionBasedVLMAnalyzer,
 )
@@ -40,6 +42,51 @@ def _find_pyproject(start_path: Path) -> Optional[Path]:
         if candidate.exists():
             return candidate
     return None
+
+
+def load_config(start_path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load merged imageworks configuration for color narrator + mono defaults."""
+
+    cfg_path = _find_pyproject(start_path or Path.cwd())
+    if not cfg_path:
+        return {}
+
+    try:
+        with cfg_path.open("rb") as fp:
+            data = tomllib.load(fp)
+    except Exception as exc:
+        logger.warning("Failed to load config from %s: %s", cfg_path, exc)
+        return {}
+
+    imageworks_cfg = (
+        data.get("tool", {}).get("imageworks", {}) if isinstance(data, dict) else {}
+    )
+
+    merged: Dict[str, Any] = {}
+
+    mono_cfg = imageworks_cfg.get("mono")
+    if isinstance(mono_cfg, dict):
+        merged.update(mono_cfg)
+
+    narrator_cfg = imageworks_cfg.get("color_narrator")
+    if isinstance(narrator_cfg, dict):
+        merged.update(narrator_cfg)
+
+    # Include other scalar entries directly under [tool.imageworks] when available
+    for key, value in imageworks_cfg.items():
+        if key in {"mono", "color_narrator"}:
+            continue
+        merged.setdefault(key, value)
+
+    # Environment overrides: IMAGEWORKS_COLOR_NARRATOR__FOO=bar → foo: "bar"
+    prefix = "IMAGEWORKS_COLOR_NARRATOR__"
+    for env_key, env_value in os.environ.items():
+        if not env_key.startswith(prefix):
+            continue
+        config_key = env_key[len(prefix) :].lower()
+        merged[config_key] = env_value
+
+    return merged
 
 
 def _start_vllm_server() -> subprocess.Popen:
@@ -181,52 +228,8 @@ def _get_vlm_client_with_autostart(
 
 
 def _load_defaults() -> Dict[str, Any]:
-    """Load defaults from [tool.imageworks] in pyproject.toml (if present)."""
-    try:
-        cfg_p = _find_pyproject(Path.cwd())
-        if not cfg_p:
-            return {}
-
-        with open(cfg_p, "rb") as f:
-            data = tomllib.load(f)
-
-        return data.get("tool", {}).get("imageworks", {})
-    except Exception as e:
-        logger.warning(f"Could not load config from pyproject.toml: {e}")
-        return {}
-    try:
-        cfg_p = _find_pyproject(Path.cwd())
-        if not cfg_p:
-            return {}
-
-        with open(cfg_p, "rb") as f:
-            data = tomllib.load(f)
-
-        return data.get("tool", {}).get("imageworks", {})
-    except Exception as e:
-        logger.warning(f"Could not load config from pyproject.toml: {e}")
-        return {}
-
-    """Load defaults from [tool.imageworks] in pyproject.toml (if present)."""
-    try:
-        cfg_p = _find_pyproject(Path.cwd())
-        if not cfg_p:
-            return {}
-        data = tomllib.loads(cfg_p.read_text())
-
-        # Get both mono and color_narrator configs
-        imageworks = data.get("tool", {}).get("imageworks", {})
-        mono_config = imageworks.get("mono", {})
-        cn_config = imageworks.get("color_narrator", {})
-
-        # Merge configs, with color_narrator taking precedence
-        merged = {}
-        merged.update(mono_config)
-        merged.update(cn_config)
-
-        return merged if isinstance(merged, dict) else {}
-    except Exception:
-        return {}
+    """Backward-compatible helper that returns merged imageworks defaults."""
+    return load_config()
 
 
 def _generate_enhancement_summary(enhanced_results: list, output_path: Path) -> None:
@@ -303,97 +306,179 @@ def _generate_enhancement_summary(enhanced_results: list, output_path: Path) -> 
         f.write("\n".join(lines))
 
 
-def resize_image_for_vlm(image_path: Path, max_size: int = 1024) -> bytes:
-    """Resize image to reasonable size for VLM processing."""
-    with Image.open(image_path) as img:
-        # Convert to RGB if needed
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+def _write_narration_summary(
+    results: List[ProcessingResult], output_path: Path
+) -> Dict[str, int]:
+    """Persist human-readable narration summary and return verdict counts."""
 
-        # Calculate new size maintaining aspect ratio
-        width, height = img.size
-        if max(width, height) > max_size:
-            if width > height:
-                new_width = max_size
-                new_height = int(height * max_size / width)
-            else:
-                new_height = max_size
-                new_width = int(width * max_size / height)
+    counts: Counter[str] = Counter()
+    successes: List[ProcessingResult] = []
+    failed: List[ProcessingResult] = []
 
-            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    for result in results:
+        mono_verdict = str(result.item.mono_data.get("verdict", "unknown")).lower()
+        counts[mono_verdict] += 1
 
-        # Save to bytes buffer
-        buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=85)
-        return buffer.getvalue()
+        if result.error:
+            failed.append(result)
+        elif result.vlm_response:
+            successes.append(result)
+
+    total = len(results)
+    fail_total = counts.get("fail", 0)
+    query_total = counts.get("pass_with_query", 0)
+    pass_total = counts.get("pass", 0)
+    other_total = total - (fail_total + query_total + pass_total)
+
+    lines = [
+        "# Color Narration Summary",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        (
+            "**Totals:** "
+            f"FAIL={fail_total}  QUERY={query_total}  PASS={pass_total}"
+            + (f"  OTHER={other_total}" if other_total else "")
+            + f"  (processed: {total})"
+        ),
+        "",
+    ]
+
+    verdict_sections = {
+        "fail": "FAIL",
+        "pass_with_query": "QUERY",
+        "pass": "PASS",
+    }
+
+    for verdict_key, heading in verdict_sections.items():
+        section_items = [
+            result
+            for result in successes
+            if str(result.item.mono_data.get("verdict", "")).lower() == verdict_key
+        ]
+        if not section_items:
+            continue
+
+        lines.append(f"## {heading} ({len(section_items)})")
+        lines.append("")
+
+        for result in section_items:
+            mono = result.item.mono_data
+            image_name = result.item.image_path.name
+            title = mono.get("title") or result.item.image_path.stem
+            author = mono.get("author") or "Unknown"
+            dominant_color = mono.get("dominant_color") or "unknown"
+            hue = mono.get("dominant_hue_deg")
+            hue_text = f" (hue {hue:.1f}°)" if isinstance(hue, (int, float)) else ""
+            colorfulness = mono.get("colorfulness")
+            chroma_max = mono.get("chroma_max")
+            reason = mono.get("reason_summary") or mono.get("failure_reason") or ""
+
+            lines.append(f"**{title}** by {author}")
+            lines.append(f"- File: {image_name}")
+            lines.append(
+                f"- Verdict: {mono.get('verdict', 'unknown')} ({mono.get('mode', 'unknown')})"
+            )
+            lines.append(f"- Dominant colour: {dominant_color}{hue_text}")
+            if colorfulness is not None or chroma_max is not None:
+                cf = (
+                    f"{colorfulness:.2f}"
+                    if isinstance(colorfulness, (int, float))
+                    else "?"
+                )
+                cm = (
+                    f"{chroma_max:.2f}" if isinstance(chroma_max, (int, float)) else "?"
+                )
+                lines.append(f"- Colourfulness: {cf} | Max chroma: {cm}")
+            if reason:
+                lines.append(f"- Mono summary: {reason}")
+
+            description = (result.vlm_response.description or "").strip()
+            if description:
+                lines.append("")
+                lines.append("**Narration:**")
+                lines.append(description)
+
+            lines.append("")
+
+    if failed:
+        lines.append("## Errors")
+        for result in failed[:10]:
+            image_name = result.item.image_path.name
+            lines.append(f"- {image_name}: {result.error}")
+        lines.append("")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+    return dict(counts)
 
 
-def encode_image(image_path: Path) -> str:
-    """Encode image to base64 with size optimization."""
-    image_bytes = resize_image_for_vlm(image_path)
-    return base64.b64encode(image_bytes).decode("utf-8")
+def _sanitize_file_part(value: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "-", value)
+    sanitized = re.sub(r"-+", "-", sanitized).strip("-._")
+    return sanitized or "run"
 
 
-def call_vlm(image_path: Path, mono_data: dict, vlm_url: str, model: str) -> str:
-    """Call VLM to get color description."""
-    try:
-        # Prepare the prompt
-        prompt = f"""You are analyzing a photograph that should be monochrome but contains residual color.
+def _duplicate_summary_with_label(
+    summary_path: Path, prompt_definition: prompts.PromptDefinition, vlm_model: str
+) -> Optional[Path]:
+    summary_path = Path(summary_path)
+    label = f"{vlm_model}_{prompt_definition.name}"
+    sanitized = _sanitize_file_part(label)
+    new_path = summary_path.with_name(
+        f"{summary_path.stem}_{sanitized}{summary_path.suffix}"
+    )
 
-Mono-checker analysis shows:
-- Dominant color: {mono_data.get('dominant_color', 'unknown')}
-- Color cast: {mono_data.get('reason_summary', 'No summary available')}
-- Verdict: {mono_data.get('verdict', 'unknown')}
+    if new_path == summary_path:
+        return None
 
-Please describe in natural language where you observe residual color in this image. Be concise and professional."""
-
-        # Encode the image
-        base64_image = encode_image(image_path)
-
-        # Prepare API request
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            },
-                        },
-                    ],
-                }
-            ],
-            "max_tokens": 300,
-            "temperature": 0.1,
-        }
-
-        # Make API call
-        response = requests.post(
-            f"{vlm_url}/chat/completions", headers=headers, json=data, timeout=30
-        )
-        response.raise_for_status()
-
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        return f"Error calling VLM: {e}"
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    new_path.write_text(summary_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return new_path
 
 
-def load_config() -> dict:
-    """Load configuration from pyproject.toml."""
-    try:
-        with open("pyproject.toml", "rb") as f:
-            config = tomllib.load(f)
-        return config.get("tool", {}).get("imageworks", {}).get("color_narrator", {})
-    except Exception as e:
-        logger.warning(f"Could not load configuration: {e}")
-        return {}
+def _write_results_json(
+    results: List[ProcessingResult],
+    output_path: Path,
+    prompt_definition: prompts.PromptDefinition,
+    narration_config: NarrationConfig,
+) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().isoformat()
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        for result in results:
+            mono = result.item.mono_data
+            vlm_response = result.vlm_response
+            record = {
+                "timestamp": timestamp,
+                "image": str(result.item.image_path),
+                "overlay": (
+                    str(result.item.overlay_path) if result.item.overlay_path else None
+                ),
+                "prompt_id": prompt_definition.id,
+                "prompt_name": prompt_definition.name,
+                "vlm_model": narration_config.vlm_model,
+                "vlm_base_url": narration_config.vlm_base_url,
+                "verdict": mono.get("verdict"),
+                "mode": mono.get("mode"),
+                "dominant_color": mono.get("dominant_color"),
+                "dominant_hue_deg": mono.get("dominant_hue_deg"),
+                "colorfulness": mono.get("colorfulness"),
+                "chroma_max": mono.get("chroma_max"),
+                "reason_summary": mono.get("reason_summary"),
+                "description": vlm_response.description if vlm_response else None,
+                "confidence": (
+                    getattr(vlm_response, "confidence", None) if vlm_response else None
+                ),
+                "metadata_written": result.metadata_written,
+                "processing_time": result.processing_time,
+                "error": result.error,
+            }
+
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 @app.command()
@@ -402,157 +487,568 @@ def narrate(
         None, "--images", "-i", help="Directory containing JPEG originals"
     ),
     overlays_dir: Optional[Path] = typer.Option(
-        None, "--overlays", "-o", help="Directory containing lab overlay PNGs"
+        None, "--overlays", "-o", help="Directory containing LAB overlay PNGs"
     ),
     mono_jsonl: Optional[Path] = typer.Option(
         None, "--mono-jsonl", "-j", help="Mono-checker results JSONL file"
     ),
     batch_size: Optional[int] = typer.Option(
-        None, "--batch-size", "-b", help="VLM batch size (default from config)"
+        None, "--batch-size", "-b", help="VLM batch size (defaults to config)"
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show what would be processed without making changes"
+    no_meta: bool = typer.Option(
+        False,
+        "--no-meta",
+        "--dry-run",
+        help="Skip writing metadata (formerly --dry-run)",
     ),
     debug: bool = typer.Option(
-        False, "--debug", help="Enable debug output and save debug images"
+        True,
+        "--debug/--no-debug",
+        help="Use sample assets by default; disable to use explicit paths",
+    ),
+    summary: Optional[Path] = typer.Option(
+        None,
+        "--summary",
+        "-s",
+        help="Path for Markdown summary (defaults to narrate_summary.md)",
+    ),
+    results_json: Optional[Path] = typer.Option(
+        None,
+        "--results-json",
+        help="Path for JSONL results (defaults to narrate_results.jsonl)",
+    ),
+    prompt_id: Optional[int] = typer.Option(
+        None,
+        "--prompt",
+        "-p",
+        help="Prompt template id (use --list-prompts to inspect options)",
+    ),
+    list_prompts: bool = typer.Option(
+        False, "--list-prompts", help="List available prompt templates and exit"
+    ),
+    regions: bool = typer.Option(
+        False,
+        "--regions/--no-regions",
+        help="Enable spatial grid guidance when supported by the prompt",
+    ),
+    require_overlays_flag: Optional[bool] = typer.Option(
+        None,
+        "--require-overlays/--allow-missing-overlays",
+        help="Override overlay requirement (default comes from configuration)",
     ),
 ) -> None:
-    """Generate natural language color descriptions for monochrome competition images.
+    """Generate colour narration metadata for competition JPEGs.
 
-    Processes JPEG images using mono-checker analysis data and VLM inference to create
-    natural language descriptions of where residual color appears. Results are embedded
-    as XMP metadata in the original JPEG files.
-
-    Example:
-        imageworks-color-narrator narrate -i ./originals -o ./overlays -j ./mono_results.jsonl
+    Examples:
+        imageworks-color-narrator narrate -i ./images -o ./overlays -j ./mono.jsonl
     """
-    typer.echo("🎨 Color-Narrator - Narrate command")
 
-    if dry_run:
-        typer.echo("🔍 DRY RUN MODE - No files will be modified")
+    if list_prompts:
+        typer.echo("Available prompts:")
+        for definition in prompts.list_prompt_definitions():
+            region_note = " (supports regions)" if definition.supports_regions else ""
+            typer.echo(
+                f"  {definition.id}: {definition.name}{region_note} - {definition.description}"
+            )
+        raise typer.Exit(0)
 
-    # Load configuration
-    config = load_config()
-    if debug:
-        typer.echo(f"📋 Loaded config: {json.dumps(config, indent=2)}")
+    cfg = load_config()
 
-    # Use provided paths or defaults from config
-    images_path = images_dir or Path(config.get("default_images_dir", ""))
-    overlays_path = overlays_dir or Path(config.get("default_overlays_dir", ""))
-    mono_jsonl_path = mono_jsonl or Path(config.get("default_mono_jsonl", ""))
+    def to_bool(value: Any, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        try:
+            return bool(int(value))
+        except Exception:
+            return bool(value)
 
-    # Basic validation
-    if not images_path.exists():
-        typer.echo(f"❌ Images directory not found: {images_path}")
+    try:
+        default_prompt_id = int(cfg.get("default_prompt_id", prompts.CURRENT_PROMPT_ID))
+    except (TypeError, ValueError):
+        default_prompt_id = prompts.CURRENT_PROMPT_ID
+
+    selected_prompt_id = prompt_id if prompt_id is not None else default_prompt_id
+
+    if selected_prompt_id not in prompts.PROMPT_LIBRARY:
+        typer.echo(
+            f"❌ Unknown prompt id: {selected_prompt_id}. Use --list-prompts to view options."
+        )
         raise typer.Exit(1)
 
-    if not overlays_path.exists():
-        typer.echo(f"❌ Overlays directory not found: {overlays_path}")
+    prompt_definition = prompts.get_prompt_definition(selected_prompt_id)
+
+    use_regions_flag = regions
+    if use_regions_flag and not prompt_definition.supports_regions:
+        typer.echo(
+            f"⚠️ Prompt {prompt_definition.id} does not support region guidance; ignoring --regions"
+        )
+        use_regions_flag = False
+
+    # Allow debug mode to use shared test assets when paths are omitted
+    if debug and images_dir is None and overlays_dir is None and mono_jsonl is None:
+        shared_images = Path("tests/shared/sample_production_images")
+        shared_overlays = shared_images
+        shared_jsonl = Path(
+            "tests/shared/sample_production_mono_json_output/production_sample.jsonl"
+        )
+        if (
+            shared_images.exists()
+            and shared_overlays.exists()
+            and shared_jsonl.exists()
+        ):
+            typer.echo("🐞 Debug mode: using tests/shared assets")
+            images_dir = shared_images
+            overlays_dir = shared_overlays
+            mono_jsonl = shared_jsonl
+
+    cfg_for_paths = cfg
+
+    def resolve_path(option: Optional[Path], keys: List[str]) -> Optional[Path]:
+        if option is not None:
+            return option
+        for key in keys:
+            value = cfg_for_paths.get(key)
+            if isinstance(value, str) and value:
+                return Path(value)
+        return None
+
+    images_path = resolve_path(images_dir, ["default_images_dir", "default_folder"])
+    overlays_path = resolve_path(overlays_dir, ["default_overlays_dir"])
+    mono_jsonl_path = resolve_path(mono_jsonl, ["default_mono_jsonl", "default_jsonl"])
+
+    if images_path is None or not images_path.exists():
+        typer.echo(
+            "❌ Images directory not found. Use --images or set default_images_dir/default_folder in pyproject.toml"
+        )
         raise typer.Exit(1)
 
-    if not mono_jsonl_path.exists():
-        typer.echo(f"❌ Mono-checker JSONL file not found: {mono_jsonl_path}")
+    if overlays_path is None or not overlays_path.exists():
+        candidates = [
+            images_path / "overlays",
+            images_path.parent / "overlays",
+            images_path,
+        ]
+        overlays_path = next(
+            (candidate for candidate in candidates if candidate.exists()), overlays_path
+        )
+
+    if overlays_path is None or not overlays_path.exists():
+        typer.echo(
+            "❌ Overlays directory not found. Use --overlays or set default_overlays_dir in pyproject.toml"
+        )
         raise typer.Exit(1)
 
-    # Create metadata writer
-    backup_originals = config.get("backup_original_files", True)
-    metadata_writer = XMPMetadataWriter(backup_original=backup_originals)
+    if mono_jsonl_path is None or not mono_jsonl_path.exists():
+        typer.echo(
+            "❌ Mono-checker JSONL not found. Use --mono-jsonl or set default_mono_jsonl/default_jsonl in pyproject.toml"
+        )
+        raise typer.Exit(1)
 
-    # Basic processing simulation for now
+    if summary is not None:
+        summary_path = summary
+    else:
+        summary_default = cfg.get(
+            "narrate_summary_path", "outputs/summaries/narrate_summary.md"
+        )
+        summary_path = Path(summary_default)
+        if debug:
+            summary_path = Path("tests/test_output/narrate_summary.md")
+
+    if results_json is not None:
+        results_path = results_json
+    else:
+        results_default = cfg.get(
+            "narrate_results_path", "outputs/results/narrate_results.jsonl"
+        )
+        results_path = Path(results_default)
+        if debug:
+            results_path = Path("tests/test_output/narrate_results.jsonl")
+
+    batch = (
+        batch_size if batch_size is not None else int(cfg.get("default_batch_size", 4))
+    )
+    min_contamination = float(cfg.get("min_contamination_level", 0.1))
+    if require_overlays_flag is not None:
+        require_overlays = require_overlays_flag
+    else:
+        require_overlays = to_bool(cfg.get("require_overlays", True), True)
+    overwrite_existing = to_bool(cfg.get("overwrite_existing_metadata", False), False)
+    backup_originals = to_bool(cfg.get("backup_original_files", True), True)
+    vlm_base_url = cfg.get("vlm_base_url", "http://localhost:8000/v1")
+    vlm_model = cfg.get("vlm_model", "Qwen2-VL-2B-Instruct")
+    vlm_timeout = int(cfg.get("vlm_timeout", 120))
+
+    typer.echo("🎨 Color Narrator — generating competition metadata")
+    if no_meta:
+        typer.echo("🔍 No-meta mode: files will not be modified")
+
     typer.echo(f"📁 Images: {images_path}")
     typer.echo(f"📁 Overlays: {overlays_path}")
     typer.echo(f"📄 Mono data: {mono_jsonl_path}")
+    typer.echo(f"🧮 Batch size: {batch}")
+    typer.echo(f"🎯 Contamination threshold: {min_contamination}")
+    typer.echo(f"🤖 VLM: {vlm_model} at {vlm_base_url}")
+    typer.echo(f"🗒️ Prompt {prompt_definition.id}: {prompt_definition.name}")
+    if use_regions_flag:
+        typer.echo("📐 Region guidance enabled")
+    typer.echo(f"📊 Results JSON: {results_path}")
 
-    vlm_url = config.get("vlm_base_url", "http://localhost:8000/v1")
-    vlm_model = config.get("vlm_model", "Qwen/Qwen2-VL-7B-Instruct")
-    typer.echo(f"🤖 VLM: {vlm_model} at {vlm_url}")
-    typer.echo(
-        f"💾 XMP metadata backup: {'enabled' if backup_originals else 'disabled'}"
+    narration_config = NarrationConfig(
+        images_dir=images_path,
+        overlays_dir=overlays_path,
+        mono_jsonl=mono_jsonl_path,
+        vlm_base_url=vlm_base_url,
+        vlm_model=vlm_model,
+        vlm_timeout=vlm_timeout,
+        batch_size=batch,
+        min_contamination_level=min_contamination,
+        require_overlays=require_overlays,
+        dry_run=no_meta,
+        debug=debug,
+        overwrite_existing=overwrite_existing,
+        prompt_id=prompt_definition.id,
+        use_regions=use_regions_flag,
+        allowed_verdicts={"fail", "pass_with_query"},
     )
 
-    # Load and process mono data
-    processed_count = 0
+    narrator = ColorNarrator(narration_config)
+    narrator.metadata_writer.backup_original = backup_originals
+
+    typer.echo("🚀 Starting narration pipeline...")
     try:
-        with open(mono_jsonl_path, "r") as f:
-            for line_num, line in enumerate(f, 1):
-                try:
-                    data = json.loads(line.strip())
-                    image_path = Path(data["path"])
-                    image_name = image_path.name
-
-                    # Check if we have local copies in test directory
-                    local_image = images_path / image_name
-
-                    if local_image.exists():
-                        typer.echo(f"📷 Processing: {image_name}")
-                        if debug:
-                            typer.echo(f"   Verdict: {data.get('verdict', 'unknown')}")
-                            typer.echo(
-                                f"   Color: {data.get('dominant_color', 'unknown')}"
-                            )
-                            typer.echo(
-                                f"   Reason: {data.get('reason_summary', 'No summary')}"
-                            )
-
-                        if not dry_run:
-                            # Actual VLM processing
-                            typer.echo("   🤖 Calling VLM for color description...")
-                            start_time = time.time()
-                            description = call_vlm(
-                                local_image, data, vlm_url, vlm_model
-                            )
-                            processing_time = time.time() - start_time
-                            typer.echo(f"   📝 VLM Response: {description}")
-
-                            # Create metadata object
-                            metadata = ColorNarrationMetadata(
-                                description=description or "No description available",
-                                confidence_score=0.85,  # Mock confidence for now
-                                color_regions=data.get("top_colors", []) or [],
-                                processing_timestamp=datetime.now().isoformat(),
-                                mono_contamination_level=float(
-                                    data.get("colorfulness", 0.0) or 0.0
-                                ),
-                                vlm_model=vlm_model or "unknown",
-                                vlm_processing_time=processing_time,
-                                hue_analysis=f"Dominant: {data.get('dominant_color', 'unknown')}",
-                                chroma_analysis=f"Max chroma: {data.get('chroma_max', 0.0)}",
-                                validation_status="unvalidated",
-                            )
-
-                            # Write metadata to image
-                            typer.echo("   💾 Writing metadata to image...")
-                            success = metadata_writer.write_metadata(
-                                local_image, metadata
-                            )
-                            if success:
-                                typer.echo("   ✅ Metadata written successfully")
-                            else:
-                                typer.echo("   ⚠️  Failed to write metadata")
-                        else:
-                            typer.echo(
-                                "   🎨 [DRY RUN] Would call VLM and write metadata"
-                            )
-                        processed_count += 1
-                    else:
-                        if debug:
-                            typer.echo(
-                                f"⏭️  Skipping {image_name} (not in local images)"
-                            )
-
-                except json.JSONDecodeError as e:
-                    typer.echo(f"⚠️  Skipping invalid JSON on line {line_num}: {e}")
-                    continue
-                except KeyError as e:
-                    typer.echo(f"⚠️  Missing required field on line {line_num}: {e}")
-                    continue
-
-    except Exception as e:
-        typer.echo(f"❌ Error processing mono data: {e}")
+        results = narrator.process_all()
+    except Exception as exc:
+        typer.echo(f"❌ Narration pipeline failed: {exc}")
         raise typer.Exit(1)
 
-    typer.echo(f"✅ Processed {processed_count} images")
-    typer.echo("⚠️  Full implementation coming soon - basic validation complete")
+    total = len(results)
+    failures = [r for r in results if r.error]
+
+    counts = _write_narration_summary(results, summary_path)
+    fail_total = counts.get("fail", 0)
+    query_total = counts.get("pass_with_query", 0)
+    processed_total = fail_total + query_total
+
+    typer.echo("\n📊 Narration Summary")
+    typer.echo(f"   Processed: {total}")
+    typer.echo(f"   Successful: {total - len(failures)}")
+    typer.echo(f"   With errors: {len(failures)}")
+    typer.echo(
+        f"Summary: FAIL={fail_total}  QUERY={query_total}  TOTAL={processed_total}"
+    )
+    typer.echo(f"📝 Summary written to {summary_path}")
+
+    alt_summary = _duplicate_summary_with_label(
+        summary_path, prompt_definition, narration_config.vlm_model
+    )
+    if alt_summary:
+        typer.echo(f"📝 Summary copy written to {alt_summary}")
+
+    _write_results_json(results, results_path, prompt_definition, narration_config)
+    typer.echo(f"💾 Results JSON written to {results_path}")
+
+    if failures:
+        typer.echo("\n⚠️  Sample errors (first 5):")
+        for failure in failures[:5]:
+            typer.echo(f"   • {failure.item.image_path.name}: {failure.error}")
+
+    typer.echo("\n✅ Color narration complete")
+
+
+@app.command()
+def compare_prompts(
+    images_dir: Optional[Path] = typer.Option(
+        None, "--images", "-i", help="Directory containing JPEG originals"
+    ),
+    overlays_dir: Optional[Path] = typer.Option(
+        None, "--overlays", "-o", help="Directory containing LAB overlay PNGs"
+    ),
+    mono_jsonl: Optional[Path] = typer.Option(
+        None, "--mono-jsonl", "-j", help="Mono-checker results JSONL file"
+    ),
+    count: int = typer.Option(
+        5,
+        "--count",
+        "-c",
+        help="Number of most recent prompt templates to compare (default: 5)",
+    ),
+    prompt_ids: Optional[List[int]] = typer.Option(
+        None,
+        "--prompts",
+        "-p",
+        help="Specific prompt ids to compare (overrides --count)",
+    ),
+    summary: Optional[Path] = typer.Option(
+        None,
+        "--summary",
+        "-s",
+        help="Path for comparison Markdown output (defaults to prompt_comparison_<timestamp>.md)",
+    ),
+    batch_size: Optional[int] = typer.Option(
+        None, "--batch-size", "-b", help="VLM batch size (defaults to config)"
+    ),
+    debug: bool = typer.Option(False, "--debug", help="Enable verbose logging"),
+    regions: bool = typer.Option(
+        False,
+        "--regions/--no-regions",
+        help="Enable spatial grid guidance when supported by prompts",
+    ),
+) -> None:
+    """Compare narrator outputs across the most recent prompt templates."""
+
+    cfg = load_config()
+
+    available_prompts = prompts.list_prompt_definitions()
+    if prompt_ids:
+        selected_prompts = [p for p in available_prompts if p.id in set(prompt_ids)]
+        missing = set(prompt_ids) - {p.id for p in selected_prompts}
+        if missing:
+            typer.echo(f"❌ Unknown prompt id(s): {sorted(missing)}")
+            raise typer.Exit(1)
+    else:
+        ordered = sorted(available_prompts, key=lambda p: p.id, reverse=True)
+        default_prompt = next(
+            (p for p in available_prompts if p.id == prompts.CURRENT_PROMPT_ID), None
+        )
+        selected_prompts = []
+        if default_prompt:
+            selected_prompts.append(default_prompt)
+        for definition in ordered:
+            if default_prompt and definition.id == default_prompt.id:
+                continue
+            if len(selected_prompts) >= max(count, 1):
+                break
+            selected_prompts.append(definition)
+
+    if not selected_prompts:
+        typer.echo("❌ No prompt templates selected for comparison")
+        raise typer.Exit(1)
+
+    def to_bool(value: Any, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        try:
+            return bool(int(value))
+        except Exception:
+            return bool(value)
+
+    cfg_for_paths = cfg
+
+    def resolve_path(option: Optional[Path], keys: List[str]) -> Optional[Path]:
+        if option is not None:
+            return option
+        for key in keys:
+            value = cfg_for_paths.get(key)
+            if isinstance(value, str) and value:
+                return Path(value)
+        return None
+
+    sample_images = Path("tests/shared/sample_production_images")
+    sample_overlays = sample_images
+    sample_jsonl = Path(
+        "tests/shared/sample_production_mono_json_output/production_sample.jsonl"
+    )
+
+    if debug and images_dir is None and overlays_dir is None and mono_jsonl is None:
+        if sample_images.exists() and sample_jsonl.exists():
+            typer.echo("🐞 Debug mode: using tests/shared assets")
+            images_dir = sample_images
+            overlays_dir = sample_overlays
+            mono_jsonl = sample_jsonl
+
+    images_path = resolve_path(images_dir, ["default_images_dir", "default_folder"])
+    overlays_path = resolve_path(overlays_dir, ["default_overlays_dir"])
+    mono_jsonl_path = resolve_path(mono_jsonl, ["default_mono_jsonl", "default_jsonl"])
+
+    if images_path is None or not images_path.exists():
+        if sample_images.exists():
+            typer.echo("🐞 Falling back to sample images for comparison")
+            images_path = sample_images
+            overlays_path = sample_overlays if overlays_dir is None else overlays_path
+        else:
+            typer.echo(
+                "❌ Images directory not found. Use --images or set default_images_dir/default_folder in pyproject.toml"
+            )
+            raise typer.Exit(1)
+
+    if overlays_path is None or not overlays_path.exists():
+        candidates = [
+            images_path / "overlays",
+            images_path.parent / "overlays",
+            images_path,
+        ]
+        overlays_path = next(
+            (candidate for candidate in candidates if candidate.exists()), overlays_path
+        )
+
+    if overlays_path is None or not overlays_path.exists():
+        if sample_overlays.exists():
+            overlays_path = sample_overlays
+        else:
+            typer.echo(
+                "❌ Overlays directory not found. Use --overlays or set default_overlays_dir in pyproject.toml"
+            )
+            raise typer.Exit(1)
+
+    if mono_jsonl_path is None or not mono_jsonl_path.exists():
+        if sample_jsonl.exists():
+            mono_jsonl_path = sample_jsonl
+        else:
+            typer.echo(
+                "❌ Mono-checker JSONL not found. Use --mono-jsonl or set default_mono_jsonl/default_jsonl in pyproject.toml"
+            )
+            raise typer.Exit(1)
+
+    batch = (
+        batch_size if batch_size is not None else int(cfg.get("default_batch_size", 4))
+    )
+    min_contamination = float(cfg.get("min_contamination_level", 0.1))
+    require_overlays = to_bool(cfg.get("require_overlays", True), True)
+    vlm_base_url = cfg.get("vlm_base_url", "http://localhost:8000/v1")
+    vlm_model = cfg.get("vlm_model", "Qwen2-VL-2B-Instruct")
+    vlm_timeout = int(cfg.get("vlm_timeout", 120))
+
+    typer.echo("🎯 Comparing narrator prompts")
+    typer.echo(f"📁 Images: {images_path}")
+    typer.echo(f"📁 Overlays: {overlays_path}")
+    typer.echo(f"📄 Mono data: {mono_jsonl_path}")
+    typer.echo(f"🤖 Model: {vlm_model} at {vlm_base_url}")
+
+    comparison_results: Dict[int, Dict[str, Any]] = {}
+
+    for prompt_definition in selected_prompts:
+        use_regions_flag = regions and prompt_definition.supports_regions
+        if regions and not prompt_definition.supports_regions:
+            typer.echo(
+                f"⚠️ Prompt {prompt_definition.id} does not support region guidance; ignoring regions"
+            )
+
+        typer.echo(
+            f"🚀 Evaluating prompt {prompt_definition.id}: {prompt_definition.name}"
+        )
+
+        narration_config = NarrationConfig(
+            images_dir=images_path,
+            overlays_dir=overlays_path,
+            mono_jsonl=mono_jsonl_path,
+            vlm_base_url=vlm_base_url,
+            vlm_model=vlm_model,
+            vlm_timeout=vlm_timeout,
+            batch_size=batch,
+            min_contamination_level=min_contamination,
+            require_overlays=require_overlays,
+            dry_run=True,
+            debug=debug,
+            overwrite_existing=False,
+            prompt_id=prompt_definition.id,
+            use_regions=use_regions_flag,
+            allowed_verdicts={"fail", "pass_with_query"},
+        )
+
+        narrator = ColorNarrator(narration_config)
+        narrator.metadata_writer.backup_original = False
+
+        try:
+            results = narrator.process_all()
+            comparison_results[prompt_definition.id] = {
+                "definition": prompt_definition,
+                "results": results,
+                "error": None,
+                "use_regions": use_regions_flag,
+            }
+        except Exception as exc:
+            typer.echo(f"❌ Prompt {prompt_definition.id} failed: {exc}")
+            comparison_results[prompt_definition.id] = {
+                "definition": prompt_definition,
+                "results": [],
+                "error": str(exc),
+                "use_regions": use_regions_flag,
+            }
+
+    if summary is not None:
+        comparison_path = summary
+    else:
+        default_summary = cfg.get(
+            "prompt_comparison_summary_path",
+            "outputs/summaries/prompt_comparison.md",
+        )
+        base_path = Path(default_summary)
+        if debug:
+            base_path = Path("tests/test_output/prompt_comparison.md")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        comparison_path = base_path.with_name(
+            f"{base_path.stem}_{timestamp}{base_path.suffix}"
+        )
+
+    lines: List[str] = [
+        "# Prompt Comparison",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        f"Model: {vlm_model}",
+        "",
+        "Prompts compared:",
+    ]
+
+    ordered_prompts = selected_prompts
+    for definition in ordered_prompts:
+        region_note = (
+            " (regions)" if comparison_results[definition.id]["use_regions"] else ""
+        )
+        lines.append(f"- {definition.id}: {definition.name}{region_note}")
+
+    lines.append("")
+
+    image_map: Dict[str, Dict[int, ProcessingResult]] = {}
+    for definition in ordered_prompts:
+        results = comparison_results[definition.id]["results"]
+        for result in results:
+            image_name = result.item.image_path.name
+            image_map.setdefault(image_name, {})[definition.id] = result
+
+    if not image_map:
+        lines.append("_No narration results available._")
+    else:
+        for image_name in sorted(image_map.keys()):
+            any_result = next(iter(image_map[image_name].values()))
+            mono = any_result.item.mono_data if any_result else {}
+            title = mono.get("title") or Path(image_name).stem
+            lines.append(f"## {title} ({image_name})")
+            lines.append("")
+            for definition in ordered_prompts:
+                record = comparison_results[definition.id]
+                result = image_map[image_name].get(definition.id)
+                header = f"### Prompt {definition.id} — {definition.name}"
+                if record["error"]:
+                    lines.append(header)
+                    lines.append(f"_Failed_: {record['error']}")
+                    lines.append("")
+                    continue
+                if not result:
+                    lines.append(header)
+                    lines.append("_No narration produced_")
+                    lines.append("")
+                    continue
+                description = (result.vlm_response.description or "").strip()
+                if not description and result.error:
+                    description = f"_Error_: {result.error}"
+                elif not description:
+                    description = "_Empty narration_"
+                lines.append(header)
+                lines.append(description)
+                lines.append("")
+
+    comparison_path.parent.mkdir(parents=True, exist_ok=True)
+    comparison_path.write_text("\n".join(lines), encoding="utf-8")
+
+    typer.echo(f"📝 Prompt comparison written to {comparison_path}")
 
 
 @app.command()
@@ -826,252 +1322,13 @@ def interpret_mono(
 
 
 @app.command()
-def enhance_mono(
-    mono_jsonl: Optional[Path] = typer.Option(
-        None,
-        "-j",
-        "--mono-jsonl",
-        help="Mono-checker results JSONL file (uses config default if not specified)",
-    ),
-    images_dir: Optional[Path] = typer.Option(
-        None,
-        "-i",
-        "--images",
-        help="Directory containing JPEG originals (uses config default if not specified)",
-    ),
-    output_jsonl: Optional[Path] = typer.Option(
-        None, "-o", "--output", help="Output JSONL for enhanced results"
-    ),
-    summary_md: Optional[Path] = typer.Option(
-        None, "-s", "--summary", help="Output markdown summary file"
-    ),
-    limit: int = typer.Option(
-        5, "--limit", help="Limit number of images to process (for testing)"
-    ),
-    interesting_only: bool = typer.Option(
-        True,
-        "--interesting-only/--all",
-        help="Process only fails and queries (not pure passes)",
-    ),
-    use_regions: bool = typer.Option(
-        False,
-        "--regions/--no-regions",
-        help="Enable 3x3 grid region analysis for enhanced context",
-    ),
-    prompt_version: str = typer.Option(
-        "v6",
-        "--prompt",
-        help="Prompt version to use (v6/v5/v4/legacy) for A/B testing",
-    ),
-):
-    """
-    Enhance mono-checker descriptions with VLM analysis.
-
-    Combines mono-checker's accurate verdicts with VLM's rich contextual descriptions
-    for professional competition documentation.
-    """
-    from ..core.hybrid_mono_enhancer import HybridMonoEnhancer
-
-    defaults = _load_defaults()
-
-    typer.echo("🎨 Hybrid Mono Enhancement - VLM Descriptions + Mono Verdicts")
-
-    # Determine summary path if not specified
-    if summary_md is None:
-        if "default_summary" in defaults:
-            # Use same pattern as mono but for enhancements
-            default_summary_path = Path(defaults["default_summary"])
-            summary_md = default_summary_path.parent / "enhancement_summary.md"
-        else:
-            summary_md = Path("outputs/summaries/enhancement_summary.md")
-
-    # Determine mono JSONL path
-    if mono_jsonl is None:
-        if "default_mono_jsonl" in defaults:
-            mono_jsonl = Path(defaults["default_mono_jsonl"])
-        elif "default_jsonl" in defaults:
-            mono_jsonl = Path(defaults["default_jsonl"])
-        else:
-            typer.echo(
-                "❌ No mono JSONL specified and no default configured. Use -j or set default_mono_jsonl in pyproject.toml"
-            )
-            raise typer.Exit(1)
-
-    # Determine images directory
-    if images_dir is None:
-        if "default_images_dir" in defaults:
-            images_dir = Path(defaults["default_images_dir"])
-        elif "default_folder" in defaults:
-            images_dir = Path(defaults["default_folder"])
-        else:
-            typer.echo(
-                "❌ No images directory specified and no default configured. Use -i or set default_folder in pyproject.toml"
-            )
-            raise typer.Exit(1)
-
-    if not mono_jsonl.exists():
-        typer.echo(f"❌ Mono JSONL file not found: {mono_jsonl}")
-        raise typer.Exit(1)
-
-    # Check if we can access images (either through images_dir or full paths in mono data)
-    images_dir_valid = images_dir.exists() if images_dir.name != "dummy" else False
-    if not images_dir_valid:
-        typer.echo(f"📁 Using full paths from mono results (images_dir: {images_dir})")
-    else:
-        typer.echo(f"📁 Images directory: {images_dir}")
-
-    typer.echo(f"📄 Mono JSONL: {mono_jsonl}")
-
-    # Initialize hybrid enhancer with selected prompt
-    try:
-        enhancer = HybridMonoEnhancer(use_regions=use_regions)
-
-        # Set prompt version based on CLI option
-        if prompt_version == "v6":
-            enhancer.use_prompt_v6()
-        elif prompt_version == "v5":
-            enhancer.use_prompt_v5()
-        elif prompt_version == "v4":
-            enhancer.use_prompt_v4()
-        elif prompt_version == "legacy":
-            enhancer.use_legacy_prompt()
-        else:
-            typer.echo(
-                f"❌ Unknown prompt version: {prompt_version}. Use v6/v5/v4/legacy"
-            )
-            raise typer.Exit(1)
-
-        prompt_info = enhancer.get_current_prompt_info()
-        typer.echo(f"🤖 VLM: {enhancer.model} at {enhancer.base_url}")
-        typer.echo(f"🧠 Prompt: {prompt_info}")
-    except Exception as e:
-        typer.echo(f"❌ Failed to initialize enhancer: {e}")
-        raise typer.Exit(1)
-
-    # Load mono data
-    mono_results = []
-    try:
-        with open(mono_jsonl, "r") as f:
-            for line in f:
-                if line.strip():
-                    mono_data = json.loads(line)
-                    # Filter for interesting cases if requested
-                    if interesting_only and mono_data.get("verdict") == "pass":
-                        continue
-                    mono_results.append(mono_data)
-    except Exception as e:
-        typer.echo(f"❌ Failed to load mono JSONL: {e}")
-        raise typer.Exit(1)
-
-    total_loaded = sum(1 for line in open(mono_jsonl) if line.strip())
-    filter_msg = " (filtered to fails and queries)" if interesting_only else ""
+def enhance_mono(*args, **kwargs):
+    """Deprecated entrypoint preserved for backward compatibility."""
     typer.echo(
-        f"📄 Loaded {len(mono_results)} mono results from {total_loaded} total{filter_msg}"
+        "⚠️  'enhance-mono' has been consolidated into 'narrate'. "
+        "Use 'imageworks-color-narrator narrate' with the appropriate options."
     )
-
-    # Process limited set
-    process_count = min(limit, len(mono_results))
-    typer.echo(f"🔄 Processing {process_count} images...")
-
-    enhanced_results = []
-
-    for i, mono_data in enumerate(mono_results[:process_count]):
-        try:
-            # Use the full path from mono results
-            original_path = Path(mono_data["path"])
-            image_path = original_path
-            image_name = original_path.name
-
-            if not image_path.exists():
-                typer.echo(f"⚠️  Image not found: {image_name}")
-                continue
-                continue
-
-            title = mono_data.get("title", "Unknown")
-            author = mono_data.get("author", "Unknown")
-            typer.echo(f'📷 Processing {i+1}/{process_count}: "{title}" by {author}')
-
-            # Get enhanced result
-            enhanced = enhancer.enhance_mono_result(
-                mono_data, image_path, use_regions=use_regions
-            )
-
-            # Store result
-            enhanced_data = {
-                "image_path": enhanced.image_path,
-                "image_name": image_name,
-                "title": enhanced.title,
-                "author": enhanced.author,
-                # Original mono-checker verdict (authoritative)
-                "verdict": enhanced.original_verdict,
-                "mode": enhanced.original_mode,
-                "original_reason": enhanced.original_reason,
-                # VLM enhancement (descriptive)
-                "vlm_description": enhanced.vlm_description,
-                "vlm_model": enhanced.vlm_model,
-                "vlm_processing_time": enhanced.vlm_processing_time,
-                # Key technical metrics
-                "dominant_color": enhanced.dominant_color,
-                "colorfulness": enhanced.colorfulness,
-                "chroma_max": enhanced.chroma_max,
-                "hue_std_deg": enhanced.hue_std_deg,
-                "timestamp": datetime.now().isoformat(),
-            }
-            enhanced_results.append(enhanced_data)
-
-            # Show result preview
-            verdict_icon = {"pass": "✅", "pass_with_query": "⚠️", "fail": "❌"}.get(
-                enhanced.original_verdict, "❓"
-            )
-            typer.echo(
-                f"   {verdict_icon} Verdict: {enhanced.original_verdict} ({enhanced.original_mode})"
-            )
-            typer.echo(f"   📝 VLM: {enhanced.vlm_description[:100]}...")
-            typer.echo(f"   ⏱️  Processing: {enhanced.vlm_processing_time:.2f}s")
-
-        except Exception as e:
-            typer.echo(f"❌ Error processing {image_name}: {e}")
-            continue
-
-    # Save results
-    if output_jsonl:
-        try:
-            with open(output_jsonl, "w") as f:
-                for result in enhanced_results:
-                    f.write(json.dumps(result) + "\n")
-            typer.echo(f"💾 Enhanced results saved to: {output_jsonl}")
-        except Exception as e:
-            typer.echo(f"❌ Failed to save results: {e}")
-
-    # Summary
-    typer.echo("\n📊 Enhancement Summary:")
-    typer.echo(f"   Total processed: {len(enhanced_results)}")
-    typer.echo(
-        f"   Average VLM processing time: {sum(r['vlm_processing_time'] for r in enhanced_results) / len(enhanced_results):.2f}s"
-    )
-
-    # Show distribution of verdicts
-    verdict_counts = {}
-    for result in enhanced_results:
-        verdict = result["verdict"]
-        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
-
-    typer.echo("   Verdict distribution:")
-    for verdict, count in verdict_counts.items():
-        verdict_icon = {"pass": "✅", "pass_with_query": "⚠️", "fail": "❌"}.get(
-            verdict, "❓"
-        )
-        typer.echo(f"      {verdict_icon} {verdict}: {count}")
-
-    # Generate human-readable summary
-    if enhanced_results:
-        try:
-            _generate_enhancement_summary(enhanced_results, summary_md)
-            typer.echo(f"📋 Summary report saved to: {summary_md}")
-        except Exception as e:
-            typer.echo(f"⚠️  Failed to generate summary: {e}")
-
-    typer.echo("\n✅ Hybrid mono enhancement complete")
+    raise typer.Exit(1)
 
 
 @app.command()
@@ -1101,9 +1358,9 @@ def analyze_regions(
 ) -> None:
     """[DEPRECATED] Analyze color regions using hallucination-resistant VLM prompts.
 
-    ⚠️  DEPRECATION NOTICE: This command is deprecated in favor of the enhanced
-    enhance-mono command which now includes the better prompting and optional
-    grid region analysis. Use enhance-mono --regions instead.
+    ⚠️  DEPRECATION NOTICE: This command is deprecated in favor of
+    `narrate --prompt <id> --regions`, which now offers the richer prompting
+    and optional grid guidance. Use the main narrate workflow instead.
 
     This command uses the new simplified approach with optional 3x3 grid regions:
     - Human-readable spatial regions (top-left, center, etc.)
@@ -1118,7 +1375,7 @@ def analyze_regions(
     """
     typer.echo("🔬 Region-Based VLM Analysis")
     typer.echo(
-        "⚠️  WARNING: This command is deprecated. Use 'enhance-mono --regions' instead."
+        "⚠️  WARNING: This command is deprecated. Use 'imageworks-color-narrator narrate --regions' instead."
     )
     typer.echo()
 

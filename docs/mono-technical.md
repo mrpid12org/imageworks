@@ -1,6 +1,6 @@
 # Monochrome Checker Technical Documentation
 
-*For ---iendly overview, see: [Monochrome Overview](monochrome-overview.md)*
+*For a user-friendly overview, see: [Mono Overview](mono-overview.md)*
 
 ## Introduction
 
@@ -49,9 +49,9 @@ The monochrome checker analyzes images through several key phases:
    - Confidence assessment
    - Explanation generation
 
----ome Checker Decision Tree (Technical Reference, v3)
+---
 
-*For a more user-friendly summary, see: [Monochrome Overview](monochrome-overview.md)*
+*For a more user-friendly summary, see: [Mono Overview](mono-overview.md)*
 
 ---
 
@@ -299,28 +299,28 @@ R2 = |Σ(w_i * e^(2iθ_i))| / Σw_i
 
 #### Derived Conditions
 
-| Condition           | Formula/Definition                                                    |
-|--------------------|----------------------------------------------------------------------|
-| force_fail         | chroma_p99 ≥ 6.0 AND (chroma_ratio4 ≥ 0.1 OR cluster_max4 ≥ 0.05)   |
-| uniform_strong_tone| hue_std ≤ 8.0° AND R ≥ 0.7 AND primary_share ≥ 0.5                  |
-| merge_ok          | peak_delta ≤ 20.0° OR second_mass < 0.1                              |
-| fail_two_peak     | peak_delta ≥ 15.0° AND second_mass ≥ 0.1                            |
-| hilo_split        | abs(mean_hue_highs - mean_hue_shadows) ≥ 45.0°                      |
+| Condition            | Formula/Definition                                                   |
+|---------------------|---------------------------------------------------------------------|
+| force_fail          | chroma_p99 ≥ 6.0 AND (chroma_ratio4 ≥ 0.1 OR cluster_max4 ≥ 0.05)  |
+| uniform_strong_tone | hue_std ≤ 8.0° AND R ≥ 0.7 AND primary_share ≥ 0.5                |
+| merge_ok           | peak_delta ≤ 12.0° OR second_mass < 0.1                             |
+| fail_two_peak      | peak_delta ≥ 15.0° AND second_mass ≥ 0.1                           |
+| hilo_split         | abs(mean_hue_highs − mean_hue_shadows) ≥ 45.0°                     |
 | LAB_TONED_PASS_DEFAULT  | 10.0      | Default hue std-dev for a toned image to pass.                              |
 | LAB_TONED_QUERY_DEFAULT | 14.0      | Default hue std-dev for a toned image to query.                             |
-| LAB_STRONG_TONE_HUE_STD | 14.0      | Max hue std-dev for strong uniform tone override.                           |
-| LAB_STRONG_TONE_CONCENTRATION | 0.85 | Min hue concentration (R) for strong uniform tone override.                 |
-| LAB_STRONG_TONE_PRIMARY_SHARE | 0.97 | Min primary hue share for strong uniform tone override.                     |
-| LAB_STRONG_TONE_HUE_TOLERANCE | 15.0° | Max angular distance for merging nearby hue peaks                                        |
-| LAB_SHADOW_NEUTRAL_L    | 24.0      | Max L* for shadow region in stage-lit override.                             |
-| LAB_SHADOW_NEUTRAL_CHROMA | 2.0     | Max chroma for neutral shadow region.                                       |
-| LAB_SHADOW_QUERY_SHARE  | 0.55      | Min shadow share for stage-lit override.                                    |
-| LAB_SHADOW_QUERY_HUE_STD | 24.0     | Max hue std-dev for stage-lit override.                                     |
-| LAB_SHADOW_QUERY_PRIMARY_SHARE | 0.95 | Min primary hue share for stage-lit override.                               |
-| LAB_HARD_FAIL_C4_RATIO_DEFAULT | 0.10 | Min ratio of C*4 pixels for hard fail.                                      |
-| LAB_HARD_FAIL_C4_CLUSTER_DEFAULT | 0.08 | Min cluster fraction of C*4 pixels for hard fail.                           |
-| CLUSTER_KERNEL_FRACTION | 0.08      | Kernel size fraction for chroma cluster morphology.                         |
-| MERGE_DEG               | 12.0      | Max delta hue for two peaks to be considered one color.                     |
+| LAB_STRONG_TONE_HUE_STD | 8.0       | Max hue std-dev for strong uniform tone override.                            |
+| LAB_STRONG_TONE_CONCENTRATION | 0.70 | Min hue concentration (R) for strong uniform tone override.                 |
+| LAB_STRONG_TONE_PRIMARY_SHARE | 0.50 | Min primary hue share for strong uniform tone override.                     |
+| LAB_STRONG_TONE_HUE_TOLERANCE | 20.0° | Max angular distance for merging nearby hue peaks.                         |
+| LAB_SHADOW_NEUTRAL_L    | 20.0      | Max L* for shadow region in stage-lit override.                             |
+| LAB_SHADOW_NEUTRAL_CHROMA | 1.0     | Max chroma for neutral shadow region.                                       |
+| LAB_SHADOW_QUERY_SHARE  | 0.20      | Min shadow share for stage-lit override.                                    |
+| LAB_SHADOW_QUERY_HUE_STD | 12.0     | Max hue std-dev for stage-lit override.                                     |
+| LAB_SHADOW_QUERY_PRIMARY_SHARE | 0.20 | Min primary hue share for stage-lit override.                               |
+| LAB_HARD_FAIL_C4_RATIO_DEFAULT | 0.10 | Min ratio of C*4 pixels for hard fail.                                     |
+| LAB_HARD_FAIL_C4_CLUSTER_DEFAULT | 0.05 | Min cluster fraction of C*4 pixels for hard fail.                          |
+| CLUSTER_KERNEL_FRACTION | 0.10      | Kernel size fraction for chroma cluster morphology.                         |
+| MERGE_DEG               | 12.0      | Max delta hue for two peaks to be considered one colour.                    |
 | FAIL_DEG                | 15.0      | Min delta hue for two peaks to be considered a genuine split.               |
 | MINOR_MASS              | 0.10      | Min mass for a second hue peak to be significant.                           |
 | HILO_SPLIT_DEG          | 45.0      | Min delta hue between highs and shadows for split signature.                |
@@ -475,7 +475,7 @@ Key circular metrics:
 
 **Shadow/Subject Share:**
 
--   `shadow_mask`: Pixels where `L <= LAB_SHADOW_NEUTRAL_L` (24.0) AND `chroma <= LAB_SHADOW_NEUTRAL_CHROMA` (2.0).
+-   `shadow_mask`: Pixels where `L <= LAB_SHADOW_NEUTRAL_L` (20.0) AND `chroma <= LAB_SHADOW_NEUTRAL_CHROMA` (1.0).
 -   `shadow_share`: Fraction of pixels in `shadow_mask`.
 -   `subject_share`: `1.0 - shadow_share` (capped at 0.0).
 
@@ -505,9 +505,10 @@ This means two dominant hue peaks are found (`peak_delta_deg >= FAIL_DEG` (15.0�
 
 **Criteria:** `force_fail` is true AND `single_hue_stage_lit` is true
 
-`force_fail` is true if: `chroma_p99 >= 6.0` AND (`chroma_ratio4 >= LAB_HARD_FAIL_C4_RATIO_DEFAULT` (0.10) OR `cluster_max4 >= LAB_HARD_FAIL_C4_CLUSTER_DEFAULT` (0.08)) AND `hue_std_deg > toned_pass_deg` (10.0°) AND NOT `uniform_strong_tone`.
 
-`single_hue_stage_lit` is true if: `shadow_share >= LAB_SHADOW_QUERY_SHARE` (0.55) AND `subject_share >= 0.05` AND `hue_std_deg <= LAB_SHADOW_QUERY_HUE_STD` (24.0°) AND `primary_share >= LAB_SHADOW_QUERY_PRIMARY_SHARE` (0.95) AND `chroma_ratio4 >= 0.05`.
+`force_fail` is true if: `chroma_p99 >= 6.0` AND (`chroma_ratio4 >= LAB_HARD_FAIL_C4_RATIO_DEFAULT` (0.10) OR `cluster_max4 >= LAB_HARD_FAIL_C4_CLUSTER_DEFAULT` (0.05)) AND `hue_std_deg > toned_pass_deg` (10.0°) AND NOT `uniform_strong_tone`.
+
+`single_hue_stage_lit` is true if: `shadow_share >= LAB_SHADOW_QUERY_SHARE` (0.20) AND `subject_share >= 0.05` AND `hue_std_deg <= LAB_SHADOW_QUERY_HUE_STD` (12.0°) AND `primary_share >= LAB_SHADOW_QUERY_PRIMARY_SHARE` (0.20) AND `chroma_ratio4 >= 0.05`.
 
 **Outcome:** PASS WITH QUERY (Toned).
 
@@ -516,7 +517,7 @@ This means two dominant hue peaks are found (`peak_delta_deg >= FAIL_DEG` (15.0�
 
 **Criteria:** `uniform_strong_tone` is true AND `hue_std_deg > toned_pass_deg` (10.0°)
 
-`uniform_strong_tone` is true if: `hue_std_deg <= LAB_STRONG_TONE_HUE_STD` (14.0°) AND `R >= LAB_STRONG_TONE_CONCENTRATION` (0.85) AND `primary_share >= LAB_STRONG_TONE_PRIMARY_SHARE` (0.97) AND `chroma_ratio4 >= 0.05`.
+`uniform_strong_tone` is true if: `hue_std_deg <= LAB_STRONG_TONE_HUE_STD` (8.0°) AND `R >= LAB_STRONG_TONE_CONCENTRATION` (0.70) AND `primary_share >= LAB_STRONG_TONE_PRIMARY_SHARE` (0.50) AND `chroma_ratio4 >= 0.05`.
 
 **Outcome:** PASS (Toned).
 

@@ -9,10 +9,12 @@ from pathlib import Path
 from dataclasses import dataclass
 import logging
 from datetime import datetime
+import json
 
 from .data_loader import ColorNarratorDataLoader, DataLoaderConfig, ColorNarratorItem
 from .vlm import VLMClient, VLMRequest, VLMResponse
 from .metadata import XMPMetadataWriter, ColorNarrationMetadata
+from . import prompts
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +30,16 @@ class NarrationConfig:
 
     # VLM settings
     vlm_base_url: str = "http://localhost:8000/v1"
-    vlm_model: str = "Qwen/Qwen2-VL-7B-Instruct"
+    vlm_model: str = "Qwen2-VL-2B-Instruct"
     vlm_timeout: int = 120
 
     # Processing settings
     batch_size: int = 4
     min_contamination_level: float = 0.1
     require_overlays: bool = True
+    prompt_id: int = prompts.CURRENT_PROMPT_ID
+    use_regions: bool = False
+    allowed_verdicts: Optional[set[str]] = None
 
     # Output settings
     dry_run: bool = False
@@ -65,12 +70,16 @@ class ColorNarrator:
         self.config = config
 
         # Initialize data loader
+        allowed_verdicts = config.allowed_verdicts or {"fail", "pass_with_query"}
+        self.allowed_verdicts = {v.lower() for v in allowed_verdicts}
+
         loader_config = DataLoaderConfig(
             images_dir=config.images_dir,
             overlays_dir=config.overlays_dir,
             mono_jsonl=config.mono_jsonl,
             min_contamination_level=config.min_contamination_level,
             require_overlays=config.require_overlays,
+            allowed_verdicts=self.allowed_verdicts,
         )
         self.data_loader = ColorNarratorDataLoader(loader_config)
 
@@ -83,6 +92,18 @@ class ColorNarrator:
 
         # Initialize metadata writer
         self.metadata_writer = XMPMetadataWriter()
+
+        # Prompt configuration
+        self.prompt_definition = prompts.get_prompt_definition(config.prompt_id)
+        self.use_regions = False
+        if config.use_regions:
+            if self.prompt_definition.supports_regions:
+                self.use_regions = True
+            else:
+                logger.warning(
+                    "Prompt %s does not support region context; ignoring --regions",
+                    self.prompt_definition.name,
+                )
 
     def process_all(self) -> List[ProcessingResult]:
         """Process all valid items for color narration.
@@ -144,11 +165,14 @@ class ColorNarrator:
                 )
                 continue
 
+            prompt_payload = self._prepare_prompt_payload(item)
+            prompt_template = self.prompt_definition.template
+
             vlm_request = VLMRequest(
                 image_path=item.image_path,
                 overlay_path=item.overlay_path,
-                mono_data=item.mono_data,
-                prompt_template=self._get_prompt_template(),
+                mono_data=prompt_payload,
+                prompt_template=prompt_template,
             )
             vlm_requests.append((item, vlm_request))
 
@@ -157,30 +181,17 @@ class ColorNarrator:
         for item, vlm_request in vlm_requests:
             start_time = datetime.now()
 
-            if self.config.dry_run:
-                # Simulate processing for dry run
-                vlm_response = VLMResponse(
-                    description=f"[DRY RUN] Would generate color description for {item.image_path.name}",
-                    confidence=0.8,
-                    color_regions=["simulated"],
-                    processing_time=0.1,
-                )
-                metadata_written = False
-                error = None
-            else:
-                # Actual VLM inference
-                vlm_response = self.vlm_client.infer_single(vlm_request)
-                metadata_written = False
-                error = vlm_response.error
+            vlm_response = self.vlm_client.infer_single(vlm_request)
+            metadata_written = False
+            error = vlm_response.error
 
-                # Write metadata if inference successful
-                if not vlm_response.error:
-                    try:
-                        metadata = self._create_metadata(item, vlm_response)
-                        self.metadata_writer.write_metadata(item.image_path, metadata)
-                        metadata_written = True
-                    except Exception as e:
-                        error = f"Metadata write error: {str(e)}"
+            if not self.config.dry_run and not vlm_response.error:
+                try:
+                    metadata = self._create_metadata(item, vlm_response)
+                    self.metadata_writer.write_metadata(item.image_path, metadata)
+                    metadata_written = True
+                except Exception as e:
+                    error = f"Metadata write error: {str(e)}"
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
@@ -200,20 +211,165 @@ class ColorNarrator:
 
     def _get_prompt_template(self) -> str:
         """Get the prompt template for VLM inference."""
-        # TODO: Make this configurable
-        return """You are analyzing a photograph that should be monochrome (black and white) but contains some residual color.
+        return self.prompt_definition.template
 
-The image has been analyzed and found to have:
-- Hue distribution: {hue_analysis}
-- Chroma levels: {chroma_analysis}
-- Color contamination: {contamination_level}
+    def _format_mono_context(self, mono_data: Dict[str, Any]) -> str:
+        """Format mono-checker metrics for prompt context."""
 
-Please describe in natural language where you observe residual color in this image. Focus on:
-1. Specific regions or objects that show color
-2. The type of color cast (warm/cool, specific hues)
-3. Whether the color appears intentional or accidental
+        verdict = mono_data.get("verdict", "unknown")
+        mode = mono_data.get("mode", "unknown")
+        dominant_color = mono_data.get("dominant_color", "unknown")
+        dominant_hue = mono_data.get("dominant_hue_deg", 0.0)
+        colorfulness = mono_data.get("colorfulness", 0.0)
+        chroma_max = mono_data.get("chroma_max", 0.0)
+        hue_std = mono_data.get("hue_std_deg", 0.0)
 
-Provide a concise, professional description suitable for metadata (max 200 words)."""
+        return (
+            f"Mono-checker analysis: {verdict} ({mode})\n"
+            f"Dominant color: {dominant_color} at {dominant_hue:.1f}°\n"
+            f"Colorfulness: {colorfulness:.2f}, Max chroma: {chroma_max:.2f}\n"
+            f"Hue variation: {hue_std:.1f}° standard deviation"
+        )
+
+    def _build_region_context(self, item: ColorNarratorItem) -> tuple[str, list[dict]]:
+        """Build human-readable region context and JSON payload."""
+
+        if not self.use_regions:
+            return "", []
+
+        try:
+            from .grid_regions import ImageGridAnalyzer
+
+            regions = ImageGridAnalyzer.create_grid_regions(
+                item.image_path, item.mono_data
+            )
+            human_text = ImageGridAnalyzer.format_regions_for_human(regions)
+            region_json = ImageGridAnalyzer.regions_to_json(regions)
+            return human_text, region_json
+        except Exception as exc:
+            logger.debug("Region analysis unavailable for %s: %s", item.image_path, exc)
+            return "Region analysis unavailable.", []
+
+    def _prepare_prompt_payload(self, item: ColorNarratorItem) -> Dict[str, Any]:
+        """Prepare template payload for the selected prompt definition."""
+
+        payload = dict(item.mono_data)
+
+        payload.setdefault("title", payload.get("title") or "Unknown")
+        payload.setdefault("author", payload.get("author") or "Unknown")
+        payload.setdefault("file_name", item.image_path.name)
+        payload.setdefault("dominant_color", payload.get("dominant_color", "unknown"))
+        payload.setdefault("dominant_hue_deg", payload.get("dominant_hue_deg", 0.0))
+        payload.setdefault("top_colors", payload.get("top_colors", []))
+        payload.setdefault("top_hues_deg", payload.get("top_hues_deg", []))
+        payload.setdefault("top_weights", payload.get("top_weights", []))
+        payload.setdefault("colorfulness", payload.get("colorfulness", 0.0))
+        payload.setdefault("chroma_max", payload.get("chroma_max", 0.0))
+        payload.setdefault("chroma_p95", payload.get("chroma_p95", 0.0))
+        payload.setdefault(
+            "chroma_ratio_2_4",
+            (
+                payload.get("chroma_ratio_4")
+                if payload.get("chroma_ratio_4") is not None
+                else payload.get("chroma_ratio_2", 0.0)
+            ),
+        )
+        payload.setdefault(
+            "contamination_level", payload.get("contamination_level", 0.0)
+        )
+        payload.setdefault(
+            "delta_h_highs_shadows_deg", payload.get("delta_h_highs_shadows_deg")
+        )
+        payload.setdefault("verdict", payload.get("verdict", "unknown"))
+        payload.setdefault("mode", payload.get("mode", "unknown"))
+        payload.setdefault("reason_summary", payload.get("reason_summary", ""))
+
+        definition = self.prompt_definition
+
+        if definition.template in (
+            prompts.ENHANCED_MONO_ANALYSIS_TEMPLATE_V6,
+            prompts.ENHANCED_MONO_ANALYSIS_TEMPLATE_V5,
+            prompts.ENHANCED_MONO_ANALYSIS_TEMPLATE_V4,
+        ):
+            payload["mono_context"] = self._format_mono_context(payload)
+            region_text, region_json = self._build_region_context(item)
+            payload["region_section"] = (
+                f"\n\nSPATIAL ANALYSIS:\n{region_text}" if region_text else ""
+            )
+            if region_json:
+                payload["regions_json"] = json.dumps(region_json, indent=2)
+
+        elif definition.template == prompts.MONO_DESCRIPTION_ENHANCEMENT_TEMPLATE:
+            payload.setdefault("chroma_max", payload.get("chroma_max", 0.0))
+
+        elif definition.template == prompts.REGION_BASED_COLOR_ANALYSIS_TEMPLATE:
+            region_text, region_json = self._build_region_context(item)
+            payload["regions_json"] = json.dumps(region_json, indent=2)
+            payload["region_text"] = region_text
+
+        elif definition.template == prompts.TRIPTYCH_HUE_ANCHORED_TEMPLATE:
+            # nothing extra beyond defaults; fields already populated
+            pass
+
+        elif definition.template == prompts.REGION_FIRST_TEMPLATE:
+            region_text, _ = self._build_region_context(item)
+            payload["region_guidance"] = region_text or "None"
+
+        elif definition.template == prompts.TECHNICAL_ANALYST_TEMPLATE:
+            analysis = {
+                "verdict": payload.get("verdict"),
+                "reason_summary": payload.get("reason_summary"),
+                "dominant_color": payload.get("dominant_color"),
+                "top_colors": payload.get("top_colors"),
+                "delta_h_highs_shadows_deg": payload.get("delta_h_highs_shadows_deg"),
+                "chroma_p95": payload.get("chroma_p95"),
+                "chroma_ratio_4": payload.get("chroma_ratio_4"),
+            }
+            payload["analysis_json"] = json.dumps(
+                analysis, indent=2, ensure_ascii=False
+            )
+
+        elif definition.template == prompts.FACTUAL_REPORTER_TEMPLATE:
+            analysis = {
+                "dominant_color": payload.get("dominant_color"),
+                "top_colors": payload.get("top_colors"),
+                "chroma_max": payload.get("chroma_max"),
+                "reason_summary": payload.get("reason_summary"),
+            }
+            payload["analysis_json"] = json.dumps(
+                analysis, indent=2, ensure_ascii=False
+            )
+
+        elif definition.template == prompts.TRIPTYCH_ANALYST_BRIEF_TEMPLATE:
+            # nothing additional; base fields already set
+            pass
+
+        elif definition.template == prompts.REGION_HINT_BULLETS_TEMPLATE:
+            region_text, _ = self._build_region_context(item)
+            payload["region_guidance"] = region_text or "None"
+
+        elif definition.template == prompts.FORENSIC_SPECIALIST_TEMPLATE:
+            analysis = {
+                "verdict": payload.get("verdict"),
+                "reason_summary": payload.get("reason_summary"),
+                "top_colors": payload.get("top_colors"),
+                "delta_h_highs_shadows_deg": payload.get("delta_h_highs_shadows_deg"),
+                "region_guidance": payload.get("region_guidance"),
+            }
+            payload["analysis_json"] = json.dumps(
+                analysis, indent=2, ensure_ascii=False
+            )
+
+        elif definition.template == prompts.STRUCTURED_OBSERVER_TEMPLATE:
+            analysis = {
+                "top_colors": payload.get("top_colors"),
+                "reason_summary": payload.get("reason_summary"),
+            }
+            payload["analysis_json"] = json.dumps(
+                analysis, indent=2, ensure_ascii=False
+            )
+
+        return payload
 
     def _create_metadata(
         self, item: ColorNarratorItem, vlm_response: VLMResponse
