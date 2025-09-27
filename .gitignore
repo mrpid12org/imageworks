@@ -54,6 +54,12 @@ write_xmp.sh
 *.csv
 *.jsonl
 
+# Root-level test clutter (should use tests/test_output/ instead)
+/results_*.json
+/manual_*.jsonl
+/test_*.json
+/test_*.jsonl
+
 # VLM server logs
 vllm_server*.log
 .ruff_cache/

@@ -114,3 +114,27 @@ Declared in `pyproject.toml` and available via `uv run <script>`:
 - Analysis logic: `src/imageworks/libs/vision/mono.py` (extensively documented).
 - XMP export: `src/imageworks/tools/write_mono_xmp.py` and `configs/exiftool`.
 - API endpoints: `src/imageworks/apps/mono_checker/api/main.py`.
+
+## Development and Testing Guidelines
+
+### Test Directory Structure
+Tests are organized by module in `tests/` with clear separation:
+- `tests/{module}/unit/` - Fast unit tests with small fixtures (tracked in git)
+- `tests/{module}/integration/` - Integration tests using shared production assets
+- `tests/shared/` - Real test images and data (NOT tracked in git)
+- `tests/test_output/` - Test output directory (NOT tracked in git)
+
+### ⚠️ **Keep Project Root Clean**
+**Critical:** Always direct test outputs to `tests/test_output/` to avoid cluttering the project root with temporary files.
+
+❌ **Avoid:** `enhance-mono -o results_001.json` (creates clutter in root)
+✅ **Use:** `enhance-mono -o tests/test_output/results_001.json`
+
+This keeps the repository professional and prevents accidental commits of test artifacts.
+
+### Output Directories
+- `outputs/` - Production analysis results and summaries
+- `tests/test_output/` - Temporary test outputs (not tracked)
+- `tests/shared/` - Reusable test assets like production images (not tracked)
+
+See `tests/README.md` for complete testing guidelines.

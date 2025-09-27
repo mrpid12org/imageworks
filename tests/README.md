@@ -86,6 +86,41 @@ TEST_OUTPUT = Path("tests/test_output")
 2. **Integration tests**: Run before commits/releases - slower, uses real data
 3. **Experimental results**: Archive large test output files for analysis
 
+### ⚠️ **Important: Keep Project Root Clean**
+**Always direct test outputs to `tests/test_output/` - never to project root!**
+
+❌ **Don't do this:**
+```bash
+# Creates clutter in project root
+enhance-mono -j data.jsonl -o results_test_001.json
+analyze-regions --output manual_grid_test.jsonl
+```
+
+✅ **Do this instead:**
+```bash
+# Keep outputs organized in test directory
+enhance-mono -j data.jsonl -o tests/test_output/results_001.json
+analyze-regions --output tests/test_output/manual_grid_test.jsonl
+```
+
+**Why this matters:**
+- Project root stays clean and professional
+- Test outputs don't accidentally get committed to git
+- Easier to find and clean up temporary files
+- Clear separation between code and test artifacts
+
+### CLI Testing Best Practices
+```bash
+# Use test output directory for all temporary files
+--output tests/test_output/my_test.jsonl
+--summary tests/test_output/my_summary.md
+--results-json tests/test_output/analysis.json
+
+# Use shared directory for reusable test assets
+--images tests/shared/images/production_images
+--mono-jsonl tests/shared/sample_data/production_sample.jsonl
+```
+
 ## Migration Notes
 
 This structure was created by reorganizing:
