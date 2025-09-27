@@ -181,6 +181,9 @@ def _result_to_json(path: str, res: MonoResult) -> Dict[str, Any]:
         "mean_hue_highs_deg": res.mean_hue_highs_deg,
         "mean_hue_shadows_deg": res.mean_hue_shadows_deg,
         "delta_h_highs_shadows_deg": res.delta_h_highs_shadows_deg,
+        "grid_regions": res.grid_regions,
+        "image_width": res.image_width,
+        "image_height": res.image_height,
     }
     return obj
 
@@ -587,6 +590,9 @@ def check(
     xmp_no_keywords: bool = typer.Option(
         False, help="With --write-xmp, skip adding mono:* Lightroom keywords"
     ),
+    include_grid_regions: bool = typer.Option(
+        False, help="Include 3x3 grid region analysis in JSONL output"
+    ),
 ):
     """Run monochrome checks over a folder tree, using config defaults when omitted."""
     defaults = _load_defaults()
@@ -751,6 +757,7 @@ def check(
             lab_toned_query_deg=final_lab_toned_query,
             lab_hard_fail_c4_ratio=final_lab_fail_c4_ratio,
             lab_hard_fail_c4_cluster=final_lab_fail_c4_cluster,
+            include_grid_regions=include_grid_regions,
         )
 
         entry = results_by_file.setdefault(p.name, {})

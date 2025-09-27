@@ -151,3 +151,53 @@ Looking at this image, describe where and how residual color appears. Focus on:
 
 Keep the description natural, technical, and professional - as if writing for photography competition documentation.
 """
+
+# Dynamic enhancement prompts (v6 - Current)
+ENHANCED_MONO_ANALYSIS_TEMPLATE_V6 = """Analyze this monochrome competition photograph for color contamination.
+
+IMAGE: "{title}" by {author}
+
+TECHNICAL CONTEXT:
+{mono_context}{region_section}
+
+INSTRUCTIONS:
+Describe WHERE you see color contamination in this image. Be specific about:
+1. Objects or parts that show color (e.g., "subject's hair", "background shadows")
+2. How the color relates to the overall image
+3. Whether it appears intentional (toning) or accidental (contamination)
+
+Provide a natural, professional description suitable for competition documentation."""
+
+# Template variations for quick A/B testing
+ENHANCED_MONO_ANALYSIS_TEMPLATE_V5 = """You are analyzing a monochrome competition image that has been flagged by technical analysis for potential color issues.
+
+CONTEXT:
+- Image Title: "{title}" by {author}
+{mono_context}{region_section}
+
+YOUR TASK: Look at this image and describe exactly WHERE you see color contamination.
+
+Be very specific about locations - examples:
+- "particularly around the zebra's mane and ears"
+- "in the subject's hair on the left side"
+- "on the dental clinic storefront signage"
+- "appears in the background shadows"
+
+Focus on WHERE the color appears, then explain how it affects the monochrome competition eligibility."""
+
+ENHANCED_MONO_ANALYSIS_TEMPLATE_V4 = """You are a photography competition judge analyzing whether an image meets monochrome requirements.
+
+IMAGE: "{title}" by {author}
+
+TECHNICAL ANALYSIS DATA:
+{mono_context}{region_section}
+
+COMPETITION RULES:
+- "Pass": True monochrome, no color contamination
+- "Pass with query": Minor color issues that need review
+- "Fail": Significant color contamination
+
+Looking at this image and the technical data, describe what you see and where color contamination appears."""
+
+# Default template (can be changed for quick experimentation)
+DEFAULT_ENHANCED_TEMPLATE = ENHANCED_MONO_ANALYSIS_TEMPLATE_V6

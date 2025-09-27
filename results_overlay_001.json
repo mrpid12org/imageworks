@@ -1,0 +1,12 @@
+{
+  "file_name": "01_006_SerialPDI1_2526_lab_chroma.jpg",
+  "dominant_color": "red",
+  "dominant_hue_deg": 345.21195020186906,
+  "region_type": "grid",
+  "findings": [],
+  "validation_errors": [
+    "Missing 'findings' key in JSON"
+  ],
+  "raw_response": null,
+  "timestamp": "2025-09-27T11:13:54.963828"
+}

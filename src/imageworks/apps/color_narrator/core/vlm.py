@@ -230,3 +230,46 @@ Provide a concise, professional description suitable for metadata."""
             return response.status_code == 200
         except Exception:
             return False
+
+    def infer_openai_compatible(self, request: Dict[str, Any]):
+        """Direct OpenAI-compatible API call for region-based analysis."""
+        try:
+            # Add model name to request
+            request["model"] = self.model_name
+
+            # Set default values if not provided
+            if "max_tokens" not in request:
+                request["max_tokens"] = 600
+            if "temperature" not in request:
+                request["temperature"] = 0.1
+            if "stream" not in request:
+                request["stream"] = False
+
+            # Make API call
+            response = self.session.post(
+                f"{self.base_url}/chat/completions", json=request, timeout=self.timeout
+            )
+
+            if response.status_code != 200:
+
+                class ErrorResponse:
+                    content = f"API error {response.status_code}: {response.text}"
+
+                return ErrorResponse()
+
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+
+            # Return object with content attribute for compatibility
+            class CompatibleResponse:
+                def __init__(self, content):
+                    self.content = content
+
+            return CompatibleResponse(content)
+
+        except Exception as e:
+
+            class ErrorResponse:
+                content = f"Inference error: {str(e)}"
+
+            return ErrorResponse()

@@ -1,11 +1,9 @@
 from __future__ import annotations
 import subprocess
 import json
-from typing import Optional, Tuple
-
+from typing import Optional, Tuple, Dict, List, Any
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
 import numpy as np
 import cv2
 from PIL import Image
@@ -127,6 +125,14 @@ class MonoResult:
         None  # circular Δh between highs & shadows
     )
     hue_weighting: Optional[str] = None  # e.g., "chroma"
+    # Grid region analysis (optional)
+    grid_regions: Optional[List[Dict[str, Any]]] = None  # 3x3 grid color regions
+    image_width: Optional[int] = None  # Image width for grid calculations
+    image_height: Optional[int] = None  # Image height for grid calculations
+    # Grid region analysis (optional 3x3 spatial analysis)
+    grid_regions: Optional[List[Dict[str, Any]]] = None  # Grid color regions
+    image_width: Optional[int] = None  # Image dimensions for grid context
+    image_height: Optional[int] = None
 
 
 def _read_jpg_metadata_exiftool(path: str) -> Tuple[Optional[str], Optional[str]]:
@@ -1399,6 +1405,7 @@ def check_monochrome(
     lab_toned_query_deg: Optional[float] = None,
     lab_hard_fail_c4_ratio: float = LAB_HARD_FAIL_C4_RATIO_DEFAULT,
     lab_hard_fail_c4_cluster: float = LAB_HARD_FAIL_C4_CLUSTER_DEFAULT,
+    include_grid_regions: bool = False,
 ) -> MonoResult:
     """Single LAB-based pipeline (legacy/IR variants removed)."""
 
@@ -1411,7 +1418,8 @@ def check_monochrome(
     lab_query = (
         lab_toned_query_deg if lab_toned_query_deg is not None else toned_query_deg
     )
-    return _check_monochrome_lab(
+
+    result = _check_monochrome_lab(
         rgb,
         loader_diag,
         neutral_tol,
@@ -1422,6 +1430,42 @@ def check_monochrome(
         lab_hard_fail_c4_ratio,
         lab_hard_fail_c4_cluster,
     )
+
+    # Add grid region analysis if requested
+    if include_grid_regions:
+        height, width = rgb.shape[:2]
+        result.image_width = width
+        result.image_height = height
+
+        # Import here to avoid circular imports
+        try:
+            from imageworks.apps.color_narrator.core.grid_regions import (
+                ImageGridAnalyzer,
+            )
+
+            # Create minimal mono_data for grid analysis
+            mono_data = {
+                "verdict": result.verdict,
+                "dominant_color": result.dominant_color or "unknown",
+                "dominant_hue_deg": result.dominant_hue_deg or 0.0,
+                "chroma_score": result.chroma_max or 0.0,
+            }
+
+            # Analyze color in grid regions
+            grid_regions = ImageGridAnalyzer.analyze_color_in_regions(
+                mono_data, width, height
+            )
+
+            if grid_regions:
+                result.grid_regions = ImageGridAnalyzer.regions_to_json(grid_regions)
+            else:
+                result.grid_regions = []
+
+        except ImportError:
+            # Grid analysis not available, continue without it
+            result.grid_regions = []
+
+    return result
 
 
 def _generate_heatmap_image(

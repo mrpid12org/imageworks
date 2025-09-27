@@ -15,13 +15,13 @@ import base64
 from PIL import Image
 import io
 import time
+import subprocess
 from datetime import datetime
 from typing import Dict, Any
 
 from ..core.metadata import XMPMetadataWriter, ColorNarrationMetadata
 from ..core.region_based_vlm import (
     RegionBasedVLMAnalyzer,
-    create_demo_regions,
 )
 from ..core.vlm import VLMClient
 
@@ -42,7 +42,171 @@ def _find_pyproject(start_path: Path) -> Optional[Path]:
     return None
 
 
+def _start_vllm_server() -> subprocess.Popen:
+    """Start the vLLM server in the background.
+
+    Returns:
+        subprocess.Popen: The server process
+    """
+    try:
+        # Check if start_vllm_server.py exists
+        server_script = Path("start_vllm_server.py")
+        if not server_script.exists():
+            raise FileNotFoundError(f"Server script not found: {server_script}")
+
+        # Start server using uv run
+        typer.echo("🔧 Starting vLLM server process...")
+        process = subprocess.Popen(
+            ["uv", "run", "python", "start_vllm_server.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=Path.cwd(),
+        )
+
+        # Give it a moment to start
+        time.sleep(3)
+
+        # Check if process is still running
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            typer.echo("❌ Server process exited immediately:")
+            if stdout:
+                typer.echo(f"stdout: {stdout[:500]}")
+            if stderr:
+                typer.echo(f"stderr: {stderr[:500]}")
+            raise RuntimeError("Server process failed to start")
+
+        typer.echo("✅ Server process started successfully")
+        return process
+    except Exception as e:
+        logger.error(f"Failed to start vLLM server: {e}")
+        raise
+
+
+def _wait_for_server(
+    base_url: str = "http://localhost:8000", timeout: int = 120
+) -> bool:
+    """Wait for the vLLM server to be ready.
+
+    Args:
+        base_url: Server URL to check
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        bool: True if server is ready, False if timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            response = requests.get(f"{base_url}/v1/models", timeout=5)
+            if response.status_code == 200:
+                return True
+        except (requests.RequestException, Exception):
+            pass
+        time.sleep(2)
+    return False
+
+
+def _get_vlm_client_with_autostart(
+    model_name: str = "Qwen2-VL-2B-Instruct", auto_start: bool = True
+) -> VLMClient:
+    """Get VLM client with optional automatic server startup.
+
+    Args:
+        model_name: Name of the model to use
+        auto_start: Whether to auto-start server if not running
+
+    Returns:
+        VLMClient: Connected VLM client
+
+    Raises:
+        typer.Exit: If client initialization fails
+    """
+    try:
+        vlm_client = VLMClient(
+            base_url="http://localhost:8000/v1",
+            model_name=model_name,
+            timeout=120,
+        )
+
+        # Test VLM connection and auto-start if needed
+        if not vlm_client.health_check():
+            if auto_start:
+                typer.echo("🚀 VLM server not running, starting automatically...")
+                typer.echo("💡 This may take 30-60 seconds for model loading")
+
+                try:
+                    # Start the server
+                    server_process = _start_vllm_server()
+
+                    # Wait for server to be ready
+                    typer.echo("⏳ Waiting for server to be ready...")
+                    if _wait_for_server("http://localhost:8000", timeout=120):
+                        typer.echo("✅ VLM server started successfully")
+                    else:
+                        typer.echo("❌ Server failed to start within 120 seconds")
+                        typer.echo(
+                            "💡 Try starting manually: uv run python start_vllm_server.py"
+                        )
+                        typer.echo("💡 Or use --no-auto-start to disable auto-start")
+                        server_process.terminate()
+                        raise typer.Exit(1)
+
+                    # Test connection again
+                    if not vlm_client.health_check():
+                        typer.echo("❌ Server started but health check failed")
+                        raise typer.Exit(1)
+
+                except Exception as e:
+                    typer.echo(f"❌ Failed to auto-start server: {e}")
+                    typer.echo(
+                        "💡 Try starting manually: uv run python start_vllm_server.py"
+                    )
+                    typer.echo("💡 Or use --no-auto-start to disable auto-start")
+                    raise typer.Exit(1)
+            else:
+                typer.echo("❌ VLM server not available at http://localhost:8000")
+                typer.echo("💡 Start server with: uv run python start_vllm_server.py")
+                typer.echo("💡 Or use --auto-start to enable automatic startup")
+                raise typer.Exit(1)
+
+        typer.echo(f"🤖 VLM: Connected to {vlm_client.model_name}")
+        return vlm_client
+
+    except Exception as e:
+        if "Failed to initialize VLM client" not in str(e):
+            typer.echo(f"❌ Failed to initialize VLM client: {e}")
+        raise typer.Exit(1)
+
+
 def _load_defaults() -> Dict[str, Any]:
+    """Load defaults from [tool.imageworks] in pyproject.toml (if present)."""
+    try:
+        cfg_p = _find_pyproject(Path.cwd())
+        if not cfg_p:
+            return {}
+
+        with open(cfg_p, "rb") as f:
+            data = tomllib.load(f)
+
+        return data.get("tool", {}).get("imageworks", {})
+    except Exception as e:
+        logger.warning(f"Could not load config from pyproject.toml: {e}")
+        return {}
+    try:
+        cfg_p = _find_pyproject(Path.cwd())
+        if not cfg_p:
+            return {}
+
+        with open(cfg_p, "rb") as f:
+            data = tomllib.load(f)
+
+        return data.get("tool", {}).get("imageworks", {})
+    except Exception as e:
+        logger.warning(f"Could not load config from pyproject.toml: {e}")
+        return {}
+
     """Load defaults from [tool.imageworks] in pyproject.toml (if present)."""
     try:
         cfg_p = _find_pyproject(Path.cwd())
@@ -689,6 +853,16 @@ def enhance_mono(
         "--interesting-only/--all",
         help="Process only fails and queries (not pure passes)",
     ),
+    use_regions: bool = typer.Option(
+        False,
+        "--regions/--no-regions",
+        help="Enable 3x3 grid region analysis for enhanced context",
+    ),
+    prompt_version: str = typer.Option(
+        "v6",
+        "--prompt",
+        help="Prompt version to use (v6/v5/v4/legacy) for A/B testing",
+    ),
 ):
     """
     Enhance mono-checker descriptions with VLM analysis.
@@ -748,10 +922,28 @@ def enhance_mono(
 
     typer.echo(f"📄 Mono JSONL: {mono_jsonl}")
 
-    # Initialize hybrid enhancer
+    # Initialize hybrid enhancer with selected prompt
     try:
-        enhancer = HybridMonoEnhancer()
+        enhancer = HybridMonoEnhancer(use_regions=use_regions)
+
+        # Set prompt version based on CLI option
+        if prompt_version == "v6":
+            enhancer.use_prompt_v6()
+        elif prompt_version == "v5":
+            enhancer.use_prompt_v5()
+        elif prompt_version == "v4":
+            enhancer.use_prompt_v4()
+        elif prompt_version == "legacy":
+            enhancer.use_legacy_prompt()
+        else:
+            typer.echo(
+                f"❌ Unknown prompt version: {prompt_version}. Use v6/v5/v4/legacy"
+            )
+            raise typer.Exit(1)
+
+        prompt_info = enhancer.get_current_prompt_info()
         typer.echo(f"🤖 VLM: {enhancer.model} at {enhancer.base_url}")
+        typer.echo(f"🧠 Prompt: {prompt_info}")
     except Exception as e:
         typer.echo(f"❌ Failed to initialize enhancer: {e}")
         raise typer.Exit(1)
@@ -800,7 +992,9 @@ def enhance_mono(
             typer.echo(f'📷 Processing {i+1}/{process_count}: "{title}" by {author}')
 
             # Get enhanced result
-            enhanced = enhancer.enhance_mono_result(mono_data, image_path)
+            enhanced = enhancer.enhance_mono_result(
+                mono_data, image_path, use_regions=use_regions
+            )
 
             # Store result
             enhanced_data = {
@@ -888,25 +1082,45 @@ def analyze_regions(
     output_json: Optional[Path] = typer.Option(
         None, "--output", "-o", help="Output JSON file for structured results"
     ),
+    use_grid_regions: bool = typer.Option(
+        True,
+        "--grid-regions/--no-grid-regions",
+        help="Use simple 3x3 grid regions (default) or analyze whole image",
+    ),
+    auto_start_server: bool = typer.Option(
+        True,
+        "--auto-start/--no-auto-start",
+        help="Automatically start VLM server if not running (default: true)",
+    ),
     demo_mode: bool = typer.Option(
         False,
         "--demo",
-        help="Use demo regions (for testing without mono-checker regions)",
+        help="Use demo mono-checker data (for testing without real mono analysis)",
     ),
     debug: bool = typer.Option(False, "--debug", help="Enable debug output"),
 ) -> None:
-    """Analyze color regions using hallucination-resistant VLM prompts.
+    """[DEPRECATED] Analyze color regions using hallucination-resistant VLM prompts.
 
-    This command demonstrates the new approach suggested for better VLM responses:
+    ⚠️  DEPRECATION NOTICE: This command is deprecated in favor of the enhanced
+    enhance-mono command which now includes the better prompting and optional
+    grid region analysis. Use enhance-mono --regions instead.
+
+    This command uses the new simplified approach with optional 3x3 grid regions:
+    - Human-readable spatial regions (top-left, center, etc.)
+    - Optional region data (can analyze whole image if no regions)
     - No priming examples to avoid bias
     - Structured JSON output for validation
-    - Grounded in technical region data
     - Uncertainty handling with confidence scores
 
     Example:
         imageworks-color-narrator analyze-regions --image photo.jpg --demo --debug
+        imageworks-color-narrator analyze-regions --image photo.jpg --no-grid-regions
     """
     typer.echo("🔬 Region-Based VLM Analysis")
+    typer.echo(
+        "⚠️  WARNING: This command is deprecated. Use 'enhance-mono --regions' instead."
+    )
+    typer.echo()
 
     if not image_path.exists():
         typer.echo(f"❌ Image not found: {image_path}")
@@ -914,73 +1128,82 @@ def analyze_regions(
 
     if debug:
         typer.echo(f"📁 Image: {image_path}")
+        typer.echo(f"🗂️ Grid regions: {use_grid_regions}")
         typer.echo(f"🧪 Demo mode: {demo_mode}")
 
-    # Initialize VLM client
+    # Initialize VLM client with auto-start capability
+    vlm_client = _get_vlm_client_with_autostart(
+        "Qwen2-VL-2B-Instruct", auto_start_server
+    )
+
+    # Load image to get dimensions
     try:
-        vlm_client = VLMClient(
-            base_url="http://localhost:8000/v1",
-            model_name="Qwen2-VL-2B-Instruct",
-            timeout=120,
-        )
-
-        # Test VLM connection
-        if not vlm_client.health_check():
-            typer.echo("❌ VLM server not available at http://localhost:8000")
-            typer.echo("💡 Start server with: uv run python start_vllm_server.py")
-            raise typer.Exit(1)
-
-        typer.echo(f"🤖 VLM: Connected to {vlm_client.model_name}")
-
-    except Exception as e:
-        typer.echo(f"❌ Failed to initialize VLM client: {e}")
-        raise typer.Exit(1)
-
-    # Load and encode image
-    try:
-        with open(image_path, "rb") as f:
-            image_data = f.read()
-        image_base64 = base64.b64encode(image_data).decode("utf-8")
-        typer.echo("📸 Image encoded")
+        with Image.open(image_path) as img:
+            image_width, image_height = img.size
+        typer.echo(f"� Image dimensions: {image_width}×{image_height}")
     except Exception as e:
         typer.echo(f"❌ Failed to load image: {e}")
         raise typer.Exit(1)
 
-    # Create regions (demo mode for now, until mono-checker provides real regions)
+    # Get mono-checker data (real or demo)
     if demo_mode:
-        regions = create_demo_regions()
-        dominant_color = "yellow-green"
-        dominant_hue_deg = 88.0
-        typer.echo("🎭 Using demo regions (2 synthetic color regions)")
+        # Demo mono-checker data
+        mono_data = {
+            "verdict": "pass_with_query",
+            "dominant_color": "green",
+            "dominant_hue_deg": 88.0,
+            "chroma_score": 5.2,
+        }
+        typer.echo("🎭 Using demo mono-checker data")
     else:
-        typer.echo(
-            "❌ Real region analysis requires mono-checker integration (not yet implemented)"
-        )
-        typer.echo("💡 Use --demo flag to test with synthetic regions")
-        raise typer.Exit(1)
+        try:
+            # Run mono-checker with grid regions
+            from imageworks.libs.vision.mono import check_monochrome
 
-    if debug:
-        typer.echo("🔍 Regions to analyze:")
-        for region in regions:
-            typer.echo(
-                f"   Region {region.index}: {region.hue_name} "
-                f"({region.area_pct:.1f}% area, L*={region.mean_L:.1f})"
+            result = check_monochrome(
+                str(image_path), include_grid_regions=use_grid_regions
             )
+            mono_data = {
+                "verdict": result.verdict,
+                "dominant_color": result.dominant_color or "unknown",
+                "dominant_hue_deg": result.dominant_hue_deg or 0.0,
+                "chroma_score": result.chroma_max or 0.0,
+            }
+            typer.echo(f"� Mono-checker result: {result.verdict}")
+        except Exception as e:
+            typer.echo(f"❌ Failed to run mono-checker: {e}")
+            raise typer.Exit(1)
+
+    # Show grid region info if enabled
+    if use_grid_regions and debug:
+        from imageworks.apps.color_narrator.core.grid_regions import ImageGridAnalyzer
+
+        grid_regions = ImageGridAnalyzer.analyze_color_in_regions(
+            mono_data, image_width, image_height
+        )
+        if grid_regions:
+            typer.echo(f"🗂️ Found color in {len(grid_regions)} grid regions:")
+            for region in grid_regions:
+                typer.echo(
+                    f"   {region.grid_region.value}: {region.dominant_color} "
+                    f"({region.area_pct:.1f}% affected)"
+                )
+        else:
+            typer.echo("🗂️ No significant color detected in grid regions")
 
     # Initialize region-based analyzer
     analyzer = RegionBasedVLMAnalyzer(vlm_client)
 
     # Perform analysis
-    typer.echo("⚡ Running VLM analysis...")
+    region_type = "grid" if use_grid_regions else "none"
+    typer.echo(f"⚡ Running VLM analysis (region type: {region_type})...")
     try:
-        analysis = analyzer.analyze_regions(
-            file_name=image_path.name,
-            regions=regions,
-            dominant_color=dominant_color,
-            dominant_hue_deg=dominant_hue_deg,
-            image_base64=image_base64,
-            # overlay_hue_base64=None,      # Would be provided by mono-checker
-            # overlay_chroma_base64=None    # Would be provided by mono-checker
+        analysis = analyzer.analyze_with_regions(
+            image_path=image_path,
+            mono_data=mono_data,
+            region_data=None,  # We're not using technical region data anymore
+            use_grid_regions=use_grid_regions,
+            image_dimensions=(image_width, image_height) if use_grid_regions else None,
         )
 
         typer.echo(f"✅ Analysis complete ({len(analysis.findings)} findings)")
@@ -1003,18 +1226,19 @@ def analyze_regions(
         if analysis.findings:
             typer.echo("\n📊 Detailed Findings:")
             for finding in analysis.findings:
+                confidence = finding.get("confidence", 0.0)
                 confidence_icon = (
-                    "🟢"
-                    if finding.confidence >= 0.8
-                    else "🟡" if finding.confidence >= 0.5 else "🔴"
+                    "🟢" if confidence >= 0.8 else "🟡" if confidence >= 0.5 else "🔴"
                 )
                 location = (
-                    f" {finding.location_phrase}" if finding.location_phrase else ""
+                    f" - {finding.get('location', '')}"
+                    if finding.get("location")
+                    else ""
                 )
                 typer.echo(
-                    f"   {confidence_icon} Region {finding.region_index}: "
-                    f"{finding.color_family} on {finding.object_part}{location} "
-                    f"({finding.tonal_zone}, confidence: {finding.confidence:.2f})"
+                    f"   {confidence_icon} {finding.get('color_family', 'unknown')} "
+                    f"on {finding.get('object_part', 'unknown')}{location} "
+                    f"({finding.get('tonal_zone', 'unknown')}, confidence: {confidence:.2f})"
                 )
 
         # Save structured results if requested
@@ -1024,18 +1248,10 @@ def analyze_regions(
                     "file_name": analysis.file_name,
                     "dominant_color": analysis.dominant_color,
                     "dominant_hue_deg": analysis.dominant_hue_deg,
-                    "findings": [
-                        {
-                            "region_index": f.region_index,
-                            "object_part": f.object_part,
-                            "color_family": f.color_family,
-                            "tonal_zone": f.tonal_zone,
-                            "location_phrase": f.location_phrase,
-                            "confidence": f.confidence,
-                        }
-                        for f in analysis.findings
-                    ],
+                    "region_type": analysis.region_type,
+                    "findings": analysis.findings,
                     "validation_errors": analysis.validation_errors,
+                    "raw_response": analysis.raw_response if debug else None,
                     "timestamp": datetime.now().isoformat(),
                 }
 

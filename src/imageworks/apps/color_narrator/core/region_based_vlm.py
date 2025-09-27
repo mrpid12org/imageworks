@@ -1,196 +1,245 @@
 """
-Region-based VLM analysis for hallucination-resistant color description.
+Region-based VLM analysis supporting both technical regions and simple 3x3 grid.
 
-This module implements the approach suggested by the friend's advice:
-- Uses structured JSON output for validation
-- Avoids hallucination by grounding responses in technical data
-- Provides uncertainty handling with confidence scores
-- Eliminates priming examples that bias the model
+This module implements hallucination-resistant color description using:
+- Structured JSON output for validation
+- Optional region data (technical or 3x3 grid)
+- Uncertainty handling with confidence scores
+- No priming examples to avoid bias
 """
 
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 import json
 import logging
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from pathlib import Path
+import base64
 
-from .vlm import VLMClient, VLMRequest
-from .prompts import REGION_BASED_COLOR_ANALYSIS_TEMPLATE
+from imageworks.apps.color_narrator.core.vlm import VLMClient
+from imageworks.apps.color_narrator.core.grid_regions import (
+    ImageGridAnalyzer,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ColorRegion:
-    """A color region detected by technical analysis."""
-
-    index: int
-    bbox_xywh: List[int]  # [x, y, width, height] in pixels
-    centroid_norm: List[float]  # [x, y] normalized 0..1
-    mean_L: float  # 0..100 lightness
-    mean_cab: float  # chroma magnitude
-    mean_hue_deg: float  # 0..360 hue angle
-    hue_name: str  # human-readable color name
-    area_pct: float  # percentage of image area
-
-
-@dataclass
-class RegionFinding:
-    """A VLM finding for a specific region."""
-
-    region_index: int
-    object_part: str  # What the color appears on
-    color_family: str  # Color description from VLM
-    tonal_zone: str  # shadow/midtone/highlight
-    location_phrase: str  # Optional spatial locator
-    confidence: float  # 0.0-1.0 VLM confidence
-
-
-@dataclass
-class RegionBasedAnalysis:
-    """Complete region-based analysis result."""
+class VLMAnalysisResult:
+    """Result from VLM analysis with validation."""
 
     file_name: str
     dominant_color: str
     dominant_hue_deg: float
-    findings: List[RegionFinding]
-    raw_response: str  # Full VLM output for debugging
-    validation_errors: List[str]  # Any validation issues found
+    findings: List[Dict[str, Any]]  # VLM findings
+    raw_response: str
+    validation_errors: List[str]
+    region_type: str  # "grid", "technical", or "none"
 
 
 class RegionBasedVLMAnalyzer:
-    """VLM analyzer using hallucination-resistant region-based prompts."""
+    """VLM analyzer with optional region support (grid or technical)."""
 
     def __init__(self, vlm_client: VLMClient):
         self.vlm_client = vlm_client
 
-    def analyze_regions(
+    def analyze_with_regions(
         self,
-        file_name: str,
-        regions: List[ColorRegion],
-        dominant_color: str,
-        dominant_hue_deg: float,
-        image_base64: str,
-        overlay_hue_base64: Optional[str] = None,
-        overlay_chroma_base64: Optional[str] = None,
-    ) -> RegionBasedAnalysis:
-        """Analyze color regions using hallucination-resistant prompts.
+        image_path: Path,
+        mono_data: Dict[str, Any],
+        region_data: Optional[Dict[str, Any]] = None,
+        use_grid_regions: bool = True,
+        image_dimensions: Optional[Tuple[int, int]] = None,
+    ) -> VLMAnalysisResult:
+        """Analyze image with VLM using mono-checker data and optional region information.
 
         Args:
-            file_name: Name of the image file being analyzed
-            regions: List of color regions from technical analysis
-            dominant_color: Dominant color name (e.g., "yellow-green")
-            dominant_hue_deg: Dominant hue angle in degrees
-            image_base64: Original image as base64 string
-            overlay_hue_base64: Optional hue overlay as base64 string
-            overlay_chroma_base64: Optional chroma overlay as base64 string
+            image_path: Path to the image file
+            mono_data: Mono-checker analysis results
+            region_data: Optional technical region analysis (luminance zones, etc.)
+            use_grid_regions: Whether to use simple 3x3 grid regions
+            image_dimensions: (width, height) for grid region calculation
 
         Returns:
-            Complete analysis with findings and validation
+            VLMAnalysisResult with structured analysis and confidence metrics
         """
-        # Convert regions to JSON format for prompt
-        regions_json = json.dumps(
-            [
-                {
-                    "index": r.index,
-                    "bbox_xywh": r.bbox_xywh,
-                    "centroid_norm": r.centroid_norm,
-                    "mean_L": r.mean_L,
-                    "mean_cab": r.mean_cab,
-                    "mean_hue_deg": r.mean_hue_deg,
-                    "hue_name": r.hue_name,
-                    "area_pct": r.area_pct,
-                }
-                for r in regions
-            ],
-            indent=2,
-        )
+        try:
+            # Prepare region context
+            region_context = "No region data provided. Analyze the entire image."
+            region_type = "none"
 
-        # Build prompt
-        prompt = REGION_BASED_COLOR_ANALYSIS_TEMPLATE.format(
-            file_name=file_name,
-            dominant_color=dominant_color,
-            dominant_hue_deg=dominant_hue_deg,
-            regions_json=regions_json,
-        )
+            if use_grid_regions and image_dimensions:
+                # Use simple 3x3 grid regions
+                width, height = image_dimensions
+                grid_regions = ImageGridAnalyzer.analyze_color_in_regions(
+                    mono_data, width, height
+                )
+                if grid_regions:
+                    region_json = ImageGridAnalyzer.regions_to_json(grid_regions)
+                    region_context = (
+                        f"Grid regions with color: {json.dumps(region_json, indent=2)}"
+                    )
+                    region_context += f"\\n\\nHuman-readable: {ImageGridAnalyzer.format_regions_for_human(grid_regions)}"
+                    region_type = "grid"
+                else:
+                    region_context = (
+                        "No significant color detected in any 3x3 grid regions."
+                    )
+                    region_type = "grid"
 
-        # Build image content list
-        content = [
-            {"type": "text", "text": prompt},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
-            },
-        ]
+            elif region_data:
+                # Use technical region data (legacy)
+                region_context = self._format_region_data(region_data)
+                region_type = "technical"
 
-        # Add overlays if available
-        if overlay_hue_base64:
-            content.append(
+            # Format mono-checker data for VLM context
+            mono_context = self._format_mono_data(mono_data)
+
+            # Load and encode image
+            image_base64 = self._encode_image(image_path)
+
+            # Build prompt - simplified for optional regions
+            if region_type == "none":
+                prompt = self._build_simple_prompt(mono_data)
+            else:
+                prompt = f"""Analyze this monochrome competition image for color contamination.
+
+TECHNICAL CONTEXT:
+{mono_context}
+
+REGION DATA:
+{region_context}
+
+INSTRUCTIONS:
+1. Look at the image and identify any colored areas (non-grayscale regions)
+2. If regions are provided, reference them in your analysis
+3. Be specific about what objects/parts show color
+4. Rate your confidence (0.0-1.0) for each observation
+5. Format as JSON with this structure:
+{{
+  "findings": [
+    {{
+      "object_part": "description of what shows color",
+      "color_family": "color description",
+      "tonal_zone": "shadow/midtone/highlight",
+      "location": "spatial description",
+      "confidence": 0.0-1.0
+    }}
+  ]
+}}
+
+Respond ONLY with the JSON."""
+
+            # Build VLM request
+            content = [
+                {"type": "text", "text": prompt},
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{overlay_hue_base64}"},
-                }
-            )
-        if overlay_chroma_base64:
-            content.append(
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+                },
+            ]
+
+            # Send to VLM
+            response = self.vlm_client.infer_openai_compatible(
                 {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{overlay_chroma_base64}"
-                    },
+                    "messages": [{"role": "user", "content": content}],
+                    "max_tokens": 1000,  # Increased for longer responses
+                    "temperature": 0.1,
                 }
             )
 
-        # Create VLM request with lower temperature for more deterministic output
-        request = VLMRequest(
-            messages=[{"role": "user", "content": content}],
-            max_tokens=600,  # Compact bullets + JSON should be under this
-            temperature=0.1,  # Low temperature for literal, grounded responses
-        )
+            # Parse response
+            findings, validation_errors = self._parse_vlm_response(response.content)
 
-        # Get VLM response
-        response = self.vlm_client.infer_single(request)
+            return VLMAnalysisResult(
+                file_name=image_path.name,
+                dominant_color=mono_data.get("dominant_color", "unknown"),
+                dominant_hue_deg=mono_data.get("dominant_hue_deg", 0.0),
+                findings=findings,
+                raw_response=response.content,
+                validation_errors=validation_errors,
+                region_type=region_type,
+            )
 
-        # Parse the structured response
-        findings, validation_errors = self._parse_vlm_response(
-            response.content, regions
-        )
+        except Exception as e:
+            logger.error(f"VLM analysis failed for {image_path}: {e}")
+            return VLMAnalysisResult(
+                file_name=image_path.name,
+                dominant_color=mono_data.get("dominant_color", "unknown"),
+                dominant_hue_deg=mono_data.get("dominant_hue_deg", 0.0),
+                findings=[],
+                raw_response=f"Error: {e}",
+                validation_errors=[f"Analysis failed: {e}"],
+                region_type="error",
+            )
 
-        return RegionBasedAnalysis(
-            file_name=file_name,
-            dominant_color=dominant_color,
-            dominant_hue_deg=dominant_hue_deg,
-            findings=findings,
-            raw_response=response.content,
-            validation_errors=validation_errors,
-        )
+    def _format_mono_data(self, mono_data: Dict[str, Any]) -> str:
+        """Format mono-checker data for VLM context."""
+        verdict = mono_data.get("verdict", "unknown")
+        dominant_color = mono_data.get("dominant_color", "unknown")
+        dominant_hue = mono_data.get("dominant_hue_deg", 0.0)
+        chroma_score = mono_data.get("chroma_score", 0.0)
+
+        return f"""Mono-checker verdict: {verdict}
+Dominant color: {dominant_color} ({dominant_hue:.1f}°)
+Overall chroma score: {chroma_score:.2f}"""
+
+    def _format_region_data(self, region_data: Dict[str, Any]) -> str:
+        """Format technical region data for VLM context."""
+        # This would format complex technical region data
+        # For now, just return a placeholder
+        return f"Technical region data: {json.dumps(region_data, indent=2)}"
+
+    def _build_simple_prompt(self, mono_data: Dict[str, Any]) -> str:
+        """Build simple prompt without region data."""
+        mono_context = self._format_mono_data(mono_data)
+
+        return f"""Analyze this monochrome competition image for color contamination.
+
+TECHNICAL CONTEXT:
+{mono_context}
+
+INSTRUCTIONS:
+1. Look at the entire image for any colored areas (non-grayscale regions)
+2. Be specific about what objects/parts show color
+3. Describe the spatial location of any color
+4. Rate your confidence (0.0-1.0) for each observation
+5. Format as JSON with this structure:
+{{
+  "findings": [
+    {{
+      "object_part": "description of what shows color",
+      "color_family": "color description",
+      "tonal_zone": "shadow/midtone/highlight",
+      "location": "spatial description",
+      "confidence": 0.0-1.0
+    }}
+  ]
+}}
+
+Respond ONLY with the JSON."""
+
+    def _encode_image(self, image_path: Path) -> str:
+        """Encode image as base64."""
+        with open(image_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
 
     def _parse_vlm_response(
-        self, response_text: str, regions: List[ColorRegion]
-    ) -> Tuple[List[RegionFinding], List[str]]:
-        """Parse VLM response into structured findings with validation.
-
-        Args:
-            response_text: Raw VLM response text
-            regions: Original regions for validation
-
-        Returns:
-            Tuple of (findings, validation_errors)
-        """
+        self, response_text: str
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Parse VLM JSON response."""
         findings = []
         validation_errors = []
 
         try:
-            # Find JSON block in response
-            json_start = response_text.find('{\n  "findings"')
+            # Find JSON in response
+            json_start = response_text.find("{")
             if json_start == -1:
-                json_start = response_text.find('{"findings"')
-            if json_start == -1:
-                validation_errors.append("No JSON block found in VLM response")
+                validation_errors.append("No JSON found in VLM response")
                 return findings, validation_errors
 
             json_text = response_text[json_start:]
 
-            # Handle case where there might be text after JSON
+            # Find end of JSON
             brace_count = 0
             json_end = len(json_text)
             for i, char in enumerate(json_text):
@@ -203,171 +252,117 @@ class RegionBasedVLMAnalyzer:
                         break
 
             json_text = json_text[:json_end]
-
-            # Parse JSON
             parsed = json.loads(json_text)
 
             if "findings" not in parsed:
-                validation_errors.append("Missing 'findings' key in JSON response")
+                validation_errors.append("Missing 'findings' key in JSON")
                 return findings, validation_errors
 
-            # Process each finding
-            region_indices = {r.index for r in regions}
-
-            for finding_dict in parsed["findings"]:
-                try:
-                    # Extract and validate fields
-                    region_index = finding_dict.get("region_index")
-                    if region_index not in region_indices:
-                        validation_errors.append(
-                            f"Region index {region_index} not found in input regions"
-                        )
-                        continue
-
-                    # Find corresponding region for validation
-                    region = next(r for r in regions if r.index == region_index)
-
-                    object_part = finding_dict.get("object_part", "")
-                    color_family = finding_dict.get("color_family", "")
-                    tonal_zone = finding_dict.get("tonal_zone", "")
-                    location_phrase = finding_dict.get("location_phrase", "")
-                    confidence = finding_dict.get("confidence", 0.0)
-
-                    # Validate tonal zone against mean_L
-                    expected_tonal_zone = self._compute_tonal_zone(region.mean_L)
-                    if tonal_zone != expected_tonal_zone:
-                        validation_errors.append(
-                            f"Region {region_index}: VLM reported tonal zone '{tonal_zone}' "
-                            f"but mean_L={region.mean_L:.1f} indicates '{expected_tonal_zone}'"
-                        )
-                        # Use computed value
-                        tonal_zone = expected_tonal_zone
-
-                    # Validate confidence range
-                    if not (0.0 <= confidence <= 1.0):
-                        validation_errors.append(
-                            f"Region {region_index}: Invalid confidence {confidence}, "
-                            "clamping to valid range"
-                        )
-                        confidence = max(0.0, min(1.0, confidence))
-
-                    finding = RegionFinding(
-                        region_index=region_index,
-                        object_part=object_part,
-                        color_family=color_family,
-                        tonal_zone=tonal_zone,
-                        location_phrase=location_phrase,
-                        confidence=confidence,
-                    )
-                    findings.append(finding)
-
-                except Exception as e:
-                    validation_errors.append(f"Error processing finding: {e}")
+            # Validate each finding
+            for finding in parsed["findings"]:
+                if not isinstance(finding, dict):
+                    validation_errors.append(f"Invalid finding format: {finding}")
                     continue
+
+                # Validate required fields
+                required_fields = ["object_part", "color_family", "confidence"]
+                for field in required_fields:
+                    if field not in finding:
+                        validation_errors.append(f"Missing field '{field}' in finding")
+                        finding[field] = "unknown" if field != "confidence" else 0.0
+
+                # Validate confidence range
+                confidence = finding.get("confidence", 0.0)
+                if not isinstance(confidence, (int, float)) or not (
+                    0.0 <= confidence <= 1.0
+                ):
+                    validation_errors.append(f"Invalid confidence: {confidence}")
+                    finding["confidence"] = max(
+                        0.0,
+                        min(
+                            1.0,
+                            (
+                                float(confidence)
+                                if isinstance(confidence, (int, float))
+                                else 0.0
+                            ),
+                        ),
+                    )
+
+                findings.append(finding)
 
         except json.JSONDecodeError as e:
             validation_errors.append(f"JSON parsing error: {e}")
         except Exception as e:
-            validation_errors.append(f"Unexpected error parsing VLM response: {e}")
+            validation_errors.append(f"Error parsing VLM response: {e}")
 
         return findings, validation_errors
 
-    def _compute_tonal_zone(self, mean_L: float) -> str:
-        """Compute tonal zone from L* lightness value.
-
-        Args:
-            mean_L: L* lightness (0-100)
-
-        Returns:
-            Tonal zone: "shadow", "midtone", or "highlight"
-        """
-        if mean_L < 35:
-            return "shadow"
-        elif mean_L < 70:
-            return "midtone"
-        else:
-            return "highlight"
-
-    def generate_human_readable_summary(self, analysis: RegionBasedAnalysis) -> str:
-        """Generate human-readable summary from region analysis.
-
-        Args:
-            analysis: Complete region-based analysis
-
-        Returns:
-            Human-readable summary string
-        """
+    def generate_human_readable_summary(self, analysis: VLMAnalysisResult) -> str:
+        """Generate human-readable summary."""
         if not analysis.findings:
-            return f"No color contamination regions found in {analysis.file_name}."
+            return f"No color contamination found in {analysis.file_name}."
 
         lines = [
             f"Color Analysis: {analysis.file_name}",
             f"Dominant color: {analysis.dominant_color} ({analysis.dominant_hue_deg:.1f}°)",
+            f"Region analysis: {analysis.region_type}",
             "",
         ]
 
-        # Group findings by confidence
-        high_conf = [f for f in analysis.findings if f.confidence >= 0.8]
-        med_conf = [f for f in analysis.findings if 0.5 <= f.confidence < 0.8]
-        low_conf = [f for f in analysis.findings if f.confidence < 0.5]
+        # Group by confidence
+        high_conf = [f for f in analysis.findings if f.get("confidence", 0) >= 0.8]
+        med_conf = [f for f in analysis.findings if 0.5 <= f.get("confidence", 0) < 0.8]
+        low_conf = [f for f in analysis.findings if f.get("confidence", 0) < 0.5]
 
         if high_conf:
             lines.append("**Clear color contamination:**")
             for f in high_conf:
-                location = f" {f.location_phrase}" if f.location_phrase else ""
+                location = f" - {f.get('location', '')}" if f.get("location") else ""
                 lines.append(
-                    f"• {f.color_family} on {f.object_part}{location} ({f.tonal_zone})"
+                    f"• {f.get('color_family', 'unknown')} on {f.get('object_part', 'unknown')}{location}"
                 )
 
         if med_conf:
-            lines.append("\n**Moderate color contamination:**")
+            lines.append("\\n**Moderate color contamination:**")
             for f in med_conf:
-                location = f" {f.location_phrase}" if f.location_phrase else ""
+                location = f" - {f.get('location', '')}" if f.get("location") else ""
                 lines.append(
-                    f"• {f.color_family} on {f.object_part}{location} ({f.tonal_zone})"
+                    f"• {f.get('color_family', 'unknown')} on {f.get('object_part', 'unknown')}{location}"
                 )
 
         if low_conf:
-            lines.append("\n**Possible color contamination (low confidence):**")
+            lines.append("\\n**Possible color contamination:**")
             for f in low_conf:
-                location = f" {f.location_phrase}" if f.location_phrase else ""
+                location = f" - {f.get('location', '')}" if f.get("location") else ""
                 lines.append(
-                    f"• {f.color_family} on {f.object_part}{location} ({f.tonal_zone})"
+                    f"• {f.get('color_family', 'unknown')} on {f.get('object_part', 'unknown')}{location}"
                 )
 
         if analysis.validation_errors:
-            lines.append("\n**Technical Validation Issues:**")
-            for error in analysis.validation_errors:
+            lines.append("\\n**Validation Issues:**")
+            for error in analysis.validation_errors[:3]:  # Limit to first 3 errors
                 lines.append(f"⚠️ {error}")
 
-        return "\n".join(lines)
+        return "\\n".join(lines)
 
 
-def create_demo_regions() -> List[ColorRegion]:
-    """Create demo regions for testing when mono-checker regions aren't available.
-
-    This function creates synthetic region data that matches the expected format
-    until mono-checker is updated to provide actual region data.
-    """
-    return [
-        ColorRegion(
-            index=0,
-            bbox_xywh=[120, 80, 60, 40],
-            centroid_norm=[0.18, 0.22],
-            mean_L=76.4,
-            mean_cab=5.1,
-            mean_hue_deg=88.0,
-            hue_name="yellow-green",
-            area_pct=4.9,
-        ),
-        ColorRegion(
-            index=1,
-            bbox_xywh=[300, 200, 45, 35],
-            centroid_norm=[0.65, 0.41],
-            mean_L=42.1,
-            mean_cab=3.8,
-            mean_hue_deg=195.5,
-            hue_name="blue",
-            area_pct=2.3,
-        ),
-    ]
+def create_demo_vlm_analysis() -> VLMAnalysisResult:
+    """Create demo analysis for testing."""
+    return VLMAnalysisResult(
+        file_name="demo_image.jpg",
+        dominant_color="yellow-green",
+        dominant_hue_deg=88.0,
+        findings=[
+            {
+                "object_part": "foliage in background",
+                "color_family": "green",
+                "tonal_zone": "midtone",
+                "location": "top-right area",
+                "confidence": 0.9,
+            }
+        ],
+        raw_response='{"findings": [{"object_part": "foliage", "color_family": "green", "confidence": 0.9}]}',
+        validation_errors=[],
+        region_type="grid",
+    )

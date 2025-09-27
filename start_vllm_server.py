@@ -9,38 +9,33 @@ import sys
 
 
 def start_vllm_server():
-    """Start vLLM server with optimal configuration for Qwen2-VL-7B."""
+    """Start vLLM server with optimal configuration for Qwen2-VL-2B."""
 
     # Model path
-    model_path = "./models/Qwen2-VL-7B-Instruct"
+    model_path = "./models/Qwen2-VL-2B-Instruct"
 
     # Server configuration
     config = {
         "model": model_path,
         "host": "0.0.0.0",
         "port": 8000,
-        "api_key": "EMPTY",
+        # No API key = no authentication required (like before)
         # GPU and memory settings
         "tensor_parallel_size": 1,  # Single GPU
-        "gpu_memory_utilization": 0.9,  # Use 90% of GPU memory
+        "gpu_memory_utilization": 0.8,  # Use 80% of GPU memory
         "max_model_len": 8192,  # Context length
-        # Vision settings
-        "image_input_type": "pixel_values",
-        "image_token_id": 151646,
-        "image_feature_size": 4096,
+        "dtype": "auto",  # Use auto dtype instead of deprecated torch_dtype
         # Performance settings
         "max_num_seqs": 16,
         "max_num_batched_tokens": 4096,
         # API compatibility
-        "served_model_name": "Qwen2-VL-7B-Instruct",
-        "chat_template": None,  # Use model's built-in template
+        "served_model_name": "Qwen2-VL-2B-Instruct",
         # Safety and reliability
         "trust_remote_code": True,
         "enforce_eager": False,
-        "disable_log_stats": False,
     }
 
-    print("🚀 Starting vLLM server for Qwen2-VL-7B-Instruct")
+    print("🚀 Starting vLLM server for Qwen2-VL-2B-Instruct")
     print(f"📁 Model path: {model_path}")
     print(f"🌐 Server: http://localhost:{config['port']}")
     print(f"🎯 GPU memory: {config['gpu_memory_utilization']*100}%")
@@ -48,20 +43,23 @@ def start_vllm_server():
 
     # Import and start vLLM
     try:
-        from vllm.entrypoints.openai.api_server import main as vllm_api_server
+        import subprocess
 
         # Build command line arguments
-        args = []
+        args = ["python", "-m", "vllm.entrypoints.openai.api_server"]
         for key, value in config.items():
             if value is not None:
-                args.extend([f"--{key.replace('_', '-')}", str(value)])
+                if isinstance(value, bool):
+                    if value:  # Only add flag if True
+                        args.append(f"--{key.replace('_', '-')}")
+                else:
+                    args.extend([f"--{key.replace('_', '-')}", str(value)])
 
-        print(f"🔧 vLLM args: {' '.join(args)}")
+        print(f"🔧 vLLM command: {' '.join(args)}")
         print("⏳ Loading model and starting server...")
 
-        # Start the server
-        sys.argv = ["vllm.entrypoints.openai.api_server"] + args
-        vllm_api_server()
+        # Start the server using subprocess
+        subprocess.run(args, check=True)
 
     except ImportError as e:
         print(f"❌ vLLM import error: {e}")
@@ -73,7 +71,7 @@ def start_vllm_server():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Start vLLM server for Qwen2-VL-7B")
+    parser = argparse.ArgumentParser(description="Start vLLM server for Qwen2-VL-2B")
     parser.add_argument("--port", type=int, default=8000, help="Server port")
     parser.add_argument(
         "--gpu-memory", type=float, default=0.9, help="GPU memory utilization"
