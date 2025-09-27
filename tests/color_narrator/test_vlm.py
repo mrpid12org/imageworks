@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from pathlib import Path
 import base64
 
-from imageworks.apps.personal_tagger.color_narrator.core.vlm import (
+from imageworks.apps.color_narrator.core.vlm import (
     VLMClient,
     VLMRequest,
     VLMResponse,

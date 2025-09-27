@@ -1,5 +1,13 @@
 # Project Structure
 
+The Imageworks project contains **three distinct applications**:
+
+1. **Mono-Checker** (`mono_checker/`) - Monochrome image analysis and color contamination detection
+2. **Color-Narrator** (`color_narrator/`) - VLM-guided natural language color descriptions
+3. **Personal-Tagger** (future) - Personal photo library enrichment and tagging tools
+
+Each application has its own entry points, CLI tools, and test suites, but may share common utilities from the `libs/` directory.
+
 This guide explains the repository layout and where to find things.
 
 ## Top Level
@@ -32,20 +40,19 @@ Top-level package: `imageworks`
     - `cli/mono.py` – Typer CLI for running checks and generating overlays.
     - `api/main.py` – FastAPI app exposing `/mono/check`, `/mono/batch`, `/healthz`.
     - `__init__.py` – package markers.
-  - `personal_tagger/`
-    - `color_narrator/`
-      - `cli/main.py` – Typer CLI for VLM-guided color narration.
-      - `api/` – FastAPI endpoints for color narration services.
-      - `core/` – core processing modules:
-        - `vlm.py` – VLM client for Qwen2-VL-7B inference.
-        - `data_loader.py` – JPEG/overlay/JSONL data loading and validation.
-        - `narrator.py` – main processing orchestration.
-        - `metadata.py` – XMP metadata reading and writing.
-      - `__init__.py` – package markers.
+  - `color_narrator/`
+    - `cli/main.py` – Typer CLI for VLM-guided color narration.
+    - `api/` – FastAPI endpoints for color narration services.
+    - `core/` – core processing modules:
+      - `vlm.py` – VLM client for Qwen2-VL-7B inference.
+      - `data_loader.py` – JPEG/overlay/JSONL data loading and validation.
+      - `narrator.py` – main processing orchestration.
+      - `metadata.py` – XMP metadata reading and writing.
+    - `__init__.py` – package markers.
 
 - `imageworks/libs/`
   - `vision/mono.py` – core monochrome analysis logic and diagnostics.
-  - `personal_tagger/` – shared utilities for personal tagger applications:
+  - `personal_tagger/` – shared utilities for personal tagger applications:\n    - `color_analysis.py` – Color space analysis and statistical utilities.\n    - `vlm_utils.py` – VLM inference management and prompt handling.\n    - `image_utils.py` – Image loading, processing, and batch operations.
     - `color_analysis.py` – color space analysis and statistical utilities.
     - `vlm_utils.py` – VLM inference management and prompt handling.
     - `image_utils.py` – image loading, processing, and batch operations.
@@ -60,7 +67,7 @@ Top-level package: `imageworks`
 - `analysis/` – diagnostic and analysis tools
   - `analyze_hue_lum.py` – hue/luminance relationship analysis
   - `analyze_polyfit.py` – polyfit warning analysis
-- `personal_tagger/color_narrator/` – color-narrator test suite
+- `color_narrator/` – color-narrator test suite
   - `test_vlm.py` – VLM client and inference tests
   - `test_data_loader.py` – data loading and validation tests
   - `test_narrator.py` – main processing orchestration tests
@@ -94,7 +101,7 @@ Declared in `pyproject.toml` and available via `uv run <script>`:
   - `imageworks-mono visualize <folder>` – write heatmap overlays next to images.
 - `imageworks-mono-api` – run the FastAPI app (`api/main.py`).
 - `imageworks-mono-xmp` – XMP writer/cleanup tool (`tools/write_mono_xmp.py`).
-- `imageworks-color-narrator` – color narration CLI (`personal_tagger/color_narrator/cli/main.py`).
+- `imageworks-color-narrator` – color narration CLI (`color_narrator/cli/main.py`).
   - `imageworks-color-narrator narrate` – generate VLM color descriptions for images.
   - `imageworks-color-narrator validate` – validate existing color descriptions.
 

@@ -8,7 +8,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from imageworks.apps.personal_tagger.color_narrator.cli.main import app
+from imageworks.apps.color_narrator.cli.main import app
 
 
 class TestColorNarratorCLI:
@@ -83,7 +83,10 @@ class TestColorNarratorCLI:
 
         assert result.exit_code == 0
         assert "🎨 Color-Narrator - Narrate command" in result.output
-        assert "⚠️  Implementation in progress - skeleton created" in result.output
+        assert (
+            "⚠️  Full implementation coming soon - basic validation complete"
+            in result.output
+        )
 
     def test_narrate_command_dry_run(self, cli_runner, temp_dirs):
         """Test narrate command with dry-run flag."""
@@ -158,20 +161,20 @@ class TestColorNarratorCLI:
 
         assert result.exit_code == 0
         assert "🔍 Color-Narrator - Validate command" in result.output
-        assert "⚠️  Implementation in progress - skeleton created" in result.output
+        assert "✅ Validation complete" in result.output
 
     def test_narrate_command_no_arguments(self, cli_runner):
-        """Test narrate command with no arguments (all optional)."""
+        """Test narrate command with no arguments (expects failure without valid defaults)."""
         result = cli_runner.invoke(app, ["narrate"])
 
-        assert result.exit_code == 0
+        assert result.exit_code == 1  # Expected to fail without valid paths
         assert "🎨 Color-Narrator - Narrate command" in result.output
 
     def test_validate_command_no_arguments(self, cli_runner):
-        """Test validate command with no arguments (all optional)."""
+        """Test validate command with no arguments (expects failure without valid defaults)."""
         result = cli_runner.invoke(app, ["validate"])
 
-        assert result.exit_code == 0
+        assert result.exit_code == 1  # Expected to fail without valid paths
         assert "🔍 Color-Narrator - Validate command" in result.output
 
     def test_narrate_command_short_flags(self, cli_runner, temp_dirs):
@@ -264,7 +267,17 @@ class TestColorNarratorCLI:
     def test_boolean_flags(self, cli_runner, temp_dirs, flag):
         """Test boolean flag handling."""
         result = cli_runner.invoke(
-            app, ["narrate", "--images", str(temp_dirs["images_dir"]), flag]
+            app,
+            [
+                "narrate",
+                "--images",
+                str(temp_dirs["images_dir"]),
+                "--overlays",
+                str(temp_dirs["overlays_dir"]),
+                "--mono-jsonl",
+                str(temp_dirs["mono_jsonl"]),
+                flag,
+            ],
         )
 
         assert result.exit_code == 0
@@ -274,7 +287,20 @@ class TestColorNarratorCLI:
     def test_batch_size_validation(self, cli_runner, temp_dirs):
         """Test batch size parameter validation."""
         # Valid batch size
-        result = cli_runner.invoke(app, ["narrate", "--batch-size", "4"])
+        result = cli_runner.invoke(
+            app,
+            [
+                "narrate",
+                "--batch-size",
+                "4",
+                "--images",
+                str(temp_dirs["images_dir"]),
+                "--overlays",
+                str(temp_dirs["overlays_dir"]),
+                "--mono-jsonl",
+                str(temp_dirs["mono_jsonl"]),
+            ],
+        )
         assert result.exit_code == 0
 
         # Invalid batch size (should be handled by typer)

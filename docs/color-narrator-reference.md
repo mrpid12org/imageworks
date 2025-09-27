@@ -214,7 +214,7 @@ uv run imageworks-color-narrator narrate \
 
 #### Python API Usage
 ```python
-from imageworks.apps.personal_tagger.color_narrator.core import (
+from imageworks.apps.color_narrator.core import (
     ColorNarrator, NarrationConfig
 )
 
@@ -240,7 +240,7 @@ for result in results:
 #### Batch Processing Script
 ```python
 from pathlib import Path
-from imageworks.apps.personal_tagger.color_narrator.core import (
+from imageworks.apps.color_narrator.core import (
     ColorNarratorDataLoader, DataLoaderConfig
 )
 
@@ -357,7 +357,7 @@ Response from VLM inference.
 
 ### Project Structure
 ```
-src/imageworks/apps/personal_tagger/color_narrator/
+src/imageworks/apps/color_narrator/
 ├── cli/
 │   ├── __init__.py
 │   └── main.py          # Typer CLI commands
@@ -376,7 +376,7 @@ src/imageworks/libs/personal_tagger/
 ├── vlm_utils.py       # VLM management utilities
 └── image_utils.py     # Image processing utilities
 
-tests/personal_tagger/color_narrator/
+tests/color_narrator/
 ├── __init__.py
 ├── conftest.py        # Test fixtures
 ├── test_vlm.py        # VLM client tests
@@ -389,25 +389,25 @@ tests/personal_tagger/color_narrator/
 ### Running Tests
 ```bash
 # Run all color-narrator tests
-uv run pytest tests/personal_tagger/color_narrator/ -v
+uv run pytest tests/color_narrator/ -v
 
 # Run specific test module
-uv run pytest tests/personal_tagger/color_narrator/test_vlm.py -v
+uv run pytest tests/color_narrator/test_vlm.py -v
 
 # Run with coverage
-uv run pytest tests/personal_tagger/color_narrator/ --cov=imageworks.apps.personal_tagger.color_narrator
+uv run pytest tests/color_narrator/ --cov=imageworks.apps.color_narrator
 ```
 
 ### Code Style
 ```bash
 # Format code
-uv run black src/imageworks/apps/personal_tagger/color_narrator/
+uv run black src/imageworks/apps/color_narrator/
 
 # Lint code
-uv run ruff check src/imageworks/apps/personal_tagger/color_narrator/
+uv run ruff check src/imageworks/apps/color_narrator/
 
 # Type checking
-uv run mypy src/imageworks/apps/personal_tagger/color_narrator/
+uv run mypy src/imageworks/apps/color_narrator/
 ```
 
 ### Adding Custom Prompt Templates
@@ -494,7 +494,7 @@ debug_output_dir = "outputs/debug"
 Verify system components:
 
 ```python
-from imageworks.apps.personal_tagger.color_narrator.core import VLMClient
+from imageworks.apps.color_narrator.core import VLMClient
 
 # Test VLM server
 client = VLMClient()
@@ -506,7 +506,7 @@ else:
 
 ### Performance Monitoring
 ```python
-from imageworks.apps.personal_tagger.color_narrator.core import ColorNarrator
+from imageworks.apps.color_narrator.core import ColorNarrator
 import time
 
 # Monitor processing performance

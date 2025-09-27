@@ -48,7 +48,7 @@ Example: "Faint yellow-green on the zebra's mane (upper-left)."
 
 ## 3. Position in Imageworks
 
-- Lives under `apps/personal_tagger/color_narrator/`.
+- Lives under `apps/color_narrator/`.
 - Runs **after** mono-checker has written its JSONL + overlays.
 - Reads from the **competition Lightroom directory layout** (no LR DB access).
 
@@ -247,8 +247,7 @@ Use VS Code's interpreter selector to point each workspace/task to the appropria
 imageworks/
 ├─ apps/
 │  ├─ mono_checker/                       # existing (unchanged)
-│  └─ personal_tagger/
-│     └─ color_narrator/                  # CN source (to be created)
+│  └─ color_narrator/                     # CN source
 ├─ docs/
 │  ├─ spec/
 │  │  └─ imageworks-colour-narrator-specification.md   # THIS FILE

@@ -11,11 +11,11 @@ import shutil
 import json
 from datetime import datetime
 
-from imageworks.apps.personal_tagger.color_narrator.core.data_loader import (
+from imageworks.apps.color_narrator.core.data_loader import (
     ColorNarratorItem,
 )
-from imageworks.apps.personal_tagger.color_narrator.core.vlm import VLMResponse
-from imageworks.apps.personal_tagger.color_narrator.core.metadata import (
+from imageworks.apps.color_narrator.core.vlm import VLMResponse
+from imageworks.apps.color_narrator.core.metadata import (
     ColorNarrationMetadata,
 )
 
@@ -208,7 +208,7 @@ class TestUtils:
     @staticmethod
     def create_mock_processing_results(count: int = 3):
         """Create mock processing results for testing."""
-        from imageworks.apps.personal_tagger.color_narrator.core.narrator import (
+        from imageworks.apps.color_narrator.core.narrator import (
             ProcessingResult,
         )
 

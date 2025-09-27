@@ -10,7 +10,7 @@ import json
 import tempfile
 import shutil
 
-from imageworks.apps.personal_tagger.color_narrator.core.data_loader import (
+from imageworks.apps.color_narrator.core.data_loader import (
     ColorNarratorDataLoader,
     DataLoaderConfig,
     ColorNarratorItem,

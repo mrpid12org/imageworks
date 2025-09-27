@@ -11,7 +11,7 @@ import json
 import tempfile
 from datetime import datetime
 
-from imageworks.apps.personal_tagger.color_narrator.core.metadata import (
+from imageworks.apps.color_narrator.core.metadata import (
     XMPMetadataWriter,
     ColorNarrationMetadata,
     XMPMetadataBatch,

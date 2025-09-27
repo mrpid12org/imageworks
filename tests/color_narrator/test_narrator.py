@@ -11,16 +11,16 @@ from datetime import datetime
 import tempfile
 import shutil
 
-from imageworks.apps.personal_tagger.color_narrator.core.narrator import (
+from imageworks.apps.color_narrator.core.narrator import (
     ColorNarrator,
     NarrationConfig,
     ProcessingResult,
 )
-from imageworks.apps.personal_tagger.color_narrator.core.data_loader import (
+from imageworks.apps.color_narrator.core.data_loader import (
     ColorNarratorItem,
 )
-from imageworks.apps.personal_tagger.color_narrator.core.vlm import VLMResponse
-from imageworks.apps.personal_tagger.color_narrator.core.metadata import (
+from imageworks.apps.color_narrator.core.vlm import VLMResponse
+from imageworks.apps.color_narrator.core.metadata import (
     ColorNarrationMetadata,
 )
 
@@ -156,17 +156,15 @@ class TestColorNarrator:
         assert narrator.vlm_client is not None
         assert narrator.metadata_writer is not None
 
+    @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.health_check")
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.vlm.VLMClient.health_check"
+        "imageworks.apps.color_narrator.core.data_loader.ColorNarratorDataLoader.load"
     )
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.data_loader.ColorNarratorDataLoader.load"
+        "imageworks.apps.color_narrator.core.data_loader.ColorNarratorDataLoader.get_statistics"
     )
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.data_loader.ColorNarratorDataLoader.get_statistics"
-    )
-    @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.data_loader.ColorNarratorDataLoader.get_items"
+        "imageworks.apps.color_narrator.core.data_loader.ColorNarratorDataLoader.get_items"
     )
     def test_process_all_dry_run(
         self, mock_get_items, mock_get_stats, mock_load, mock_health, sample_config
@@ -193,9 +191,7 @@ class TestColorNarrator:
         assert results[0].metadata_written is False
         assert results[0].error is None
 
-    @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.vlm.VLMClient.health_check"
-    )
+    @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.health_check")
     def test_process_all_vlm_server_unavailable(self, mock_health, sample_config):
         """Test process_all with unavailable VLM server."""
         mock_health.return_value = False
@@ -244,7 +240,7 @@ class TestColorNarrator:
         assert metadata.vlm_processing_time == 1.2
 
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.metadata.XMPMetadataWriter.read_metadata"
+        "imageworks.apps.color_narrator.core.metadata.XMPMetadataWriter.read_metadata"
     )
     def test_validate_existing(self, mock_read_metadata, temp_workspace):
         """Test validation of existing color narrations."""
@@ -334,11 +330,9 @@ class TestColorNarrator:
         )
         assert narrator._validate_metadata_content(invalid3) is False
 
+    @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.infer_single")
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.vlm.VLMClient.infer_single"
-    )
-    @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.metadata.XMPMetadataWriter.write_metadata"
+        "imageworks.apps.color_narrator.core.metadata.XMPMetadataWriter.write_metadata"
     )
     def test_process_batch_success(
         self, mock_write_metadata, mock_infer, sample_config
@@ -372,11 +366,9 @@ class TestColorNarrator:
         assert results[0].metadata_written is True
         assert results[0].error is None
 
+    @patch("imageworks.apps.color_narrator.core.vlm.VLMClient.infer_single")
     @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.vlm.VLMClient.infer_single"
-    )
-    @patch(
-        "imageworks.apps.personal_tagger.color_narrator.core.metadata.XMPMetadataWriter.write_metadata"
+        "imageworks.apps.color_narrator.core.metadata.XMPMetadataWriter.write_metadata"
     )
     def test_process_batch_metadata_write_failure(
         self, mock_write_metadata, mock_infer, sample_config

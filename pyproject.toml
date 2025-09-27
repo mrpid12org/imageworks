@@ -31,7 +31,7 @@ requires-python = ">=3.9"
 imageworks-mono = "imageworks.apps.mono_checker.cli.mono:app"
 imageworks-api = "imageworks.apps.mono_checker.api.main:start"
 imageworks-zip = "imageworks.tools.zip_extract:app"
-imageworks-color-narrator = "imageworks.apps.personal_tagger.color_narrator.cli.main:app"
+imageworks-color-narrator = "imageworks.apps.color_narrator.cli.main:app"
 
 
 [tool.rye]

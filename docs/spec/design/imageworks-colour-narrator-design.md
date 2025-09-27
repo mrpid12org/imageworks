@@ -10,7 +10,8 @@ _Version 1.0 – Personal Tagger: VLM-guided color localization_
 - [4. Input and Directory Conventions](#4-input-and-directory-conventions)
 - [5. Data Contract](#5-data-contract)
 - [6. Configuration](#6-configuration)
-- [7. Component Design](#7-component-design)
+- [7. Component Design](#7│  ├─ mono_checker/                        # existing (unchanged)
+│  └─ color_narrator/                     # CN sourcemponent-design)
 - [8. CLI and Python API](#8-cli-and-python-api)
 - [9. Environment and Dependencies](#9-environment-and-dependencies)
 - [10. Logging and Observability](#10-logging-and-observability)
@@ -307,7 +308,7 @@ iw-personal color-narrator \
 ### Python API
 
 ```python
-from imageworks.apps.personal_tagger.color_narrator import run_batch
+from imageworks.apps.color_narrator import run_batch
 
 results = run_batch(
     images_dir=..., overlays_dir=..., mono_jsonl=...,
