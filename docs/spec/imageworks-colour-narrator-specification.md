@@ -117,13 +117,15 @@ No new color maths; this simply serializes structure already implicit in mono-ch
 
 ## 8. VLM Backend
 
-### Serving Choices
+### Model Selection
+**Production Model**: Qwen2-VL-2B-Instruct
+- **Reason**: Fits within RTX 4080 16GB VRAM constraints (10.88GB total usage)
+- **Performance**: Sub-1 second inference for color description tasks
+- **Quality**: Excellent for color contamination detection and location description
 
-**Default (Phase 1 on RTX 4080)**: Serve Qwen2-VL-7B behind an OpenAI-style local endpoint (e.g., vLLM multimodal). CN's adapter is just an OpenAI client.
-
-**Upgrade (RTX 6000 Pro)**: Switch the adapter endpoint to Triton/TensorRT-LLM (optionally run a larger Qwen2.5-VL model for "audit" passes). No changes to CN's call site.
-
-The adapter must remain model/server-agnostic so back-ends can be swapped without touching CN logic.
+**Alternative Tested**: Qwen2-VL-7B-Instruct
+- **Status**: Failed due to CUDA OOM errors on 16GB VRAM
+- **Model Size**: 13.6GB (too large for current hardware)
 
 ## 9. Configuration
 
@@ -139,7 +141,7 @@ mono_results_jsonl = "/PATH/SerialPDI_2025-26/R1/analysis/mono_results.jsonl"
 # VLM back-end (RTX 4080 default; later swap endpoint on 6000 Pro)
 backend            = "openai"                         # generic OpenAI-style client
 endpoint_url       = "http://127.0.0.1:8000/v1"
-model              = "Qwen/Qwen2-VL-7B-Instruct"
+model              = "Qwen2-VL-2B-Instruct"
 batch_size         = 6
 panel_long_edge_px = 1280
 

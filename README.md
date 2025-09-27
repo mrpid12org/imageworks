@@ -10,7 +10,7 @@ Imageworks provides local-first photography utilities for two workflows:
   - Flags near-duplicates and generates overlay visualizations
 
 - **Personal Tagger** – enriches a personal Lightroom catalogue with concise keywords, optional captions/long descriptions, and similarity search tools:
-  - **Color-Narrator** – VLM-guided natural language descriptions of residual color in monochrome images using Qwen2-VL-7B inference
+  - **Color-Narrator** – VLM-guided natural language descriptions of residual color in monochrome images using Qwen2-VL-2B inference
 
 Both applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
 
@@ -43,7 +43,19 @@ imageworks/
 - `outputs/` – Generated files and analysis results
 - `configs/` – Sample configuration and experiment settings
 
-## Getting Started
+## Documentation
+
+### Core Documentation
+- [Competition Workflow](docs/COMPETITION_WORKFLOW.md) - Complete competition checking process
+- [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed codebase organization
+- [AI Models and Prompting](docs/ai-models-and-prompting.md) - **Comprehensive guide to all AI models, experiments, and prompting strategies**
+
+### Component-Specific Guides
+- [Color-Narrator Reference](docs/color-narrator-reference.md) - VLM-based color analysis system
+- [vLLM Deployment Guide](docs/vllm-deployment-guide.md) - Production AI model deployment
+- [Mono Workflow](docs/MONO_WORKFLOW.md) - Monochrome image analysis workflow
+
+### Development Setup\n- [IDE Setup (WSL/VSCode)](docs/dev-env/ide-setup-wsl-vscode.md) - Development environment configuration\n\n## Getting Started
 1. Install [uv](https://docs.astral.sh/uv/) following the steps in `docs/dev-env/ide-setup-wsl-vscode.md`.
 2. From the repository root run `uv sync` to create the virtual environment and install dependencies.
 3. Activate tools with `uv run ...` or `uvx ...` so commands use the project environment.

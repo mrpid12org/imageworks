@@ -1,6 +1,4 @@
-# vLLM Deployment Guide for Color-Narrator
-
-## Overview
+# vLLM Deployment Guide for Color-Narrator\n\n> **📚 For comprehensive AI model information**: See [AI Models and Prompting Guide](./ai-models-and-prompting.md) for complete coverage of all models used across imageworks, experimentation details, and prompting strategies.\n\n## Overview
 This guide documents the process and learnings from deploying vLLM with Qwen2-VL vision models for the Color-Narrator system. Based on real deployment experience with RTX 4080 16GB and CUDA 12.9.
 
 ## Key Learnings & Gotchas

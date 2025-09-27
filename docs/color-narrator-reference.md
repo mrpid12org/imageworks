@@ -1,6 +1,25 @@
-# Color-Narrator Reference Documentation
+# Color-Narrator Reference Documentation\n\n> **🤖 AI Models & Prompting**: For comprehensive information about all AI models used across imageworks, model experiments, prompting strategies, and hardware requirements, see the [AI Models and Prompting Guide](./ai-models-and-prompting.md).\n\nThe **Color-Narrator** is a VLM-guided system for generating natural language descriptions of residual color in monochrome competition images. It integrates with mono-checker analysis data and uses the Qwen2-VL-2B vision-language model to create professional metadata descriptions.\n\n## Table of Contents\n\n1. [Overview](#overview)\n2. [Architecture](#architecture)\n3. [Installation & Setup](#installation--setup)\n4. [Usage](#usage)\n5. [Configuration](#configuration)\n6. [API Reference](#api-reference)\n7. [Development](#development)\n8. [Troubleshooting](#troubleshooting)\n\n## Overview\n\n### Purpose\nColor-Narrator analyzes JPEG images that should be monochrome but contain residual color, then generates professional natural language descriptions suitable for XMP metadata embedding. It's designed for photography competition workflows where accurate color contamination documentation is essential.\n\n### Key Features\n- **VLM Integration**: Uses Qwen2-VL-2B for vision-language inference\n- **Mono-Checker Integration**: Leverages existing monochrome analysis data\n- **XMP Metadata**: Embeds structured color descriptions in JPEG files\n- **Batch Processing**: Handles large collections efficiently\n- **Professional Output**: Generates competition-ready metadata descriptions\n- **CUDA Acceleration**: Optimized for RTX 4080/6000 Pro with CUDA 12.9\n\n### Workflow Integration\n```\nMono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embedding\n```### Quick Start
+```bash
+# Start vLLM server (see vLLM Deployment Guide for details)
+./start_vllm_server.py --model Qwen2-VL-2B-Instruct --port 8000
 
-The **Color-Narrator** is a VLM-guided system for generating natural language descriptions of residual color in monochrome competition images. It integrates with mono-checker analysis data and uses the Qwen2-VL-7B vision-language model to create professional metadata descriptions.
+# Basic narration workflow
+uv run imageworks-color-narrator narrate \
+  --images ./competition_images \
+  --overlays ./lab_overlays \
+  --mono-jsonl ./mono_results.jsonl
+
+# Validate existing narrations
+uv run imageworks-color-narrator validate \
+  --images ./competition_images \
+  --mono-jsonl ./mono_results.jsonl
+
+# Enhanced mono analysis (hybrid approach)
+uv run imageworks-color-narrator enhance-mono \
+  --mono-jsonl ./mono_results.jsonl \
+  --limit 50 \
+  --summary ./outputs/summaries/enhancement_summary.md
+```e descriptions of residual color in monochrome competition images. It integrates with mono-checker analysis data and uses the Qwen2-VL-2B vision-language model to create professional metadata descriptions.
 
 ## Table of Contents
 
@@ -19,12 +38,12 @@ The **Color-Narrator** is a VLM-guided system for generating natural language de
 Color-Narrator analyzes JPEG images that should be monochrome but contain residual color, then generates professional natural language descriptions suitable for XMP metadata embedding. It's designed for photography competition workflows where accurate color contamination documentation is essential.
 
 ### Key Features
-- **VLM Integration**: Uses Qwen2-VL-7B for vision-language inference
+- **VLM Integration**: Uses Qwen2-VL-2B for vision-language inference
 - **Mono-Checker Integration**: Leverages existing monochrome analysis data
 - **XMP Metadata**: Embeds structured color descriptions in JPEG files
 - **Batch Processing**: Handles large collections efficiently
 - **Professional Output**: Generates competition-ready metadata descriptions
-- **CUDA Acceleration**: Optimized for RTX 6000 Pro with CUDA 12.8
+- **CUDA Acceleration**: Optimized for RTX 4080/6000 Pro with CUDA 12.9
 
 ### Workflow Integration
 ```
@@ -41,7 +60,7 @@ Mono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embeddi
 - **Integration**: Direct integration with mono-checker output formats
 
 #### 2. **VLM Client** (`core/vlm.py`)
-- **Model**: Qwen2-VL-7B-Instruct via vLLM server
+- **Model**: Qwen2-VL-2B-Instruct via vLLM server
 - **API**: OpenAI-compatible REST interface
 - **Features**: Base64 image encoding, structured prompts, confidence estimation
 
@@ -70,7 +89,7 @@ Mono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embeddi
 1. Load JPEG originals + LAB overlays + mono JSONL
 2. Filter by contamination level and file availability
 3. Generate VLM prompts with mono analysis context
-4. Process through Qwen2-VL-7B inference
+4. Process through Qwen2-VL-2B inference
 5. Parse responses for color regions and confidence
 6. Structure metadata with validation
 7. Embed XMP metadata in JPEG files
@@ -81,7 +100,7 @@ Mono-Checker Analysis → Color-Narrator VLM Processing → XMP Metadata Embeddi
 
 ### Prerequisites
 - **Python**: 3.9+ with CUDA support
-- **CUDA**: 12.8 (for RTX 6000 Pro compatibility)
+- **CUDA**: 12.9 (for RTX 4080/6000 Pro compatibility)
 - **PyTorch**: >=2.3.0 with CUDA support
 - **vLLM Server**: Running Qwen2-VL-7B-Instruct model
 
