@@ -21,7 +21,20 @@ models/*
 *.ckpt
 *.gguf
 
-# Test images and test data (exclude from git)
+# Test images and test data (exclude from git - now in organized structure)
+# Shared test assets (real images, not tracked in git)
+tests/shared/images/
+tests/shared/overlays/
+tests/shared/sample_data/
+
+# Test output directory (not tracked in git)
+tests/test_output/
+
+# Experimental results (can be large, not tracked in git)
+tests/color_narrator/experimental_results/
+tests/mono/experimental_results/
+
+# Legacy test directories (cleaned up but keeping ignore rules)
 test_color_narrator/images/
 test_color_narrator/overlays/
 test_color_narrator/production_images/
@@ -32,10 +45,9 @@ test_color_narrator/*.log
 outputs/
 tests/output/
 
-# Test outputs and temp files
-tests/test_images/samples/
-tests/test_images/synthetic/tmp_*.png
-tests/test_images/synthetic/stage.png
+# Test outputs and temp files (unit test fixtures are tracked)
+tests/*/unit/fixtures/tmp_*
+tests/test_output/
 
 # Generated scripts and analysis outputs
 write_xmp.sh
