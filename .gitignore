@@ -8,9 +8,13 @@ __pycache__/
 src/*.egg-info/
 .pytest_cache/
 
-# Editor/IDE
+# Editor/IDE and caches
 .vscode/
 .DS_Store
+.ruff_cache/
+*.swp
+*.swo
+*~
 
 # Model directories and files (exclude all models from git)
 models/*
@@ -60,7 +64,8 @@ write_xmp.sh
 /test_*.json
 /test_*.jsonl
 
-# VLM server logs
+# VLM server logs and scripts directory
+logs/
 vllm_server*.log
 .ruff_cache/
 __pycache__/

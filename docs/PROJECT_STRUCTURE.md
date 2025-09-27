@@ -16,12 +16,19 @@ This guide explains the repository layout and where to find things.
 - `uv.lock` – pinned dependency lockfile for reproducible installs.
 - `configs/` – repo-scoped configuration (e.g., ExifTool namespace).
 - `docs/` – developer documentation (environment setup, specs, workflows).
+- `scripts/` – utility scripts for development and deployment.
 - `src/` – all application and library code (installed via the `src/` layout).
 - `tests/` – test suites, analysis tools, and test data.
 - `outputs/` – generated files and analysis results.
+- `logs/` – runtime logs (not tracked in git).
 
 ## `configs/`
 - `exiftool/.ExifTool_config` – defines the custom XMP `MW` namespace used by the exporter to write structured monochrome diagnostics.
+
+## `scripts/`
+- `start_vllm_server.py` – VLM server startup script for local development
+- Utility scripts for development, deployment, and maintenance tasks
+- Not part of the main application - these are development tools
 
 ## `docs/`
 - `MONO_WORKFLOW.md` - complete mono checking workflow
