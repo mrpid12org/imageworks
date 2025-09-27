@@ -2,6 +2,73 @@
 Prompt templates for VLM-based mono analysis and color narration.
 """
 
+# Hallucination-resistant prompt with structured JSON output
+REGION_BASED_COLOR_ANALYSIS_TEMPLATE = """You are auditing a MONOCHROME competition photograph for residual colour.
+
+You are given:
+• Panel A: the original photograph.
+• Panel B: an overlay marking WHERE colour appears (by hue direction).
+• Panel C: an overlay showing HOW STRONG the colour is (brighter = stronger).
+• A JSON list of REGIONS computed by technical analysis. Each region includes:
+  - index, bbox_xywh (pixels), centroid_norm (x,y in 0..1),
+  - mean_L (0..100), mean_cab (chroma), mean_hue_deg (0..360), hue_name, area_pct.
+
+Your task:
+For EACH region, describe—in natural, precise language—WHAT visible thing the colour sits on
+(object or part), and add the tonal zone (shadow/midtone/highlight). Be specific about the part
+(e.g., "mane", "cheekbone", "window frame", "waterline"), but ONLY when you clearly see it.
+
+Truth constraints (very important):
+1) Ground your description ONLY in the areas highlighted by Panels B/C and the supplied REGIONS.
+2) Do NOT guess scene type, species, brands, or locations. If you cannot clearly identify the object/part,
+   use a broader but truthful term (e.g., "subject's hair", "building detail", "foreground foliage", "background area").
+3) If you are uncertain, explicitly write "(uncertain)" at the end of the object/part phrase.
+4) The tonal zone must be computed from mean_L (not guessed):
+   - shadow if L* < 35; midtone if 35 ≤ L* < 70; highlight if L* ≥ 70.
+5) The colour family you name must be consistent with the overlay hue and the provided hue_name.
+
+Output format (strict):
+• First, one bullet line per region, in region index order, each ≤18 words:
+  "{{color family}} on {{object/part}}{{optional short locator}}. Tonal zone: {{shadow|midtone|highlight}}."
+  – The locator is optional (e.g., "upper-right edge", "near horizon")—include it only if it's obvious and helpful.
+• Then a single JSON object:
+  {{
+    "findings": [
+      {{
+        "region_index": <int>,
+        "object_part": "<free text, specific but honest>",
+        "color_family": "<free text, e.g., yellow-green / magenta / aqua>",
+        "tonal_zone": "<shadow|midtone|highlight>",
+        "location_phrase": "<optional short locator, or empty string>",
+        "confidence": <0.0–1.0, your visual certainty only>
+      }},
+      ...
+    ]
+  }}
+Do not add any commentary after the JSON.
+
+Additional guidance:
+• Prefer the most specific object/part you can state with confidence. If two plausible options exist,
+  choose the more general one and mark "(uncertain)".
+• Do not invent features that are not plainly visible in Panel A within the region.
+• Keep colour names concise (e.g., yellow-green, aqua, magenta, blue).
+• If a region spans multiple small items, name the dominant one; if none dominates, use a collective term
+  like "fine foliage", "stone texture", "background blur (uncertain)".
+
+FILE: {file_name}
+DOMINANT: {dominant_color} (hue {dominant_hue_deg:.1f}°)
+
+REGIONS (index order; use these indices exactly):
+{regions_json}
+
+Remember:
+• Describe only inside the marked regions as evidenced by Panels B/C.
+• Use your own words for object/part—be specific when clear; general but honest if not.
+• Compute tonal zone from mean_L.
+• Provide bullets, then the single JSON block.
+"""
+
+# Legacy prompts (kept for backward compatibility)
 MONO_DESCRIPTION_ENHANCEMENT_TEMPLATE = """You are analyzing a monochrome competition image that has been flagged by technical analysis for potential color issues.
 
 CONTEXT:

@@ -206,6 +206,40 @@ Focus on WHERE the color appears, then explain why this disqualifies it from mon
 ```
 **Results**: Specific location identification, competition rule compliance
 
+#### 5. Region-Based Hallucination-Resistant Prompts (v5 - Current Best) 🆕
+```python
+REGION_BASED_COLOR_ANALYSIS_TEMPLATE = """
+You are auditing a MONOCHROME competition photograph for residual colour.
+
+You are given:
+• Panel A: the original photograph.
+• Panel B: an overlay marking WHERE colour appears (by hue direction).
+• Panel C: an overlay showing HOW STRONG the colour is (brighter = stronger).
+• A JSON list of REGIONS computed by technical analysis.
+
+Truth constraints (very important):
+1) Ground your description ONLY in the areas highlighted by Panels B/C and the supplied REGIONS.
+2) Do NOT guess scene type, species, brands, or locations.
+3) If you are uncertain, explicitly write "(uncertain)" at the end of the object/part phrase.
+4) The tonal zone must be computed from mean_L (not guessed):
+   - shadow if L* < 35; midtone if 35 ≤ L* < 70; highlight if L* ≥ 70.
+
+Output format (strict):
+• First, one bullet line per region, each ≤18 words
+• Then a single JSON object with structured findings
+"""
+```
+
+**Key Innovations**:
+- **No Priming Examples**: Eliminates bias from "zebra" or other specific examples
+- **Grounded Constraints**: Forces model to only describe what's in marked regions
+- **Structured JSON Output**: Enables programmatic validation and confidence scoring
+- **Uncertainty Handling**: Explicit "(uncertain)" escape hatch for ambiguous cases
+- **Technical Integration**: Uses mono-checker's L* values for consistent tonal zones
+- **Validation Pipeline**: Cross-checks VLM output against technical ground truth
+
+**Implementation**: Available via `imageworks-color-narrator analyze-regions --demo`
+
 ### Prompt Template Categories
 
 #### 1. **Technical Analysis Prompts**
@@ -223,6 +257,34 @@ Focus on WHERE the color appears, then explain why this disqualifies it from mon
 - Use Case: Production workflow integration
 - Structure: Mono verdict + VLM description → Enhanced output
 
+#### 4. **Region-Based Analysis Prompts** 🆕
+- Focus: Hallucination-resistant analysis with structured validation
+- Use Case: Production-grade color contamination analysis
+- Structure: Technical regions → Grounded analysis → Validated JSON output
+- Key Features: Uncertainty handling, confidence scoring, cross-validation
+
+### VLM Response Validation Pipeline
+
+The region-based approach introduces comprehensive validation:
+
+#### **Input Validation**
+- Region data completeness (bbox, centroid, mean_L, hue_name)
+- Technical consistency (L* values, hue angles, area percentages)
+- Image format validation (base64 encoding, overlay alignment)
+
+#### **Output Validation**
+- JSON structure compliance (required fields, data types)
+- Region index matching (VLM references valid input regions)
+- Tonal zone verification (VLM output vs computed L* zones)
+- Confidence range clamping (0.0-1.0 bounds enforcement)
+- Cross-referencing hue names with technical analysis
+
+#### **Quality Assurance**
+- Low confidence detection (< 0.5 flagged for review)
+- Uncertainty phrase detection ("(uncertain)" markers)
+- Hallucination detection (descriptions not grounded in regions)
+- Technical drift monitoring (VLM vs ground truth deviations)
+
 ### Prompt Optimization Principles
 
 1. **Specific Examples**: Include concrete location examples to guide responses
@@ -230,6 +292,57 @@ Focus on WHERE the color appears, then explain why this disqualifies it from mon
 3. **Technical Grounding**: Provide numerical context to anchor descriptions
 4. **Task Clarity**: Clearly define what type of response is expected
 5. **Output Structure**: Specify format for consistent parsing
+6. **Hallucination Prevention**: Use grounding constraints and validation pipelines
+7. **Uncertainty Handling**: Provide explicit escape hatches for ambiguous cases
+
+### Implementation: Region-Based Analysis System
+
+#### **Command Line Interface**
+```bash
+# Test new approach with demo regions
+uv run imageworks-color-narrator analyze-regions \
+  --image photo.jpg \
+  --demo \
+  --debug \
+  --output results.json
+
+# Production usage (when mono-checker provides regions)
+uv run imageworks-color-narrator analyze-regions \
+  --image photo.jpg \
+  --output results.json
+```
+
+#### **Sample Output Structure**
+```json
+{
+  "file_name": "photo.jpg",
+  "dominant_color": "yellow-green",
+  "dominant_hue_deg": 88.0,
+  "findings": [
+    {
+      "region_index": 0,
+      "object_part": "subject's hair (uncertain)",
+      "color_family": "yellow-green",
+      "tonal_zone": "highlight",
+      "location_phrase": "upper-left area",
+      "confidence": 0.85
+    }
+  ],
+  "validation_errors": []
+}
+```
+
+#### **Integration with Existing Workflow**
+- **Input**: Mono-checker JSONL + overlay images + region data
+- **Processing**: Hallucination-resistant VLM analysis + validation
+- **Output**: Structured JSON + human-readable summary + XMP metadata
+- **Fallbacks**: Graceful degradation when VLM unavailable
+
+#### **Quality Metrics**
+- **Confidence Distribution**: Track high/medium/low confidence findings
+- **Validation Error Rate**: Monitor technical inconsistencies
+- **Uncertainty Rates**: Track "(uncertain)" usage patterns
+- **Cross-Validation**: Compare VLM output with technical ground truth
 
 ---
 

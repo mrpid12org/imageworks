@@ -19,6 +19,11 @@ from datetime import datetime
 from typing import Dict, Any
 
 from ..core.metadata import XMPMetadataWriter, ColorNarrationMetadata
+from ..core.region_based_vlm import (
+    RegionBasedVLMAnalyzer,
+    create_demo_regions,
+)
+from ..core.vlm import VLMClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -873,6 +878,186 @@ def enhance_mono(
             typer.echo(f"⚠️  Failed to generate summary: {e}")
 
     typer.echo("\n✅ Hybrid mono enhancement complete")
+
+
+@app.command()
+def analyze_regions(
+    image_path: Path = typer.Option(
+        ..., "--image", "-i", help="Path to JPEG image to analyze"
+    ),
+    output_json: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output JSON file for structured results"
+    ),
+    demo_mode: bool = typer.Option(
+        False,
+        "--demo",
+        help="Use demo regions (for testing without mono-checker regions)",
+    ),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug output"),
+) -> None:
+    """Analyze color regions using hallucination-resistant VLM prompts.
+
+    This command demonstrates the new approach suggested for better VLM responses:
+    - No priming examples to avoid bias
+    - Structured JSON output for validation
+    - Grounded in technical region data
+    - Uncertainty handling with confidence scores
+
+    Example:
+        imageworks-color-narrator analyze-regions --image photo.jpg --demo --debug
+    """
+    typer.echo("🔬 Region-Based VLM Analysis")
+
+    if not image_path.exists():
+        typer.echo(f"❌ Image not found: {image_path}")
+        raise typer.Exit(1)
+
+    if debug:
+        typer.echo(f"📁 Image: {image_path}")
+        typer.echo(f"🧪 Demo mode: {demo_mode}")
+
+    # Initialize VLM client
+    try:
+        vlm_client = VLMClient(
+            base_url="http://localhost:8000/v1",
+            model_name="Qwen2-VL-2B-Instruct",
+            timeout=120,
+        )
+
+        # Test VLM connection
+        if not vlm_client.health_check():
+            typer.echo("❌ VLM server not available at http://localhost:8000")
+            typer.echo("💡 Start server with: uv run python start_vllm_server.py")
+            raise typer.Exit(1)
+
+        typer.echo(f"🤖 VLM: Connected to {vlm_client.model_name}")
+
+    except Exception as e:
+        typer.echo(f"❌ Failed to initialize VLM client: {e}")
+        raise typer.Exit(1)
+
+    # Load and encode image
+    try:
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+        image_base64 = base64.b64encode(image_data).decode("utf-8")
+        typer.echo("📸 Image encoded")
+    except Exception as e:
+        typer.echo(f"❌ Failed to load image: {e}")
+        raise typer.Exit(1)
+
+    # Create regions (demo mode for now, until mono-checker provides real regions)
+    if demo_mode:
+        regions = create_demo_regions()
+        dominant_color = "yellow-green"
+        dominant_hue_deg = 88.0
+        typer.echo("🎭 Using demo regions (2 synthetic color regions)")
+    else:
+        typer.echo(
+            "❌ Real region analysis requires mono-checker integration (not yet implemented)"
+        )
+        typer.echo("💡 Use --demo flag to test with synthetic regions")
+        raise typer.Exit(1)
+
+    if debug:
+        typer.echo("🔍 Regions to analyze:")
+        for region in regions:
+            typer.echo(
+                f"   Region {region.index}: {region.hue_name} "
+                f"({region.area_pct:.1f}% area, L*={region.mean_L:.1f})"
+            )
+
+    # Initialize region-based analyzer
+    analyzer = RegionBasedVLMAnalyzer(vlm_client)
+
+    # Perform analysis
+    typer.echo("⚡ Running VLM analysis...")
+    try:
+        analysis = analyzer.analyze_regions(
+            file_name=image_path.name,
+            regions=regions,
+            dominant_color=dominant_color,
+            dominant_hue_deg=dominant_hue_deg,
+            image_base64=image_base64,
+            # overlay_hue_base64=None,      # Would be provided by mono-checker
+            # overlay_chroma_base64=None    # Would be provided by mono-checker
+        )
+
+        typer.echo(f"✅ Analysis complete ({len(analysis.findings)} findings)")
+
+        # Show validation results
+        if analysis.validation_errors:
+            typer.echo(f"⚠️  {len(analysis.validation_errors)} validation issues:")
+            for error in analysis.validation_errors:
+                typer.echo(f"   • {error}")
+        else:
+            typer.echo("✅ No validation errors")
+
+        # Generate human-readable summary
+        summary = analyzer.generate_human_readable_summary(analysis)
+        typer.echo("\n" + "=" * 60)
+        typer.echo(summary)
+        typer.echo("=" * 60)
+
+        # Show findings with confidence scores
+        if analysis.findings:
+            typer.echo("\n📊 Detailed Findings:")
+            for finding in analysis.findings:
+                confidence_icon = (
+                    "🟢"
+                    if finding.confidence >= 0.8
+                    else "🟡" if finding.confidence >= 0.5 else "🔴"
+                )
+                location = (
+                    f" {finding.location_phrase}" if finding.location_phrase else ""
+                )
+                typer.echo(
+                    f"   {confidence_icon} Region {finding.region_index}: "
+                    f"{finding.color_family} on {finding.object_part}{location} "
+                    f"({finding.tonal_zone}, confidence: {finding.confidence:.2f})"
+                )
+
+        # Save structured results if requested
+        if output_json:
+            try:
+                results = {
+                    "file_name": analysis.file_name,
+                    "dominant_color": analysis.dominant_color,
+                    "dominant_hue_deg": analysis.dominant_hue_deg,
+                    "findings": [
+                        {
+                            "region_index": f.region_index,
+                            "object_part": f.object_part,
+                            "color_family": f.color_family,
+                            "tonal_zone": f.tonal_zone,
+                            "location_phrase": f.location_phrase,
+                            "confidence": f.confidence,
+                        }
+                        for f in analysis.findings
+                    ],
+                    "validation_errors": analysis.validation_errors,
+                    "timestamp": datetime.now().isoformat(),
+                }
+
+                output_json.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_json, "w") as f:
+                    json.dump(results, f, indent=2)
+
+                typer.echo(f"💾 Structured results saved to: {output_json}")
+
+            except Exception as e:
+                typer.echo(f"⚠️  Failed to save results: {e}")
+
+        # Show raw VLM response if debug
+        if debug:
+            typer.echo("\n🤖 Raw VLM Response:")
+            typer.echo("-" * 40)
+            typer.echo(analysis.raw_response)
+            typer.echo("-" * 40)
+
+    except Exception as e:
+        typer.echo(f"❌ Analysis failed: {e}")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
