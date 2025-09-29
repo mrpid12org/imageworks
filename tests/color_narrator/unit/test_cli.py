@@ -50,43 +50,69 @@ class TestColorNarratorCLI:
 
         def _invoke(args, config=None, process_results=None):
             config = config or {}
-            default_results = Path("tests/test_output/test_cli_results.jsonl")
-            config.setdefault("narrate_results_path", str(default_results))
-            default_results.parent.mkdir(parents=True, exist_ok=True)
             if process_results is None:
                 process_results = []
 
-            summary_path = Path("tests/test_output/test_cli_summary.md")
-            summary_path.parent.mkdir(parents=True, exist_ok=True)
             args_with_summary = list(args)
             if "--summary" not in args_with_summary and "-s" not in args_with_summary:
-                args_with_summary.extend(["--summary", str(summary_path)])
+                args_with_summary.extend(
+                    ["--summary", "tests/test_output/test_cli_summary.md"]
+                )
 
-            # Ensure tests use deterministic sample assets
+            if (
+                "--results-json" not in args_with_summary
+                and "-r" not in args_with_summary
+            ):
+                args_with_summary.extend(
+                    [
+                        "--results-json",
+                        "tests/test_output/test_cli_results.jsonl",
+                    ]
+                )
+
             if not any(arg in args_with_summary for arg in {"--debug", "--no-debug"}):
                 args_with_summary.append("--debug")
 
-            with (
-                patch(
-                    "imageworks.apps.color_narrator.cli.main.load_config",
-                    return_value=config,
-                ),
-                patch(
-                    "imageworks.apps.color_narrator.cli.main.ColorNarrator"
-                ) as mock_narrator,
-            ):
-                instance = mock_narrator.return_value
-                instance.metadata_writer = MagicMock()
-                instance.metadata_writer.backup_original = True
-                instance.process_all.return_value = process_results
+            with cli_runner.isolated_filesystem():
+                summary_path = Path("tests/test_output/test_cli_summary.md")
+                summary_path.parent.mkdir(parents=True, exist_ok=True)
+                results_path = Path("tests/test_output/test_cli_results.jsonl")
+                results_path.parent.mkdir(parents=True, exist_ok=True)
 
-                return cli_runner.invoke(app, ["narrate", *args_with_summary])
+                shared_images = Path("tests/shared/sample_production_images")
+                shared_images.mkdir(parents=True, exist_ok=True)
+                (shared_images / "placeholder.jpg").write_text("placeholder")
+                shared_json_dir = Path(
+                    "tests/shared/sample_production_mono_json_output"
+                )
+                shared_json_dir.mkdir(parents=True, exist_ok=True)
+                (shared_json_dir / "production_sample.jsonl").write_text("{}\n")
+
+                config.setdefault("narrate_results_path", str(results_path))
+
+                with (
+                    patch(
+                        "imageworks.apps.color_narrator.cli.main.load_config",
+                        return_value=config,
+                    ),
+                    patch(
+                        "imageworks.apps.color_narrator.cli.main.ColorNarrator"
+                    ) as mock_narrator,
+                ):
+                    instance = mock_narrator.return_value
+                    instance.metadata_writer = MagicMock()
+                    instance.metadata_writer.backup_original = True
+                    instance.process_all.return_value = process_results
+
+                    return cli_runner.invoke(
+                        app, ["narrate", *args_with_summary], color=False
+                    )
 
         return _invoke
 
     def test_cli_app_help(self, cli_runner):
         """Test CLI app help message."""
-        result = cli_runner.invoke(app, ["--help"])
+        result = cli_runner.invoke(app, ["--help"], color=False)
 
         assert result.exit_code == 0
         assert "Color-Narrator" in result.output
@@ -95,7 +121,7 @@ class TestColorNarratorCLI:
 
     def test_narrate_command_help(self, cli_runner):
         """Test narrate command help message."""
-        result = cli_runner.invoke(app, ["narrate", "--help"])
+        result = cli_runner.invoke(app, ["narrate", "--help"], color=False)
 
         assert result.exit_code == 0
         assert "Generate colour narration metadata" in result.output
@@ -110,7 +136,7 @@ class TestColorNarratorCLI:
 
     def test_validate_command_help(self, cli_runner):
         """Test validate command help message."""
-        result = cli_runner.invoke(app, ["validate", "--help"])
+        result = cli_runner.invoke(app, ["validate", "--help"], color=False)
 
         assert result.exit_code == 0
         assert "Validate existing color narrations" in result.output
