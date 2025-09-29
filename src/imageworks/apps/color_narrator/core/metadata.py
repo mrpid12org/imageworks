@@ -11,20 +11,18 @@ from datetime import datetime
 import logging
 import json
 
-# XMP toolkit imports
-try:
-    from libxmp import XMPFiles, XMPMeta, XMPError
+try:  # pragma: no cover - exercised when libxmp & exempi are installed
+    from libxmp import XMPFiles, XMPMeta, XMPError  # type: ignore[attr-defined]
 
     XMP_AVAILABLE = True
-except ImportError:
-    # Fallback for development/testing
-    XMPFiles = XMPMeta = XMPError = None
+except Exception:  # pragma: no cover - ImportError or ExempiLoadError
+    XMPFiles = XMPMeta = XMPError = None  # type: ignore[assignment]
     XMP_AVAILABLE = False
-    logging.getLogger(__name__).info(
-        "XMP toolkit not available; using sidecar JSON metadata"
-    )
 
 logger = logging.getLogger(__name__)
+
+if not XMP_AVAILABLE:
+    logger.info("XMP toolkit not available; using sidecar JSON metadata")
 
 
 @dataclass
