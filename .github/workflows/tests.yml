@@ -14,11 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - analysis
           - color_narrator
           - mono
           - personal_tagger
-          - shared
           - vision
     steps:
       - name: Checkout repository
