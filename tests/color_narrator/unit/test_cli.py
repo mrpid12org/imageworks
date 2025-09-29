@@ -9,6 +9,7 @@ import pytest
 import typer
 from pathlib import Path
 from typer.testing import CliRunner
+import re
 from unittest.mock import patch, MagicMock
 
 from imageworks.apps.color_narrator.core.data_loader import ColorNarratorItem
@@ -113,35 +114,38 @@ class TestColorNarratorCLI:
     def test_cli_app_help(self, cli_runner):
         """Test CLI app help message."""
         result = cli_runner.invoke(app, ["--help"], color=False)
+        output = _strip_ansi(result.output)
 
         assert result.exit_code == 0
-        assert "Color-Narrator" in result.output
-        assert "VLM-guided color localization" in result.output
-        assert "compare-prompts" in result.output
+        assert "Color-Narrator" in output
+        assert "VLM-guided color localization" in output
+        assert "compare-prompts" in output
 
     def test_narrate_command_help(self, cli_runner):
         """Test narrate command help message."""
         result = cli_runner.invoke(app, ["narrate", "--help"], color=False)
+        output = _strip_ansi(result.output)
 
         assert result.exit_code == 0
-        assert "Generate colour narration metadata" in result.output
-        assert "--images" in result.output
-        assert "--overlays" in result.output
-        assert "--mono-jsonl" in result.output
-        assert "--batch-size" in result.output
-        assert "--no-meta" in result.output
-        assert "--results-json" in result.output
-        assert "--debug" in result.output
-        assert "--vlm-backend" in result.output
+        assert "Generate colour narration metadata" in output
+        assert "--images" in output
+        assert "--overlays" in output
+        assert "--mono-jsonl" in output
+        assert "--batch-size" in output
+        assert "--no-meta" in output
+        assert "--results-json" in output
+        assert "--debug" in output
+        assert "--vlm-backend" in output
 
     def test_validate_command_help(self, cli_runner):
         """Test validate command help message."""
         result = cli_runner.invoke(app, ["validate", "--help"], color=False)
+        output = _strip_ansi(result.output)
 
         assert result.exit_code == 0
-        assert "Validate existing color narrations" in result.output
-        assert "--images" in result.output
-        assert "--mono-jsonl" in result.output
+        assert "Validate existing color narrations" in output
+        assert "--images" in output
+        assert "--mono-jsonl" in output
 
     def test_narrate_command_basic_execution(self, temp_dirs, invoke_narrate):
         """Test basic narrate command execution (skeleton implementation)."""
@@ -467,3 +471,8 @@ class TestVLMConfigResolution:
         assert timeout == cli_main.DEFAULT_VLM_SETTINGS[VLMBackend.LMDEPLOY]["timeout"]
         assert api_key == "EMPTY"
         assert options is None
+
+
+def _strip_ansi(text: str) -> str:
+    ansi_pattern = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_pattern.sub("", text)
