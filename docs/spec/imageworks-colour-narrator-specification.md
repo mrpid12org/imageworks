@@ -118,7 +118,7 @@ No new color maths; this simply serializes structure already implicit in mono-ch
 ## 8. VLM Backend
 
 ### Model Selection
-**Production Model**: Qwen2-VL-2B-Instruct
+**Production Model**: Qwen2.5-VL-7B-AWQ (LMDeploy)
 - **Reason**: Fits within RTX 4080 16GB VRAM constraints (10.88GB total usage)
 - **Performance**: Sub-1 second inference for color description tasks
 - **Quality**: Excellent for color contamination detection and location description
@@ -141,7 +141,7 @@ mono_results_jsonl = "/PATH/SerialPDI_2025-26/R1/analysis/mono_results.jsonl"
 # VLM back-end (RTX 4080 default; later swap endpoint on 6000 Pro)
 backend            = "openai"                         # generic OpenAI-style client
 endpoint_url       = "http://127.0.0.1:8000/v1"
-model              = "Qwen2-VL-2B-Instruct"
+model              = "Qwen2.5-VL-7B-AWQ"
 batch_size         = 6
 panel_long_edge_px = 1280
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Helper script to launch an LMDeploy OpenAI-compatible server."""
+"""Helper script to launch an LMDeploy OpenAI-compatible server.
+
+The script defaults to the Qwen2.5-VL-7B vision-language model and enables
+PyTorch eager mode to avoid CUDA Graph allocations (lower VRAM footprint).
+Adjust arguments as needed for alternative deployments.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +24,7 @@ DEFAULT_MODEL_PATH = str(
 
 
 def build_command(args: argparse.Namespace) -> List[str]:
+    """Construct the lmdeploy CLI command."""
     model_path = Path(args.model_path).expanduser()
     command = [
         "lmdeploy",

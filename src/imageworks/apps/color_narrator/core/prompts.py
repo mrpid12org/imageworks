@@ -1,7 +1,9 @@
 """Prompt templates and registry for colour narration experiments."""
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict
+
+from imageworks.libs.prompting import PromptLibrary, PromptProfileBase
 
 
 # Hallucination-resistant prompt with structured JSON output
@@ -402,20 +404,17 @@ Only list entries you can confirm. Return NONE if nothing is confirmed."""
 
 
 @dataclass(frozen=True)
-class PromptDefinition:
+class PromptDefinition(PromptProfileBase):
     """Describes a prompt template available to the CLI."""
 
-    id: int
-    name: str
     template: str
     supports_regions: bool
-    description: str
 
 
 DEFAULT_ENHANCED_TEMPLATE = ENHANCED_MONO_ANALYSIS_TEMPLATE_V6
 
 
-PROMPT_LIBRARY: Dict[int, PromptDefinition] = {
+PROMPT_DEFINITIONS: Dict[int, PromptDefinition] = {
     1: PromptDefinition(
         id=1,
         name="baseline_narration",
@@ -516,6 +515,13 @@ PROMPT_LIBRARY: Dict[int, PromptDefinition] = {
     ),
 }
 
+DEFAULT_PROMPT_ID = 9
+
+# Backwards compatibility alias – prefer DEFAULT_PROMPT_ID going forward.
+CURRENT_PROMPT_ID = DEFAULT_PROMPT_ID
+
+PROMPT_LIBRARY = PromptLibrary(PROMPT_DEFINITIONS, default_id=DEFAULT_PROMPT_ID)
+
 
 # Prompt ranking / observations:
 #  - 9 (technical_analyst) — current default; best factual balance so far.
@@ -525,25 +531,23 @@ PROMPT_LIBRARY: Dict[int, PromptDefinition] = {
 #  - 7/8 — previous experiments with repetition issues; avoid unless improved.
 
 
-CURRENT_PROMPT_ID = 9
+def get_prompt_definition(identifier):
+    """Return prompt definition for the given identifier (fallback to default)."""
+
+    return PROMPT_LIBRARY.get(identifier)
 
 
-def get_prompt_definition(prompt_id: int) -> PromptDefinition:
-    """Return prompt definition for the given id (fallback to default)."""
-
-    return PROMPT_LIBRARY.get(prompt_id, PROMPT_LIBRARY[CURRENT_PROMPT_ID])
-
-
-def list_prompt_definitions() -> List[PromptDefinition]:
+def list_prompt_definitions():
     """Return all registered prompt definitions."""
 
-    return sorted(PROMPT_LIBRARY.values(), key=lambda p: p.id)
+    return PROMPT_LIBRARY.list()
 
 
 __all__ = [
     "PromptDefinition",
     "PROMPT_LIBRARY",
     "CURRENT_PROMPT_ID",
+    "DEFAULT_PROMPT_ID",
     "get_prompt_definition",
     "list_prompt_definitions",
     "REGION_BASED_COLOR_ANALYSIS_TEMPLATE",

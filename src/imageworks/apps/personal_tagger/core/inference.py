@@ -16,6 +16,7 @@ from imageworks.libs.vlm import (
     create_backend_client,
 )
 
+from . import prompts as prompt_registry
 from .config import PersonalTaggerConfig
 from .models import GenerationModels, KeywordPrediction, PersonalTaggerRecord
 from .post_processing import clean_keywords, tidy_caption, tidy_description
@@ -111,6 +112,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
     def __init__(self, config: PersonalTaggerConfig) -> None:
         super().__init__(config)
         self._clients: Dict[str, OpenAIChatClient] = {}
+        self._prompt_profile = prompt_registry.get_prompt_profile(config.prompt_profile)
 
     def close(self) -> None:  # pragma: no cover - exercised in runtime only
         for client in self._clients.values():
@@ -160,25 +162,16 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
     # Stage executors
     # ------------------------------------------------------------------
     def _run_caption_stage(self, image_b64: str) -> tuple[str, Optional[str]]:
+        stage = self._prompt_profile.caption_stage
         try:
             result = self._chat(
                 model=self.config.caption_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You write concise, photographic captions for personal photo libraries.",
-                    },
+                    {"role": "system", "content": stage.system},
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "Provide an active-voice caption describing this image. "
-                                    "Limit the caption to at most two sentences and fewer than 200 characters. "
-                                    "Do not include quotation marks or extra commentary."
-                                ),
-                            },
+                            {"type": "text", "text": stage.render()},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -188,6 +181,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                         ],
                     },
                 ],
+                max_tokens=stage.max_new_tokens or self.config.max_new_tokens,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Caption generation failed")
@@ -197,28 +191,16 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         return caption, None if caption else "caption_empty"
 
     def _run_keyword_stage(self, image_b64: str) -> tuple[List[str], Optional[str]]:
+        stage = self._prompt_profile.keyword_stage
         try:
             result = self._chat(
                 model=self.config.keyword_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return carefully curated keyword lists for personal photography archives. "
-                            "Avoid generic photographic terminology or subjective adjectives."
-                        ),
-                    },
+                    {"role": "system", "content": stage.system},
                     {
                         "role": "user",
                         "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "Generate a ranked JSON array named keywords containing 25 distinct, specific keywords that describe this photograph. "
-                                    "Use lowercase text, avoid duplicates, and prefer noun phrases that a photographer would use for search. "
-                                    "Return ONLY valid JSON."
-                                ),
-                            },
+                            {"type": "text", "text": stage.render()},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -228,7 +210,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                         ],
                     },
                 ],
-                max_tokens=max(self.config.max_new_tokens, 300),
+                max_tokens=stage.max_new_tokens or max(self.config.max_new_tokens, 300),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Keyword generation failed")
@@ -244,27 +226,21 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         caption: str,
         keywords: List[str],
     ) -> tuple[str, Optional[str]]:
+        stage = self._prompt_profile.description_stage
         try:
             keyword_preview = ", ".join(keywords[:10]) if keywords else "none"
             result = self._chat(
                 model=self.config.description_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Write rich, accessibility-friendly descriptions of photographs. "
-                            "Compose warm but factual prose suitable for metadata fields."
-                        ),
-                    },
+                    {"role": "system", "content": stage.system},
                     {
                         "role": "user",
                         "content": [
                             {
                                 "type": "text",
-                                "text": (
-                                    "Using the provided caption and keywords as context, craft a vivid 3-4 sentence description of the image. "
-                                    "Do not repeat the caption verbatim; expand on important subjects, setting, light, and mood. "
-                                    f"Caption: {caption or 'N/A'}. Keywords: {keyword_preview}."
+                                "text": stage.render(
+                                    caption=caption or "N/A",
+                                    keyword_preview=keyword_preview,
                                 ),
                             },
                             {
@@ -276,7 +252,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                         ],
                     },
                 ],
-                max_tokens=max(self.config.max_new_tokens, 600),
+                max_tokens=stage.max_new_tokens or max(self.config.max_new_tokens, 600),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Description generation failed")

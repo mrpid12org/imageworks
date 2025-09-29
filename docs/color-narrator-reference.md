@@ -18,7 +18,7 @@
 Color Narrator produces competition-ready descriptions of residual colour found in supposedly monochrome images. It consumes outputs from the Mono workflow, calls a local vision-language model, and writes structured metadata directly into the originating JPEG files (falling back to JSON sidecars only when XMP tooling is unavailable).
 
 ### Key Capabilities
-- **VLM Integration** – Talks to a locally hosted vLLM instance running `Qwen2-VL-2B-Instruct`.
+- **VLM Integration** – Pluggable OpenAI-compatible backends (LMDeploy + Qwen2.5-VL-7B-AWQ by default, vLLM retained for smaller checkpoints, Triton stub for future work).
 - **Mono Workflow Context** – Reads contamination metrics, overlays, and metadata created by the Mono checker.
 - **Metadata Authoring** – Persists findings as structured XMP (or sidecar JSON during development).
 - **Batch Processing** – Streams large folders, reporting progress and error details.
@@ -49,8 +49,8 @@ Shared utilities in `src/imageworks/libs/personal_tagger/` provide reusable colo
 
 ### Prerequisites
 - Python 3.9+
-- CUDA 12.8+ with compatible NVIDIA drivers (recommended for Qwen2-VL-2B)
-- vLLM `>=0.4` serving an OpenAI-compatible API
+- CUDA 12.8+ with compatible NVIDIA drivers (recommended for GPU execution)
+- OpenAI-compatible VLM server: vLLM `>=0.4` (default) or LMDeploy `>=0.5`
 - `uv` for environment management (see `docs/dev-env/ide-setup-wsl-vscode.md`)
 
 ### Install Project Dependencies
@@ -59,21 +59,42 @@ uv sync
 ```
 
 ### Launch the VLM Server
+
+#### Option A: LMDeploy (default Qwen2.5-VL-7B-AWQ)
 ```bash
-# Recommended configuration for a 16 GB GPU
-nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
-  --served-model-name Qwen2-VL-2B-Instruct \
-  --host 0.0.0.0 --port 8000 \
-  --trust-remote-code \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.8 \
-  > vllm_server.log 2>&1 &
+uv run python scripts/start_lmdeploy_server.py --eager
 
 # Confirm the server is available
+curl http://localhost:24001/v1/models
+```
+
+The helper script resolves the local AWQ weights under `$IMAGEWORKS_MODEL_ROOT` (default `~/ai-models/weights/Qwen2.5-VL-7B-Instruct-AWQ`) and enables eager mode to stay within a 16 GB GPU budget. Adjust ports or batch sizes inside `scripts/start_lmdeploy_server.py` as needed.
+
+#### Option B: vLLM (legacy Qwen2-VL-2B)
+```bash
+uv run python scripts/start_vllm_server.py
+
+# Health check for the vLLM OpenAI endpoint
 curl http://localhost:8000/v1/models
 ```
 
-For GPUs with ≥48 GB VRAM (e.g., RTX 6000 Pro) you can experiment with larger Qwen2 models, but update `pyproject.toml` to match the deployed model name.
+vLLM remains handy for lightweight experimentation or when GPU memory is tight; point it at `Qwen2-VL-2B-Instruct` or other supported safetensors under `$IMAGEWORKS_MODEL_ROOT`.
+
+```bash
+# Example: serve an AWQ quantised checkpoint with TurboMind backend on port 24001
+uv run lmdeploy serve api_server \
+  "$IMAGEWORKS_MODEL_ROOT/Qwen2.5-VL-7B-Instruct-AWQ" \
+  --model-name Qwen2.5-VL-7B-AWQ \
+  --backend turbomind \
+  --server-name 0.0.0.0 \
+  --server-port 24001 \
+  --vision-max-batch-size 1 \
+  --eager-mode
+
+curl http://localhost:24001/v1/models
+```
+
+For GPUs with ≥48 GB VRAM you can point either script at larger Qwen2/VL checkpoints; remember to update `pyproject.toml` so the CLI points to the matching model name. The narrator CLI now uses these paths by default—pass `--debug` if you want to fall back to the bundled sample assets.
 
 ## Usage
 
@@ -109,19 +130,29 @@ Runtime defaults live in `pyproject.toml`:
 
 ```toml
 [tool.imageworks.color_narrator]
-vlm_base_url = "http://localhost:8000/v1"
-vlm_model = "Qwen2-VL-2B-Instruct"
+vlm_backend = "lmdeploy"
+vlm_base_url = "http://localhost:24001/v1"
+vlm_model = "Qwen2.5-VL-7B-AWQ"
 vlm_timeout = 120
 vlm_max_tokens = 300
 vlm_temperature = 0.1
+vlm_vllm_base_url = "http://localhost:8000/v1"
+vlm_vllm_model = "Qwen2-VL-2B-Instruct"
+vlm_vllm_api_key = "EMPTY"
+vlm_lmdeploy_base_url = "http://localhost:24001/v1"
+vlm_lmdeploy_model = "Qwen2.5-VL-7B-AWQ"
+vlm_lmdeploy_api_key = "EMPTY"
+vlm_lmdeploy_eager = true
+vlm_triton_base_url = "http://localhost:9000/v1"
+vlm_triton_model = "Qwen2-VL-2B-Instruct"
 
 default_batch_size = 4
 min_contamination_level = 0.1
 require_overlays = true
 max_concurrent_requests = 4
 
-default_images_dir = "outputs/originals"
-default_overlays_dir = "outputs/overlays"
+default_images_dir = "/mnt/d/Proper Photos/photos/ccc competition images"
+default_overlays_dir = "/mnt/d/Proper Photos/photos/ccc competition images"
 default_mono_jsonl = "outputs/results/mono_results.jsonl"
 
 backup_original_files = true
@@ -136,6 +167,9 @@ debug_save_intermediate = false
 debug_output_dir = "outputs/debug"
 log_level = "INFO"
 ```
+
+- `vlm_backend` accepts `vllm`, `lmdeploy`, or `triton` (stub). Backend-specific overrides follow the pattern `vlm_<backend>_*`.
+- Environment overrides still work, e.g. `IMAGEWORKS_COLOR_NARRATOR__VLM_BACKEND=lmdeploy`.
 
 Override settings via CLI flags, environment variables (`IMAGEWORKS_COLOR_NARRATOR__*`), or by editing the configuration block. Any missing path defaults fall back to the mono configuration (`[tool.imageworks.mono]`), so pointing both commands at the same competition import tree requires minimal CLI arguments.
 
@@ -194,7 +228,7 @@ Integration tests rely on assets under `tests/shared/`. Keep personally identifi
 
 | Symptom | Likely Cause | Suggested Fix |
 |---------|--------------|---------------|
-| `VLM server is not available` | vLLM server offline or wrong base URL | Verify the service with `curl /v1/models`, confirm `vlm_base_url` matches.
+| `VLM backend '<name>' is not available` | Backend offline or wrong base URL/model config | Verify with `curl <base_url>/models` and check `vlm_<backend>_*` settings.
 | CUDA out-of-memory errors | Batch too large or GPU under-provisioned | Reduce `default_batch_size`, limit concurrent requests, or host on a larger GPU.
 | Overlay files reported as missing | File naming mismatch or optional overlays disabled | Ensure overlay suffix matches expectations or set `require_overlays = false`.
 | Metadata not written | Insufficient permissions or backup failures | Check backup directory, confirm `backup_original_files` is writable, and run with `--debug` for verbose logs.
@@ -204,11 +238,16 @@ Integration tests rely on assets under `tests/shared/`. Keep personally identifi
 ```python
 from imageworks.apps.color_narrator.core.vlm import VLMClient
 
-client = VLMClient()
+client = VLMClient(
+    base_url="http://localhost:23333/v1",
+    model_name="tQwen2.5-VL-7B-Instruct",
+    backend="lmdeploy",
+)
+
 if client.health_check():
-    print("✅ VLM server is healthy")
+    print(f"✅ {client.backend.value} backend is healthy")
 else:
-    print("❌ VLM server is not responding")
+    print(f"❌ {client.backend.value} backend is not responding: {client.last_error}")
 ```
 
 ### Performance Timing Example

@@ -13,8 +13,9 @@ from unittest.mock import patch, MagicMock
 
 from imageworks.apps.color_narrator.core.data_loader import ColorNarratorItem
 from imageworks.apps.color_narrator.core.narrator import ProcessingResult
-from imageworks.apps.color_narrator.core.vlm import VLMResponse
+from imageworks.apps.color_narrator.core.vlm import VLMBackend, VLMResponse
 
+from imageworks.apps.color_narrator.cli import main as cli_main
 from imageworks.apps.color_narrator.cli.main import app
 
 
@@ -61,6 +62,10 @@ class TestColorNarratorCLI:
             if "--summary" not in args_with_summary and "-s" not in args_with_summary:
                 args_with_summary.extend(["--summary", str(summary_path)])
 
+            # Ensure tests use deterministic sample assets
+            if not any(arg in args_with_summary for arg in {"--debug", "--no-debug"}):
+                args_with_summary.append("--debug")
+
             with (
                 patch(
                     "imageworks.apps.color_narrator.cli.main.load_config",
@@ -101,6 +106,7 @@ class TestColorNarratorCLI:
         assert "--no-meta" in result.output
         assert "--results-json" in result.output
         assert "--debug" in result.output
+        assert "--vlm-backend" in result.output
 
     def test_validate_command_help(self, cli_runner):
         """Test validate command help message."""
@@ -254,7 +260,7 @@ class TestColorNarratorCLI:
         assert "Color Narrator — generating competition metadata" in result.output
 
     def test_validate_command_no_arguments(self, cli_runner):
-        """Validate should succeed gracefully when defaults are missing."""
+        """Validate should succeed using default configuration when no paths provided."""
         result = cli_runner.invoke(app, ["validate"])
 
         assert result.exit_code == 0
@@ -384,3 +390,54 @@ class TestColorNarratorCLI:
         # Invalid batch size (should be handled by typer)
         result = cli_runner.invoke(app, ["narrate", "--batch-size", "invalid"])
         assert result.exit_code != 0
+
+
+class TestVLMConfigResolution:
+    """Tests for resolving runtime VLM settings."""
+
+    def test_resolve_lmdeploy_overrides(self):
+        cfg = {
+            "vlm_backend": "vllm",
+            "vlm_lmdeploy_base_url": "http://custom:23333/v1",
+            "vlm_lmdeploy_model": "custom/lmdeploy",
+            "vlm_lmdeploy_api_key": "token",
+        }
+
+        (
+            backend,
+            base_url,
+            model,
+            timeout,
+            api_key,
+            options,
+        ) = cli_main._resolve_vlm_runtime_settings(
+            cfg,
+            backend="lmdeploy",
+            timeout=300,
+        )
+
+        assert backend is VLMBackend.LMDEPLOY
+        assert base_url == "http://custom:23333/v1"
+        assert model == "custom/lmdeploy"
+        assert api_key == "token"
+        assert timeout == 300
+        assert options is None
+
+    def test_resolve_defaults(self):
+        cfg = {}
+
+        (
+            backend,
+            base_url,
+            model,
+            timeout,
+            api_key,
+            options,
+        ) = cli_main._resolve_vlm_runtime_settings(cfg)
+
+        assert backend is VLMBackend.LMDEPLOY
+        assert base_url == "http://localhost:24001/v1"
+        assert model == "Qwen2.5-VL-7B-AWQ"
+        assert timeout == cli_main.DEFAULT_VLM_SETTINGS[VLMBackend.LMDEPLOY]["timeout"]
+        assert api_key == "EMPTY"
+        assert options is None

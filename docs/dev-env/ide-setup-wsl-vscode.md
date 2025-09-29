@@ -46,10 +46,14 @@ Set the Hugging Face caches so every project reuses downloaded models:
 echo 'export HF_HOME=$HOME/ai-models/huggingface' >> ~/.bashrc
 echo 'export TRANSFORMERS_CACHE=$HF_HOME/hub' >> ~/.bashrc
 echo 'export HUGGINGFACE_HUB_CACHE=$HF_HOME' >> ~/.bashrc
+echo 'export IMAGEWORKS_MODEL_ROOT=$HOME/ai-models/weights' >> ~/.bashrc
 source ~/.bashrc
 rm -rf ~/.cache/huggingface
 ln -s "$HF_HOME" ~/.cache/huggingface
 ```
+A dedicated `IMAGEWORKS_MODEL_ROOT` keeps large weight folders (vLLM/LMDeploy
+checkpoints, GGUF files, etc.) outside individual repositories while giving
+scripts a consistent lookup path.
 A symlink keeps straggler tools (that ignore environment variables) writing into the shared cache.
 
 ## 3. Python Toolchain: uv

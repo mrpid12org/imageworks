@@ -25,6 +25,7 @@ Mono and Color Narrator are production-ready and share significant infrastructur
 
 ## `scripts/`
 - `start_vllm_server.py` – convenience launcher for a local vLLM server.
+- `start_lmdeploy_server.py` – launches LMDeploy with tQwen2.5-VL-7B and eager mode defaults.
 - Additional helper scripts for development and deployment workflows.
 
 ## `docs/`
@@ -47,7 +48,7 @@ Top-level package: `imageworks`
     - `cli/main.py` – Typer CLI for narrating or validating colour findings.
     - `api/` – Reserved for future FastAPI endpoints (currently a stub).
     - `core/` – orchestration modules:
-      - `vlm.py` – client for the Qwen2-VL-2B inference server.
+      - `vlm.py` – backend-agnostic client (default LMDeploy + Qwen2.5-VL-7B-AWQ).
       - `data_loader.py` – coordinates JPEG, overlay, and JSONL inputs.
       - `narrator.py` – main processing pipeline and error handling.
       - `metadata.py` – XMP metadata management helpers.

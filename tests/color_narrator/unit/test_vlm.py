@@ -10,6 +10,7 @@ from pathlib import Path
 import base64
 
 from imageworks.apps.color_narrator.core.vlm import (
+    VLMBackend,
     VLMClient,
     VLMRequest,
     VLMResponse,
@@ -27,6 +28,7 @@ class TestVLMClient:
         assert client.model_name == "Qwen2-VL-2B-Instruct"
         assert client.api_key == "EMPTY"
         assert client.timeout == 120
+        assert client.backend == VLMBackend.VLLM
 
     def test_client_custom_config(self):
         """Test VLM client initializes with custom configuration."""
@@ -35,12 +37,22 @@ class TestVLMClient:
             model_name="custom/model",
             api_key="test-key",
             timeout=60,
+            backend="lmdeploy",
         )
 
         assert client.base_url == "http://custom:9000/v1"
         assert client.model_name == "custom/model"
         assert client.api_key == "test-key"
         assert client.timeout == 60
+        assert client.backend == VLMBackend.LMDEPLOY
+
+    def test_client_triton_backend_health(self):
+        """TensorRT/Triton stub backend reports helpful health error."""
+        client = VLMClient(backend=VLMBackend.TRITON)
+
+        assert client.health_check() is False
+        assert client.last_error is not None
+        assert "TensorRT-LLM backend" in client.last_error
 
     @patch("builtins.open", create=True)
     def test_encode_image_success(self, mock_open):
@@ -146,6 +158,23 @@ class TestVLMClient:
         assert "API error 500" in result.error
         assert result.description == ""
         assert result.confidence == 0.0
+
+    @patch.object(VLMClient, "encode_image", return_value="stub")
+    def test_triton_backend_infer_single(self, mock_encode):
+        """Triton stub backend should surface informative error."""
+        client = VLMClient(backend=VLMBackend.TRITON)
+        request = VLMRequest(
+            image_path=Path("/fake/image.jpg"),
+            overlay_path=Path("/fake/overlay.png"),
+            mono_data={},
+            prompt_template="Test",
+        )
+
+        response = client.infer_single(request)
+
+        assert response.error is not None
+        assert "TensorRT-LLM backend" in response.error
+        assert response.description == ""
 
     @patch.object(VLMClient, "encode_image", side_effect=Exception("Encoding failed"))
     def test_infer_single_exception(self, mock_encode):

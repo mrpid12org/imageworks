@@ -1,23 +1,67 @@
 #!/usr/bin/env python3
-"""Helper script to launch a vLLM OpenAI-compatible server."""
+"""Helper to launch a vLLM OpenAI-compatible server.
+
+Provides convenience defaults for the Qwen2-VL-2B model and resolves weights
+from ``$IMAGEWORKS_MODEL_ROOT`` when present, while still allowing explicit
+paths or Hugging Face repo identifiers.
+"""
 
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import List
 
+DEFAULT_MODEL_SUBDIR = "Qwen2-VL-2B-Instruct"
+DEFAULT_SERVED_MODEL_NAME = "Qwen2-VL-2B-Instruct"
+
+
+def _candidate_model_root() -> Path:
+    return Path(
+        os.environ.get("IMAGEWORKS_MODEL_ROOT", Path.home() / "ai-models" / "weights")
+    )
+
+
+def resolve_model_argument(raw_model: str | None) -> str:
+    """Resolve the model argument to a path when possible.
+
+    - If *raw_model* is provided and refers to an existing file system path, the
+      expanded path is returned.
+    - If *raw_model* is empty, fall back to ``$IMAGEWORKS_MODEL_ROOT`` (or the
+      default weights directory) joined with ``DEFAULT_MODEL_SUBDIR`` when that
+      path exists.
+    - Otherwise, return the original string so Hugging Face repos remain valid.
+    """
+
+    if raw_model:
+        expanded = Path(raw_model).expanduser()
+        if expanded.exists():
+            return str(expanded)
+        return raw_model
+
+    candidate = _candidate_model_root() / DEFAULT_MODEL_SUBDIR
+    if candidate.exists():
+        return str(candidate)
+
+    # Default to relative path used in documentation for local runs
+    return str(Path("./models") / DEFAULT_MODEL_SUBDIR)
+
 
 def build_command(args: argparse.Namespace) -> List[str]:
+    """Construct the vLLM server command."""
+
+    model_arg = resolve_model_argument(args.model)
+
     command = [
         "python",
         "-m",
         "vllm.entrypoints.openai.api_server",
         "--model",
-        str(Path(args.model).expanduser()),
+        model_arg,
         "--host",
         args.host,
         "--port",
@@ -61,12 +105,15 @@ def start_server() -> None:
     )
     parser.add_argument(
         "--model",
-        default="./models/Qwen2-VL-2B-Instruct",
-        help="Path or repo ID for the model",
+        default=None,
+        help=(
+            "Path or repo ID for the model. Defaults to $IMAGEWORKS_MODEL_ROOT/"
+            f"{DEFAULT_MODEL_SUBDIR} when available."
+        ),
     )
     parser.add_argument(
         "--served-model-name",
-        default="vllm-model",
+        default=DEFAULT_SERVED_MODEL_NAME,
         help="Model name exposed through the OpenAI API",
     )
     parser.add_argument("--host", default="0.0.0.0", help="Host interface")

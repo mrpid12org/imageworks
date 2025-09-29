@@ -23,11 +23,11 @@ This guide captures the practical steps and lessons from hosting Qwen2 vision-la
 
 | Model | VRAM Footprint (16 GB GPU) | Status |
 |-------|----------------------------|--------|
-| `Qwen2-VL-2B-Instruct` | ~11 GB total (weights + activations + CUDA graphs) | ✅ Recommended default |
+| `Qwen2-VL-2B-Instruct` | ~11 GB total (weights + activations + CUDA graphs) | ✅ Recommended fallback |
 | `Qwen2-VL-7B-Instruct` | >20 GB | ❌ Out-of-memory on 16 GB GPUs |
 | Quantised GGUF variants | N/A | ❌ Unsupported for vision models in vLLM `0.10.x` |
 
-**Recommendation:** Ship with `Qwen2-VL-2B-Instruct` unless you have ≥48 GB VRAM. Match the value in `pyproject.toml` (`vlm_model`) to the deployed server.
+**Recommendation:** Use `Qwen2-VL-2B-Instruct` when you need a lightweight vLLM backend; otherwise serve the default LMDeploy AWQ model.
 
 ## Server Setup
 
@@ -38,6 +38,10 @@ uv run python -c "import vllm, torch; print(vllm.__version__)"
 ```
 
 ### 2. Download Model Weights
+Ensure your shared weights directory is defined (the dev env guide exports
+`IMAGEWORKS_MODEL_ROOT=$HOME/ai-models/weights`). The commands below assume that
+variable is available in your shell.
+
 ```bash
 uv run python -m vllm.entrypoints.openai.pull \
   --model Qwen2-VL-2B-Instruct
@@ -45,7 +49,7 @@ uv run python -m vllm.entrypoints.openai.pull \
 
 ### 3. Launch the Server
 ```bash
-nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
+nohup uv run vllm serve "$IMAGEWORKS_MODEL_ROOT/Qwen2-VL-2B-Instruct" \
   --served-model-name Qwen2-VL-2B-Instruct \
   --host 0.0.0.0 --port 8000 \
   --trust-remote-code \
