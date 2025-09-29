@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from imageworks.apps.color_narrator.core.vlm import (  # type: ignore
-    BACKEND_REGISTRY,
+from imageworks.libs.vlm import (
     VLMBackend,
     VLMBackendError,
+    create_backend_client,
 )
 
 from .config import PersonalTaggerConfig
@@ -44,12 +44,9 @@ class OpenAIChatClient:
         timeout: int,
     ) -> None:
         enum_backend = self._resolve_backend(backend)
-        backend_cls = BACKEND_REGISTRY.get(enum_backend)
-        if backend_cls is None:
-            raise ValueError(f"Unsupported backend: {backend}")
-
         self.model_name = model_name
-        self._client = backend_cls(
+        self._client = create_backend_client(
+            enum_backend,
             base_url=base_url,
             model_name=model_name,
             api_key=api_key,

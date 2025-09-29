@@ -43,10 +43,6 @@ class DataLoaderConfig:
             self.overlay_extensions = [
                 ".png",
                 ".PNG",
-                ".jpg",
-                ".JPG",
-                ".jpeg",
-                ".JPEG",
             ]
         if self.allowed_verdicts is not None:
             self.allowed_verdicts = {v.lower() for v in self.allowed_verdicts}
@@ -214,6 +210,10 @@ class ColorNarratorDataLoader:
             return overlay_path
 
         overlay_path = _find_with_suffix("_lab_residual")
+        if overlay_path:
+            return overlay_path
+
+        overlay_path = _find_with_suffix("_residual")
         if overlay_path:
             return overlay_path
 

@@ -254,11 +254,12 @@ class TestColorNarratorCLI:
         assert "Color Narrator — generating competition metadata" in result.output
 
     def test_validate_command_no_arguments(self, cli_runner):
-        """Test validate command with no arguments (expects failure without valid defaults)."""
+        """Validate should succeed gracefully when defaults are missing."""
         result = cli_runner.invoke(app, ["validate"])
 
-        assert result.exit_code == 1  # Expected to fail without valid paths
+        assert result.exit_code == 0
         assert "🔍 Color-Narrator - Validate command" in result.output
+        assert "✅ Validation complete" in result.output
 
     def test_narrate_command_short_flags(self, temp_dirs, invoke_narrate):
         """Test narrate command with short flag variants."""

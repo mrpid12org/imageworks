@@ -1,15 +1,20 @@
-"""VLM (Vision-Language Model) inference module.
+"""VLM (Vision-Language Model) inference module with pluggable backends."""
 
-Handles vLLM server communication for the default Qwen2-VL-2B model using an
-OpenAI-compatible API. Provides batch processing capabilities and structured
-output parsing for color narration.
-"""
+from __future__ import annotations
 
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import base64
-import requests
+import logging
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from imageworks.libs.vlm import (
+    VLMBackend,
+    VLMBackendError,
+    create_backend_client,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,39 +39,41 @@ class VLMRequest:
 
 
 class VLMClient:
-    """Client for vLLM server with OpenAI-compatible API."""
+    """Client for OpenAI-compatible VLM backends used by color narrator."""
 
     def __init__(
         self,
+        *,
         base_url: str = "http://localhost:8000/v1",
         model_name: str = "Qwen2-VL-2B-Instruct",
         api_key: str = "EMPTY",
         timeout: int = 120,
-    ):
-        """Initialize VLM client.
-
-        Args:
-            base_url: vLLM server base URL
-            model_name: Model identifier for API requests
-            api_key: API key (EMPTY for local vLLM)
-            timeout: Request timeout in seconds
-        """
+        backend: VLMBackend = VLMBackend.VLLM,
+        backend_options: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model_name = model_name
         self.api_key = api_key
         self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update(
-            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        self.backend = backend
+        self.backend_options = backend_options or {}
+        self._backend_client = create_backend_client(
+            backend,
+            base_url=self.base_url,
+            model_name=self.model_name,
+            api_key=self.api_key,
+            timeout=self.timeout,
+            backend_options=self.backend_options,
         )
+        self.last_error: Optional[str] = None
 
     def encode_image(self, image_path: Path) -> str:
         """Encode image to base64 for API transmission."""
         try:
             with open(image_path, "rb") as img_file:
                 return base64.b64encode(img_file.read()).decode("utf-8")
-        except Exception as e:
-            raise RuntimeError(f"Failed to encode image {image_path}: {e}")
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Failed to encode image {image_path}: {exc}") from exc
 
     def create_color_narration_prompt(
         self, mono_data: Dict[str, Any], template: Optional[str] = None
@@ -92,23 +99,23 @@ Provide a concise, professional description suitable for metadata."""
                 chroma_analysis=mono_data.get("chroma_analysis", "Not available"),
                 contamination_level=mono_data.get("contamination_level", "Unknown"),
             )
-        else:
-            # Custom template - use all available data
-            return template.format(**mono_data)
+        return template.format(**mono_data)
+
+    def health_check(self) -> bool:
+        """Check if the configured backend is reachable."""
+        healthy = self._backend_client.health_check()
+        self.last_error = self._backend_client.last_error
+        return healthy
 
     def infer_single(self, request: VLMRequest) -> VLMResponse:
         """Perform single image color narration inference."""
         try:
-            # Encode images
             base_image = self.encode_image(request.image_path)
             overlay_image = self.encode_image(request.overlay_path)
-
-            # Create prompt
             prompt = self.create_color_narration_prompt(
                 request.mono_data, request.prompt_template
             )
 
-            # Build API request
             payload = {
                 "model": self.model_name,
                 "messages": [
@@ -136,24 +143,35 @@ Provide a concise, professional description suitable for metadata."""
                 "stream": False,
             }
 
-            # Make API call
-            response = self.session.post(
-                f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout
-            )
-
-            if response.status_code != 200:
+            try:
+                response = self._backend_client.chat_completions(payload)
+            except VLMBackendError as exc:
+                error_message = f"{self.backend.value} backend error: {exc}"
+                self.last_error = error_message
                 return VLMResponse(
                     description="",
                     confidence=0.0,
                     color_regions=[],
                     processing_time=0.0,
-                    error=f"API error {response.status_code}: {response.text}",
+                    error=error_message,
+                )
+
+            if response.status_code != 200:
+                error_message = (
+                    f"API error {response.status_code}: {response.text[:200]}"
+                )
+                self.last_error = error_message
+                return VLMResponse(
+                    description="",
+                    confidence=0.0,
+                    color_regions=[],
+                    processing_time=0.0,
+                    error=error_message,
                 )
 
             result = response.json()
             description = result["choices"][0]["message"]["content"].strip()
 
-            # Parse structured output (basic implementation)
             color_regions = self._extract_color_regions(description)
             confidence = self._estimate_confidence(description)
 
@@ -165,33 +183,81 @@ Provide a concise, professional description suitable for metadata."""
                 error=None,
             )
 
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
+            error_message = f"Inference error: {exc}"
+            self.last_error = error_message
+            logger.debug("VLM inference failure: %s", exc, exc_info=True)
             return VLMResponse(
                 description="",
                 confidence=0.0,
                 color_regions=[],
                 processing_time=0.0,
-                error=f"Inference error: {str(e)}",
+                error=error_message,
             )
 
     def infer_batch(self, requests: List[VLMRequest]) -> List[VLMResponse]:
         """Process multiple images in batch."""
-        responses = []
+        responses: List[VLMResponse] = []
         for request in requests:
-            response = self.infer_single(request)
-            responses.append(response)
+            responses.append(self.infer_single(request))
 
-            # Add small delay between requests to avoid overwhelming server
             import time
 
             time.sleep(0.1)
 
         return responses
 
+    def infer_openai_compatible(self, request: Dict[str, Any]):
+        """Direct OpenAI-compatible API call for region-based analysis."""
+        try:
+            payload = dict(request)
+            payload["model"] = self.model_name
+            payload.setdefault("max_tokens", 600)
+            payload.setdefault("temperature", 0.1)
+            payload.setdefault("stream", False)
+
+            try:
+                response = self._backend_client.chat_completions(payload)
+            except VLMBackendError as exc:
+                error_message = f"{self.backend.value} backend error: {exc}"
+                self.last_error = error_message
+
+                class ErrorResponse:
+                    content = error_message
+
+                return ErrorResponse()
+
+            if response.status_code != 200:
+
+                class ErrorResponse:
+                    content = (
+                        f"API error {response.status_code}: " f"{response.text[:200]}"
+                    )
+
+                self.last_error = ErrorResponse.content
+                return ErrorResponse()
+
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+
+            class CompatibleResponse:
+                def __init__(self, content: str) -> None:
+                    self.content = content
+
+            return CompatibleResponse(content)
+
+        except Exception as exc:  # noqa: BLE001
+
+            class ErrorResponse:
+                content = f"Inference error: {exc}"
+
+            self.last_error = ErrorResponse.content
+            logger.debug("OpenAI-compatible inference failed: %s", exc, exc_info=True)
+            return ErrorResponse()
+
     def _extract_color_regions(self, description: str) -> List[str]:
         """Extract color region mentions from description text."""
-        # Simple keyword extraction - could be enhanced with NLP
-        regions = []
+        regions: List[str] = []
         region_keywords = [
             "background",
             "foreground",
@@ -214,63 +280,14 @@ Provide a concise, professional description suitable for metadata."""
 
     def _estimate_confidence(self, description: str) -> float:
         """Estimate confidence based on description characteristics."""
-        # Simple confidence estimation - could be enhanced
-        if "clear" in description.lower() or "obvious" in description.lower():
+        lowered = description.lower()
+        if "clear" in lowered or "obvious" in lowered:
             return 0.9
-        elif "subtle" in description.lower() or "slight" in description.lower():
+        if "subtle" in lowered or "slight" in lowered:
             return 0.7
-        elif "minimal" in description.lower() or "trace" in description.lower():
+        if "minimal" in lowered or "trace" in lowered:
             return 0.5
-        else:
-            return 0.8
+        return 0.8
 
-    def health_check(self) -> bool:
-        """Check if VLM server is healthy and responding."""
-        try:
-            response = self.session.get(f"{self.base_url}/models", timeout=10)
-            return response.status_code == 200
-        except Exception:
-            return False
 
-    def infer_openai_compatible(self, request: Dict[str, Any]):
-        """Direct OpenAI-compatible API call for region-based analysis."""
-        try:
-            # Add model name to request
-            request["model"] = self.model_name
-
-            # Set default values if not provided
-            if "max_tokens" not in request:
-                request["max_tokens"] = 600
-            if "temperature" not in request:
-                request["temperature"] = 0.1
-            if "stream" not in request:
-                request["stream"] = False
-
-            # Make API call
-            response = self.session.post(
-                f"{self.base_url}/chat/completions", json=request, timeout=self.timeout
-            )
-
-            if response.status_code != 200:
-
-                class ErrorResponse:
-                    content = f"API error {response.status_code}: {response.text}"
-
-                return ErrorResponse()
-
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-
-            # Return object with content attribute for compatibility
-            class CompatibleResponse:
-                def __init__(self, content):
-                    self.content = content
-
-            return CompatibleResponse(content)
-
-        except Exception as e:
-
-            class ErrorResponse:
-                content = f"Inference error: {str(e)}"
-
-            return ErrorResponse()
+__all__ = ["VLMBackend", "VLMClient", "VLMRequest", "VLMResponse"]
