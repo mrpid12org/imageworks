@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 
 from .data_loader import ColorNarratorDataLoader, DataLoaderConfig, ColorNarratorItem
-from .vlm import VLMClient, VLMRequest, VLMResponse
+from .vlm import VLMBackend, VLMClient, VLMRequest, VLMResponse
 from .metadata import XMPMetadataWriter, ColorNarrationMetadata
 from . import prompts
 
@@ -29,9 +29,12 @@ class NarrationConfig:
     mono_jsonl: Path
 
     # VLM settings
-    vlm_base_url: str = "http://localhost:8000/v1"
-    vlm_model: str = "Qwen2-VL-2B-Instruct"
+    vlm_base_url: str = "http://localhost:24001/v1"
+    vlm_model: str = "Qwen2.5-VL-7B-AWQ"
     vlm_timeout: int = 120
+    vlm_backend: str = VLMBackend.LMDEPLOY.value
+    vlm_api_key: str = "EMPTY"
+    vlm_backend_options: Optional[Dict[str, Any]] = None
 
     # Processing settings
     batch_size: int = 4
@@ -87,7 +90,10 @@ class ColorNarrator:
         self.vlm_client = VLMClient(
             base_url=config.vlm_base_url,
             model_name=config.vlm_model,
+            api_key=config.vlm_api_key,
             timeout=config.vlm_timeout,
+            backend=config.vlm_backend,
+            backend_options=config.vlm_backend_options,
         )
 
         # Initialize metadata writer
@@ -115,9 +121,9 @@ class ColorNarrator:
 
         # Validate VLM server availability
         if not self.vlm_client.health_check():
-            raise RuntimeError(
-                "VLM server is not available. Please start vLLM server first."
-            )
+            backend = self.config.vlm_backend
+            hint = self.vlm_client.last_error or "backend did not respond"
+            raise RuntimeError(f"VLM backend '{backend}' is not available: {hint}.")
 
         # Load and validate data
         self.data_loader.load()

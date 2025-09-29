@@ -35,16 +35,20 @@ This document consolidates all AI model usage, experiments, and lessons learned 
 
 **Purpose**: Analyze monochrome images for color contamination and generate professional descriptions.
 
-#### Production Model: Qwen2-VL-2B-Instruct
-- **Model Size**: 4.2GB weights
-- **Total VRAM Usage**: 10.88GB (RTX 4080 16GB)
-  - Weights: 4.15 GiB
-  - Peak activation: 2.65 GiB
-  - CUDA graphs: 4.06 GiB
-  - Other: 0.02 GiB
-- **Inference Speed**: Sub-1 second for color description tasks
-- **Quality**: Excellent for color contamination detection and location description
-- **Server**: vLLM with OpenAI-compatible API
+#### Production Model: Qwen2.5-VL-7B-AWQ (LMDeploy)
+- **Model Size**: ~7.3 GB quantised weights (two shards)
+- **Total VRAM Usage**: ~13 GB on an RTX 4080 (16 GB) with eager mode; comfortably fits when vision batch size is 1
+- **Inference Speed**: ~1.5–2.0 s per image (debug tests on 4080)
+- **Quality**: Noticeably richer spatial grounding and cleaner prose than the 2 B baseline while keeping VRAM within consumer limits
+- **Server**: LMDeploy TurboMind backend (`uv run lmdeploy serve api_server …`)
+- **Notes**: Default LMDeploy port 24001; weights live at `$IMAGEWORKS_MODEL_ROOT/Qwen2.5-VL-7B-Instruct-AWQ`
+
+#### Secondary Model: Qwen2-VL-2B-Instruct (vLLM)
+- **Model Size**: 4.2 GB
+- **Total VRAM Usage**: ~11 GB on RTX 4080
+- **Inference Speed**: <1 s per image
+- **Quality**: Still solid for contamination calls; kept for lightweight setups or as a regression check
+- **Server**: vLLM OpenAI API (`scripts/start_vllm_server.py`)
 
 #### Alternative Models Tested
 
@@ -54,21 +58,22 @@ This document consolidates all AI model usage, experiments, and lessons learned 
 - **Lesson**: Model size alone doesn't predict VRAM usage; vLLM overhead is ~2.6x model size
 
 **Qwen2.5-VL-7B-Instruct-Q6K-GGUF** ❌
-- **Status**: Not supported - GGUF quantization unavailable for vision models in vLLM v0.10.2
-- **Lesson**: Quantization support varies by model architecture and inference engine
+- **Status**: Not supported - GGUF quantisation targets llama.cpp/Ollama, not LMDeploy/vLLM
+- **Lesson**: Stick to AWQ/GPTQ packages (or run GGUF via a separate runtime)
 
 #### API Integration
 ```python
 # VLM Client Configuration
 VLMClient(
-    base_url="http://localhost:8000/v1",
-    model_name="Qwen2-VL-2B-Instruct",
-    timeout=120
+    base_url="http://localhost:24001/v1",
+    model_name="Qwen2.5-VL-7B-AWQ",
+    backend="lmdeploy",
+    timeout=180,
 )
 
 # Request Structure (OpenAI-compatible)
 {
-    "model": "Qwen2-VL-2B-Instruct",
+    "model": "Qwen2.5-VL-7B-AWQ",
     "messages": [
         {
             "role": "user",
@@ -107,7 +112,8 @@ VLMClient(
 
 | Model | VRAM Required | Status | Quality Score | Speed | Use Case |
 |-------|---------------|---------|---------------|-------|----------|
-| Qwen2-VL-2B-Instruct | 10.88GB | ✅ Production | 9/10 | Fast (~1s) | Color contamination analysis |
+| Qwen2.5-VL-7B-AWQ (LMDeploy) | ≈13.5GB | ✅ Production | 9.5/10 (subjective) | Moderate (~1.5–2s) | Default narrator backend |
+| Qwen2-VL-2B-Instruct | 10.88GB | ✅ Alternate | 9/10 | Fast (~1s) | Lightweight environments / regression checks |
 | Qwen2-VL-7B-Instruct | >16GB | ❌ OOM | Unknown | Unknown | Would be better quality |
 | Qwen2.5-VL-7B-Q6K-GGUF | N/A | ❌ Unsupported | Unknown | Unknown | Quantized fallback |
 
@@ -122,14 +128,15 @@ VLMClient(
 ### Hardware Scaling Requirements
 
 #### Minimum (RTX 3060 12GB)
-- Model: Qwen2-VL-2B-Instruct only
+- Model: Qwen2-VL-2B-Instruct (fallback)
 - VRAM Usage: 10.88GB (tight fit)
 - Performance: Acceptable
 
 #### Recommended (RTX 4080 16GB) ✅
-- Model: Qwen2-VL-2B-Instruct with room for growth
-- VRAM Usage: 10.88GB / 16GB (68% utilization)
-- Performance: Excellent
+- Model: Qwen2.5-VL-7B-AWQ (LMDeploy, eager mode)
+- VRAM Usage: ~13.5GB / 16GB (≈84% utilisation)
+- Performance: 1.5–2.0s per image
+- Alternate: Swap to vLLM + Qwen2-VL-2B-Instruct if you need more headroom
 
 #### High-End (RTX 6000 Pro 48GB)
 - Models: All Qwen2-VL variants including 7B+
@@ -382,21 +389,19 @@ uv run imageworks-color-narrator analyze-regions \
 
 #### 1. Background Process Management
 ```bash
-# Persistent server with logging
-nohup uv run vllm serve ./models/Qwen2-VL-2B-Instruct \
-  --served-model-name Qwen2-VL-2B-Instruct \
-  --host 0.0.0.0 --port 8000 \
-  --trust-remote-code \
-  --gpu-memory-utilization 0.8 \
-  > vllm_server.log 2>&1 &
+# vLLM helper (fallback Qwen2-VL-2B)
+uv run python scripts/start_vllm_server.py
+
+# LMDeploy helper (tQwen2.5-VL-7B eager mode)
+uv run python scripts/start_lmdeploy_server.py --eager
 ```
 
 #### 2. Health Monitoring
 ```python
 # Automated health checks
-def check_vllm_health():
+def check_backend_health(base_url="http://localhost:8000/v1"):
     try:
-        response = requests.get("http://localhost:8000/v1/models", timeout=10)
+        response = requests.get(f"{base_url}/models", timeout=10)
         return response.status_code == 200
     except Exception:
         return False

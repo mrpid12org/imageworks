@@ -20,7 +20,7 @@ from imageworks.apps.color_narrator.core.narrator import (
 from imageworks.apps.color_narrator.core.data_loader import (
     ColorNarratorItem,
 )
-from imageworks.apps.color_narrator.core.vlm import VLMResponse
+from imageworks.apps.color_narrator.core.vlm import VLMBackend, VLMResponse
 from imageworks.apps.color_narrator.core.metadata import (
     ColorNarrationMetadata,
 )
@@ -37,9 +37,12 @@ class TestNarrationConfig:
             mono_jsonl=Path("/test/mono.jsonl"),
         )
 
-        assert config.vlm_base_url == "http://localhost:8000/v1"
-        assert config.vlm_model == "Qwen2-VL-2B-Instruct"
+        assert config.vlm_base_url == "http://localhost:24001/v1"
+        assert config.vlm_model == "Qwen2.5-VL-7B-AWQ"
         assert config.vlm_timeout == 120
+        assert config.vlm_backend == VLMBackend.LMDEPLOY.value
+        assert config.vlm_api_key == "EMPTY"
+        assert config.vlm_backend_options is None
         assert config.batch_size == 4
         assert config.min_contamination_level == 0.1
         assert config.require_overlays is True
@@ -58,6 +61,9 @@ class TestNarrationConfig:
             mono_jsonl=Path("/custom/mono.jsonl"),
             vlm_base_url="http://custom:9000/v1",
             vlm_model="custom/model",
+            vlm_backend="lmdeploy",
+            vlm_api_key="secret",
+            vlm_backend_options={"tp": 2},
             batch_size=8,
             dry_run=True,
             debug=True,
@@ -68,6 +74,9 @@ class TestNarrationConfig:
 
         assert config.vlm_base_url == "http://custom:9000/v1"
         assert config.vlm_model == "custom/model"
+        assert config.vlm_backend == "lmdeploy"
+        assert config.vlm_api_key == "secret"
+        assert config.vlm_backend_options == {"tp": 2}
         assert config.batch_size == 8
         assert config.dry_run is True
         assert config.debug is True
@@ -223,7 +232,7 @@ class TestColorNarrator:
 
         narrator = ColorNarrator(sample_config)
 
-        with pytest.raises(RuntimeError, match="VLM server is not available"):
+        with pytest.raises(RuntimeError, match="VLM backend"):
             narrator.process_all()
 
     def test_get_prompt_template(self, sample_config):

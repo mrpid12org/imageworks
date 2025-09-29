@@ -9,6 +9,7 @@ import re
 import typer
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+from urllib.parse import urlparse
 import tomllib  # Built-in since Python 3.11
 import logging
 import json
@@ -25,13 +26,54 @@ from ..core.narrator import ColorNarrator, NarrationConfig, ProcessingResult
 from ..core.region_based_vlm import (
     RegionBasedVLMAnalyzer,
 )
-from ..core.vlm import VLMClient
+from ..core.vlm import VLMBackend, VLMClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(help="Color-Narrator - VLM-guided color localization")
+
+
+DEFAULT_VLM_SETTINGS: Dict[VLMBackend, Dict[str, Any]] = {
+    VLMBackend.VLLM: {
+        "base_url": "http://localhost:8000/v1",
+        "model": "Qwen2-VL-2B-Instruct",
+        "api_key": "EMPTY",
+        "timeout": 120,
+    },
+    VLMBackend.LMDEPLOY: {
+        "base_url": "http://localhost:24001/v1",
+        "model": "Qwen2.5-VL-7B-AWQ",
+        "api_key": "EMPTY",
+        "timeout": 120,
+    },
+    VLMBackend.TRITON: {
+        "base_url": "http://localhost:9000/v1",
+        "model": "Qwen2-VL-2B-Instruct",
+        "api_key": "EMPTY",
+        "timeout": 120,
+    },
+}
+
+
+def _to_bool(value: Any, default: bool) -> bool:
+    """Coerce a configuration value into a boolean."""
+
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    try:
+        return bool(int(value))
+    except Exception:
+        return bool(value)
 
 
 def _find_pyproject(start_path: Path) -> Optional[Path]:
@@ -89,7 +131,110 @@ def load_config(start_path: Optional[Path] = None) -> Dict[str, Any]:
     return merged
 
 
-def _start_vllm_server() -> subprocess.Popen:
+def _backend_connection_info(base_url: str) -> Dict[str, Any]:
+    """Parse base URL and derive connection metadata."""
+
+    trimmed = base_url.rstrip("/")
+    parsed = urlparse(trimmed if "://" in trimmed else f"http://{trimmed}")
+
+    scheme = parsed.scheme or "http"
+    host = parsed.hostname or "localhost"
+    port = parsed.port or (443 if scheme == "https" else 80)
+
+    api_base = trimmed
+    if not parsed.path or parsed.path == "/":
+        api_base = f"{scheme}://{host}"
+        if port not in (80, 443):
+            api_base = f"{api_base}:{port}"
+        api_base = f"{api_base}/v1"
+
+    api_root = api_base
+    if api_root.endswith("/v1"):
+        api_root = api_root[: -len("/v1")]
+
+    return {
+        "scheme": scheme,
+        "host": host,
+        "port": port,
+        "api_root": api_root,
+        "api_base": api_base,
+    }
+
+
+def _resolve_vlm_runtime_settings(
+    cfg: Dict[str, Any],
+    *,
+    backend: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout: Optional[int] = None,
+    api_key: Optional[str] = None,
+) -> tuple[VLMBackend, str, str, int, str, Optional[Dict[str, Any]]]:
+    """Resolve runtime VLM settings from configuration and overrides."""
+
+    backend_value_raw = backend or cfg.get("vlm_backend")
+    backend_value = str(backend_value_raw or VLMBackend.LMDEPLOY.value).strip().lower()
+
+    try:
+        backend_enum = VLMBackend(backend_value)
+    except ValueError as exc:  # noqa: B904 - keep original context for caller
+        raise ValueError(f"Unknown VLM backend '{backend_value}'.") from exc
+
+    def resolve_backend_setting(suffix: str, default: Any) -> Any:
+        for key in (
+            f"vlm_{backend_enum.value}_{suffix}",
+            f"{backend_enum.value}_{suffix}",
+            f"vlm_{suffix}",
+            suffix,
+        ):
+            if key in cfg and cfg[key] not in (None, ""):
+                return cfg[key]
+        return default
+
+    defaults = DEFAULT_VLM_SETTINGS.get(backend_enum, {})
+
+    resolved_base_url = base_url or resolve_backend_setting(
+        "base_url", defaults.get("base_url", "http://localhost:8000/v1")
+    )
+    resolved_model = model or resolve_backend_setting(
+        "model", defaults.get("model", "Qwen2-VL-2B-Instruct")
+    )
+
+    raw_timeout = (
+        timeout
+        if timeout is not None
+        else resolve_backend_setting("timeout", defaults.get("timeout", 120))
+    )
+    try:
+        resolved_timeout = int(raw_timeout)
+    except (TypeError, ValueError):
+        resolved_timeout = int(defaults.get("timeout", 120))
+
+    resolved_api_key = (
+        api_key
+        if api_key is not None
+        else resolve_backend_setting("api_key", defaults.get("api_key", "EMPTY"))
+    )
+
+    backend_options = resolve_backend_setting("options", None)
+    if not isinstance(backend_options, dict):
+        backend_options = None
+
+    resolved_base_url = str(resolved_base_url).strip()
+    resolved_model = str(resolved_model).strip()
+    resolved_api_key = "" if resolved_api_key is None else str(resolved_api_key)
+
+    return (
+        backend_enum,
+        resolved_base_url,
+        resolved_model,
+        resolved_timeout,
+        resolved_api_key,
+        backend_options,
+    )
+
+
+def _start_vllm_server(port: Optional[int] = None) -> subprocess.Popen:
     """Start the vLLM server in the background.
 
     Returns:
@@ -97,14 +242,19 @@ def _start_vllm_server() -> subprocess.Popen:
     """
     try:
         # Check if start_vllm_server.py exists
-        server_script = Path("start_vllm_server.py")
+        server_script = Path("scripts/start_vllm_server.py")
+        if not server_script.exists():
+            server_script = Path("start_vllm_server.py")
         if not server_script.exists():
             raise FileNotFoundError(f"Server script not found: {server_script}")
 
         # Start server using uv run
         typer.echo("🔧 Starting vLLM server process...")
+        command = ["uv", "run", "python", str(server_script)]
+        if port is not None:
+            command.extend(["--port", str(port)])
         process = subprocess.Popen(
-            ["uv", "run", "python", "start_vllm_server.py"],
+            command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -131,8 +281,65 @@ def _start_vllm_server() -> subprocess.Popen:
         raise
 
 
+def _start_lmdeploy_server(
+    model_name: str,
+    port: Optional[int] = None,
+    host: str = "0.0.0.0",
+    eager: bool = True,
+) -> subprocess.Popen:
+    """Start the LMDeploy OpenAI-compatible server in the background."""
+
+    try:
+        server_script = Path("scripts/start_lmdeploy_server.py")
+        if not server_script.exists():
+            server_script = Path("start_lmdeploy_server.py")
+        if not server_script.exists():
+            raise FileNotFoundError(f"Server script not found: {server_script}")
+
+        typer.echo("🔧 Starting LMDeploy server process...")
+        command = [
+            "uv",
+            "run",
+            "python",
+            str(server_script),
+            "--model-name",
+            model_name,
+        ]
+        if port is not None:
+            command.extend(["--port", str(port)])
+        if host:
+            command.extend(["--host", host])
+        if eager:
+            command.append("--eager")
+
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=Path.cwd(),
+        )
+
+        time.sleep(3)
+
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            typer.echo("❌ LMDeploy server exited immediately:")
+            if stdout:
+                typer.echo(f"stdout: {stdout[:500]}")
+            if stderr:
+                typer.echo(f"stderr: {stderr[:500]}")
+            raise RuntimeError("LMDeploy server process failed to start")
+
+        typer.echo("✅ LMDeploy server process started successfully")
+        return process
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to start LMDeploy server: %s", exc)
+        raise
+
+
 def _wait_for_server(
-    base_url: str = "http://localhost:8000", timeout: int = 120
+    base_url: str = "http://localhost:8000/v1", timeout: int = 120
 ) -> bool:
     """Wait for the vLLM server to be ready.
 
@@ -143,10 +350,13 @@ def _wait_for_server(
     Returns:
         bool: True if server is ready, False if timeout
     """
+    info = _backend_connection_info(base_url)
+    api_base = info["api_base"].rstrip("/")
+
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            response = requests.get(f"{base_url}/v1/models", timeout=5)
+            response = requests.get(f"{api_base}/models", timeout=5)
             if response.status_code == 200:
                 return True
         except (requests.RequestException, Exception):
@@ -156,13 +366,26 @@ def _wait_for_server(
 
 
 def _get_vlm_client_with_autostart(
-    model_name: str = "Qwen2-VL-2B-Instruct", auto_start: bool = True
+    backend: str | VLMBackend = VLMBackend.VLLM,
+    *,
+    base_url: Optional[str] = None,
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
+    timeout: Optional[int] = None,
+    backend_options: Optional[Dict[str, Any]] = None,
+    auto_start: bool = True,
+    eager: bool = True,
 ) -> VLMClient:
     """Get VLM client with optional automatic server startup.
 
     Args:
-        model_name: Name of the model to use
+        backend: Backend identifier (string or enum)
+        base_url: API base URL for the backend
+        model_name: Model identifier
+        api_key: API key for authenticated backends
+        timeout: Request timeout in seconds
         auto_start: Whether to auto-start server if not running
+        eager: Use eager mode when starting LMDeploy server (disables CUDA graphs)
 
     Returns:
         VLMClient: Connected VLM client
@@ -171,10 +394,27 @@ def _get_vlm_client_with_autostart(
         typer.Exit: If client initialization fails
     """
     try:
+        backend_enum = (
+            backend if isinstance(backend, VLMBackend) else VLMBackend(backend)
+        )
+        defaults = DEFAULT_VLM_SETTINGS.get(backend_enum, {})
+
+        resolved_base_url = (
+            base_url or defaults.get("base_url", "http://localhost:8000/v1")
+        ).rstrip("/")
+        resolved_model = model_name or defaults.get("model", "Qwen2-VL-2B-Instruct")
+        resolved_api_key = api_key or defaults.get("api_key", "EMPTY")
+        resolved_timeout = timeout or defaults.get("timeout", 120)
+
+        connection = _backend_connection_info(resolved_base_url)
+
         vlm_client = VLMClient(
-            base_url="http://localhost:8000/v1",
-            model_name=model_name,
-            timeout=120,
+            base_url=connection["api_base"],
+            model_name=resolved_model,
+            api_key=resolved_api_key,
+            timeout=resolved_timeout,
+            backend=backend_enum,
+            backend_options=backend_options,
         )
 
         # Test VLM connection and auto-start if needed
@@ -184,20 +424,40 @@ def _get_vlm_client_with_autostart(
                 typer.echo("💡 This may take 30-60 seconds for model loading")
 
                 try:
-                    # Start the server
-                    server_process = _start_vllm_server()
+                    server_process: Optional[subprocess.Popen[Any]] = None
+                    if backend_enum == VLMBackend.VLLM:
+                        server_process = _start_vllm_server(connection["port"])
+                    elif backend_enum == VLMBackend.LMDEPLOY:
+                        server_process = _start_lmdeploy_server(
+                            model_name=resolved_model,
+                            port=connection["port"],
+                            host=connection["host"],
+                            eager=eager,
+                        )
+                    else:
+                        typer.echo(
+                            "❌ Automatic startup not supported for this backend."
+                        )
+                        raise typer.Exit(1)
 
                     # Wait for server to be ready
                     typer.echo("⏳ Waiting for server to be ready...")
-                    if _wait_for_server("http://localhost:8000", timeout=120):
+                    api_base = connection["api_base"]
+                    if _wait_for_server(api_base, timeout=resolved_timeout):
                         typer.echo("✅ VLM server started successfully")
                     else:
                         typer.echo("❌ Server failed to start within 120 seconds")
-                        typer.echo(
-                            "💡 Try starting manually: uv run python start_vllm_server.py"
-                        )
+                        if backend_enum == VLMBackend.VLLM:
+                            typer.echo(
+                                "💡 Try starting manually: uv run python scripts/start_vllm_server.py"
+                            )
+                        elif backend_enum == VLMBackend.LMDEPLOY:
+                            typer.echo(
+                                "💡 Try starting manually: uv run python scripts/start_lmdeploy_server.py"
+                            )
                         typer.echo("💡 Or use --no-auto-start to disable auto-start")
-                        server_process.terminate()
+                        if server_process is not None:
+                            server_process.terminate()
                         raise typer.Exit(1)
 
                     # Test connection again
@@ -207,18 +467,32 @@ def _get_vlm_client_with_autostart(
 
                 except Exception as e:
                     typer.echo(f"❌ Failed to auto-start server: {e}")
-                    typer.echo(
-                        "💡 Try starting manually: uv run python start_vllm_server.py"
-                    )
+                    if backend_enum == VLMBackend.VLLM:
+                        typer.echo(
+                            "💡 Try starting manually: uv run python scripts/start_vllm_server.py"
+                        )
+                    elif backend_enum == VLMBackend.LMDEPLOY:
+                        typer.echo(
+                            "💡 Try starting manually: uv run python scripts/start_lmdeploy_server.py"
+                        )
                     typer.echo("💡 Or use --no-auto-start to disable auto-start")
                     raise typer.Exit(1)
             else:
-                typer.echo("❌ VLM server not available at http://localhost:8000")
-                typer.echo("💡 Start server with: uv run python start_vllm_server.py")
+                typer.echo(f"❌ VLM server not available at {connection['api_base']}")
+                if backend_enum == VLMBackend.VLLM:
+                    typer.echo(
+                        "💡 Start server with: uv run python scripts/start_vllm_server.py"
+                    )
+                elif backend_enum == VLMBackend.LMDEPLOY:
+                    typer.echo(
+                        "💡 Start server with: uv run python scripts/start_lmdeploy_server.py"
+                    )
                 typer.echo("💡 Or use --auto-start to enable automatic startup")
                 raise typer.Exit(1)
 
-        typer.echo(f"🤖 VLM: Connected to {vlm_client.model_name}")
+        typer.echo(
+            f"🤖 VLM: Connected to {backend_enum.value} / {vlm_client.model_name}"
+        )
         return vlm_client
 
     except Exception as e:
@@ -502,9 +776,9 @@ def narrate(
         help="Skip writing metadata (formerly --dry-run)",
     ),
     debug: bool = typer.Option(
-        True,
+        False,
         "--debug/--no-debug",
-        help="Use sample assets by default; disable to use explicit paths",
+        help="Use bundled sample assets when enabled (otherwise rely on configured paths)",
     ),
     summary: Optional[Path] = typer.Option(
         None,
@@ -536,6 +810,31 @@ def narrate(
         "--require-overlays/--allow-missing-overlays",
         help="Override overlay requirement (default comes from configuration)",
     ),
+    vlm_backend_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-backend",
+        help="Override VLM backend (vllm, lmdeploy, triton)",
+    ),
+    vlm_base_url_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-base-url",
+        help="Override VLM base URL (defaults depend on backend)",
+    ),
+    vlm_model_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-model",
+        help="Override VLM model identifier",
+    ),
+    vlm_timeout_opt: Optional[int] = typer.Option(
+        None,
+        "--vlm-timeout",
+        help="Override VLM request timeout (seconds)",
+    ),
+    vlm_api_key_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-api-key",
+        help="Override VLM API key",
+    ),
 ) -> None:
     """Generate colour narration metadata for competition JPEGs.
 
@@ -553,18 +852,6 @@ def narrate(
         raise typer.Exit(0)
 
     cfg = load_config()
-
-    def to_bool(value: Any, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
-        if value is None:
-            return default
-        if isinstance(value, str):
-            return value.strip().lower() in {"1", "true", "yes", "on"}
-        try:
-            return bool(int(value))
-        except Exception:
-            return bool(value)
 
     try:
         default_prompt_id = int(cfg.get("default_prompt_id", prompts.CURRENT_PROMPT_ID))
@@ -675,12 +962,31 @@ def narrate(
     if require_overlays_flag is not None:
         require_overlays = require_overlays_flag
     else:
-        require_overlays = to_bool(cfg.get("require_overlays", True), True)
-    overwrite_existing = to_bool(cfg.get("overwrite_existing_metadata", False), False)
-    backup_originals = to_bool(cfg.get("backup_original_files", True), True)
-    vlm_base_url = cfg.get("vlm_base_url", "http://localhost:8000/v1")
-    vlm_model = cfg.get("vlm_model", "Qwen2-VL-2B-Instruct")
-    vlm_timeout = int(cfg.get("vlm_timeout", 120))
+        require_overlays = _to_bool(cfg.get("require_overlays", True), True)
+    overwrite_existing = _to_bool(cfg.get("overwrite_existing_metadata", False), False)
+    backup_originals = _to_bool(cfg.get("backup_original_files", True), True)
+
+    try:
+        (
+            backend_enum,
+            vlm_base_url,
+            vlm_model,
+            vlm_timeout,
+            vlm_api_key,
+            backend_options,
+        ) = _resolve_vlm_runtime_settings(
+            cfg,
+            backend=vlm_backend_opt,
+            base_url=vlm_base_url_opt,
+            model=vlm_model_opt,
+            timeout=vlm_timeout_opt,
+            api_key=vlm_api_key_opt,
+        )
+    except ValueError as exc:
+        typer.echo(f"❌ {exc}")
+        valid_backends = ", ".join(b.value for b in VLMBackend)
+        typer.echo(f"   Available options: {valid_backends}")
+        raise typer.Exit(1)
 
     typer.echo("🎨 Color Narrator — generating competition metadata")
     if no_meta:
@@ -691,7 +997,7 @@ def narrate(
     typer.echo(f"📄 Mono data: {mono_jsonl_path}")
     typer.echo(f"🧮 Batch size: {batch}")
     typer.echo(f"🎯 Contamination threshold: {min_contamination}")
-    typer.echo(f"🤖 VLM: {vlm_model} at {vlm_base_url}")
+    typer.echo(f"🤖 VLM: {backend_enum.value} / {vlm_model} at {vlm_base_url}")
     typer.echo(f"🗒️ Prompt {prompt_definition.id}: {prompt_definition.name}")
     if use_regions_flag:
         typer.echo("📐 Region guidance enabled")
@@ -704,6 +1010,9 @@ def narrate(
         vlm_base_url=vlm_base_url,
         vlm_model=vlm_model,
         vlm_timeout=vlm_timeout,
+        vlm_backend=backend_enum.value,
+        vlm_api_key=str(vlm_api_key),
+        vlm_backend_options=backend_options,
         batch_size=batch,
         min_contamination_level=min_contamination,
         require_overlays=require_overlays,
@@ -1072,14 +1381,32 @@ def validate(
     images_path = images_dir or Path(config.get("default_images_dir", ""))
     mono_jsonl_path = mono_jsonl or Path(config.get("default_mono_jsonl", ""))
 
-    # Basic validation
+    # Basic validation with graceful fallback when defaults are absent
+    if not images_path or not str(images_path):
+        typer.echo("⚠️ Images directory not configured; skipping validation.")
+        typer.echo("✅ Validation complete")
+        return
+
     if not images_path.exists():
-        typer.echo(f"❌ Images directory not found: {images_path}")
-        raise typer.Exit(1)
+        if images_dir is not None:
+            typer.echo(f"❌ Images directory not found: {images_path}")
+            raise typer.Exit(1)
+        typer.echo(f"⚠️ Images directory not found: {images_path}")
+        typer.echo("✅ Validation complete")
+        return
+
+    if not mono_jsonl_path or not str(mono_jsonl_path):
+        typer.echo("⚠️ Mono-checker JSONL path not configured; skipping validation.")
+        typer.echo("✅ Validation complete")
+        return
 
     if not mono_jsonl_path.exists():
-        typer.echo(f"❌ Mono-checker JSONL file not found: {mono_jsonl_path}")
-        raise typer.Exit(1)
+        if mono_jsonl is not None:
+            typer.echo(f"❌ Mono-checker JSONL file not found: {mono_jsonl_path}")
+            raise typer.Exit(1)
+        typer.echo(f"⚠️ Mono-checker JSONL file not found: {mono_jsonl_path}")
+        typer.echo("✅ Validation complete")
+        return
 
     typer.echo(f"📁 Images: {images_path}")
     typer.echo(f"📄 Mono data: {mono_jsonl_path}")
@@ -1355,6 +1682,36 @@ def analyze_regions(
         help="Use demo mono-checker data (for testing without real mono analysis)",
     ),
     debug: bool = typer.Option(False, "--debug", help="Enable debug output"),
+    vlm_backend_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-backend",
+        help="Override VLM backend (vllm, lmdeploy, triton)",
+    ),
+    vlm_base_url_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-base-url",
+        help="Override VLM base URL",
+    ),
+    vlm_model_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-model",
+        help="Override VLM model identifier",
+    ),
+    vlm_timeout_opt: Optional[int] = typer.Option(
+        None,
+        "--vlm-timeout",
+        help="Override VLM request timeout (seconds)",
+    ),
+    vlm_api_key_opt: Optional[str] = typer.Option(
+        None,
+        "--vlm-api-key",
+        help="Override VLM API key",
+    ),
+    vlm_eager_opt: Optional[bool] = typer.Option(
+        None,
+        "--vlm-eager/--vlm-no-eager",
+        help="Force eager mode when auto-starting LMDeploy (defaults to config)",
+    ),
 ) -> None:
     """[DEPRECATED] Analyze color regions using hallucination-resistant VLM prompts.
 
@@ -1379,6 +1736,35 @@ def analyze_regions(
     )
     typer.echo()
 
+    cfg = load_config()
+
+    try:
+        (
+            backend_enum,
+            vlm_base_url,
+            vlm_model,
+            vlm_timeout,
+            vlm_api_key,
+            backend_options,
+        ) = _resolve_vlm_runtime_settings(
+            cfg,
+            backend=vlm_backend_opt,
+            base_url=vlm_base_url_opt,
+            model=vlm_model_opt,
+            timeout=vlm_timeout_opt,
+            api_key=vlm_api_key_opt,
+        )
+    except ValueError as exc:
+        typer.echo(f"❌ {exc}")
+        valid_backends = ", ".join(b.value for b in VLMBackend)
+        typer.echo(f"   Available options: {valid_backends}")
+        raise typer.Exit(1)
+
+    lmdeploy_eager_cfg = _to_bool(cfg.get("vlm_lmdeploy_eager", True), True)
+    eager_mode = vlm_eager_opt if vlm_eager_opt is not None else lmdeploy_eager_cfg
+
+    typer.echo(f"🤖 VLM backend: {backend_enum.value} / {vlm_model} at {vlm_base_url}")
+
     if not image_path.exists():
         typer.echo(f"❌ Image not found: {image_path}")
         raise typer.Exit(1)
@@ -1387,10 +1773,20 @@ def analyze_regions(
         typer.echo(f"📁 Image: {image_path}")
         typer.echo(f"🗂️ Grid regions: {use_grid_regions}")
         typer.echo(f"🧪 Demo mode: {demo_mode}")
+        typer.echo(
+            f"🤖 VLM backend: {backend_enum.value} / {vlm_model} at {vlm_base_url}"
+        )
 
     # Initialize VLM client with auto-start capability
     vlm_client = _get_vlm_client_with_autostart(
-        "Qwen2-VL-2B-Instruct", auto_start_server
+        backend_enum,
+        base_url=vlm_base_url,
+        model_name=vlm_model,
+        api_key=vlm_api_key,
+        timeout=vlm_timeout,
+        backend_options=backend_options,
+        auto_start=auto_start_server,
+        eager=eager_mode,
     )
 
     # Load image to get dimensions
