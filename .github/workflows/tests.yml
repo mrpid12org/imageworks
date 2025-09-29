@@ -28,8 +28,11 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Install pytest
+        run: uv pip install pytest==8.2.2
+
       - name: Install project package
         run: uv pip install .
 
       - name: Run pytest (${{ matrix.target }})
-        run: uv run --with "pytest==8.2.2" pytest tests/${{ matrix.target }}
+        run: uv run pytest tests/${{ matrix.target }}
