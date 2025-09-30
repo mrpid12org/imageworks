@@ -28,7 +28,8 @@
 ## Reference Notes
 - Current defaults set in `pyproject.toml` (`[tool.imageworks.personal_tagger]`).
 - Prompt registry located at `src/imageworks/apps/personal_tagger/core/prompts.py`.
-- Shared VLM client utilities live under `src/imageworks/libs/vlm/`.
+- Model variants captured in `src/imageworks/apps/personal_tagger/core/model_registry.py`.
+- Embedding helpers live under `src/imageworks/libs/personal_tagger/embeddings.py`.
 - Backend launcher script: `scripts/start_personal_tagger_backends.py` (see how stages map to servers).
 
 ## Next Steps
