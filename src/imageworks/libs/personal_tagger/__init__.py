@@ -12,6 +12,7 @@ Key modules:
 from .color_analysis import ColorAnalyzer, ColorRegionAnalyzer, ColorStatistics
 from .vlm_utils import VLMPromptManager, VLMResponseParser, VLMModelManager
 from .image_utils import ImageLoader, ImageProcessor, ImageComparison, ImageBatch
+from .embeddings import SiglipEmbeddingService
 
 __version__ = "0.1.0"
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "ImageProcessor",
     "ImageComparison",
     "ImageBatch",
+    "SiglipEmbeddingService",
 ]
