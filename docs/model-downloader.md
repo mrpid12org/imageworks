@@ -8,7 +8,9 @@ A comprehensive tool for downloading and managing AI models across multiple form
 - 🔍 **Format Detection**: Infers GGUF, AWQ, GPTQ, Safetensors, and more from filenames and configs
 - 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
 - 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
-- 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers
+
+- 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
+
 - ⚡ **Cross-Platform**: Built for mixed Windows/WSL setups with optional custom overrides
 - 🛡️ **Verification**: Validates completed downloads and registry integrity
 
@@ -31,6 +33,9 @@ brew install aria2
 ```bash
 # Download a model by name
 imageworks-download download "microsoft/DialoGPT-medium"
+
+# Target a specific branch/tag
+imageworks-download download "microsoft/DialoGPT-medium@dev"
 
 # Download from URL
 imageworks-download download "https://huggingface.co/microsoft/DialoGPT-medium"
@@ -94,7 +99,9 @@ The downloader manages two separate directories:
 
 **Compatible with**: LM Studio, llama.cpp, Ollama
 
-Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path.
+
+Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path. When a non-`main` branch is requested, the repository directory is suffixed with `@branch` (e.g. `DialoGPT-medium@dev`) to avoid collisions with the default branch.
+
 
 ## Format Detection
 
@@ -133,6 +140,9 @@ imageworks-download download "microsoft/DialoGPT-medium"
 
 # Specific format and location
 imageworks-download download "microsoft/DialoGPT-medium" --format safetensors --location linux_wsl
+
+# Branch selection with custom location
+imageworks-download download "microsoft/DialoGPT-medium@dev" --location ~/models
 
 # From URL with optional files
 imageworks-download download "https://huggingface.co/microsoft/DialoGPT-medium" --include-optional
@@ -273,6 +283,9 @@ model = downloader.download(
     force_redownload=False,
     interactive=True,
 )
+
+# Target an alternate branch
+experimental = downloader.download("microsoft/DialoGPT-medium@dev", force_redownload=True)
 ```
 
 **`list_models(**kwargs)`**
@@ -413,6 +426,25 @@ downloader.download("Qwen/Qwen2.5-VL-7B-Instruct")
 # Use with color narrator
 from imageworks.apps.color_narrator import ColorNarrator
 narrator = ColorNarrator(model_name="Qwen2.5-VL-7B-Instruct")
+```
+
+### With Personal Tagger
+```bash
+# Fetch the caption/keyword/description models you plan to serve
+imageworks-download download "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ"
+imageworks-download download "llava-hf/llava-v1.6-mistral-7b-hf"
+
+# Launch backends (vLLM/LMDeploy) with the downloaded paths
+python scripts/start_personal_tagger_backends.py --launch \
+  --caption-model-path "~/ai-models/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ" \
+  --description-model-path "~/ai-models/weights/llava-hf/llava-v1.6-mistral-7b-hf"
+
+# The LMDeploy helper defaults to `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/…`, so
+# downloads made with the Model Downloader are discovered automatically when you
+# keep the standard directory layout.
+
+# Run the personal tagger once backends are online
+python -m imageworks.apps.personal_tagger.cli.main run --input ~/photos --backend http://localhost:8000
 ```
 
 ## Troubleshooting
