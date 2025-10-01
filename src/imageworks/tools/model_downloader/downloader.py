@@ -211,6 +211,15 @@ class ModelDownloader:
         repo_name = analysis.repository.repo
         repository_id = f"{owner}/{repo_name}"
 
+        branch = analysis.repository.branch or "main"
+        storage_repo_name = (
+            repo_name if branch == "main" else f"{repo_name}@{branch.replace('/', '_')}"
+        )
+        registry_model_name = (
+            repository_id if branch == "main" else f"{repository_id}@{branch}"
+        )
+
+
         # Normalise format preferences – accept single strings from callers
         preferred_formats: Optional[List[str]]
         if isinstance(format_preference, str):
@@ -222,7 +231,7 @@ class ModelDownloader:
 
         # Step 2: Check if already downloaded
         if not force_redownload:
-            existing_models = self.registry.find_model(repository_id)
+            existing_models = self.registry.find_model(registry_model_name)
             if existing_models:
                 existing = existing_models[0]  # Use first match
 
@@ -295,13 +304,19 @@ class ModelDownloader:
                     base_dir = self.config.linux_wsl.root / "weights"
                 else:
                     base_dir = self.config.windows_lmstudio.root
-                target_dir = base_dir / owner / repo_name
+
+                target_dir = base_dir / owner / storage_repo_name
             else:
-                target_dir = Path(normalized_override).expanduser() / repository_id
+                target_dir = (
+                    Path(normalized_override).expanduser()
+                    / owner
+                    / storage_repo_name
+                )
         else:
             target_dir = self.config.get_target_directory(
                 primary_format,
-                repo_name,
+                storage_repo_name,
+
                 publisher=owner,
             )
 
@@ -321,7 +336,7 @@ class ModelDownloader:
             raise RuntimeError("No essential model files found")
 
         # Step 6: Download files
-        base_url = f"https://huggingface.co/{repository_id}/resolve/main"
+        base_url = f"https://huggingface.co/{repository_id}/resolve/{branch}"
 
         # Prepare aria2c download
         print(f"📥 Downloading {len(required_files)} required files...")
@@ -359,7 +374,7 @@ class ModelDownloader:
             location_label = "custom"
 
         entry = ModelEntry(
-            model_name=repository_id,
+            model_name=registry_model_name,
             format_type=primary_format,
             path=str(target_dir),
             size_bytes=total_size,
@@ -370,6 +385,7 @@ class ModelDownloader:
                 "model_type": analysis.repository.model_type,
                 "library": analysis.repository.library_name,
                 "huggingface_id": repository_id,
+                "branch": branch,
                 "files_downloaded": len(all_files),
                 "verified_complete": True,  # Mark as verified
             },
@@ -429,18 +445,13 @@ class ModelDownloader:
                 str(self.config.max_connections_per_server),
                 "--max-concurrent-downloads",
                 str(self.config.max_concurrent_downloads),
-                "--continue",
-                "true" if self.config.enable_resume else "false",
-                "--auto-file-renaming",
-                "false",
-                "--allow-overwrite",
-                "true",
+                f"--continue={'true' if self.config.enable_resume else 'false'}",
+                "--auto-file-renaming=false",
+                "--allow-overwrite=true",
                 "--summary-interval",
                 "0",
-                "--truncate-console-readout",
-                "true",
-                "--human-readable",
-                "true",
+                "--truncate-console-readout=true",
+                "--human-readable=true",
                 "--console-log-level",
                 "warn",
                 # Clean, minimal progress display - warn level hides NOTICE messages

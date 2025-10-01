@@ -1,7 +1,7 @@
-"""
-Configuration management for model downloader.
+"""Configuration management for the model downloader.
 
-Handles paths, formats, user preferences, and integration with imageworks settings.
+Handles paths, formats, user preferences, and integration with ImageWorks
+settings so downloads land in predictable directories.
 """
 
 import os
