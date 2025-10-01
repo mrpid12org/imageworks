@@ -7,11 +7,14 @@ following imageworks conventions.
 
 from pathlib import Path
 from typing import Optional
+import logging
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
+
+from imageworks.logging_utils import configure_logging
 
 from .downloader import ModelDownloader
 from .registry import get_registry
@@ -25,6 +28,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+LOG_PATH = configure_logging("model_downloader")
+logger = logging.getLogger(__name__)
+logger.info("Model downloader logging initialised → %s", LOG_PATH)
 
 
 @app.command("download")

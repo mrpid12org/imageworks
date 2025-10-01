@@ -9,6 +9,7 @@ Adjust arguments as needed for alternative deployments.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import shutil
 import subprocess
@@ -16,8 +17,12 @@ import sys
 from pathlib import Path
 from typing import List, Mapping, Optional
 
+
+
 DEFAULT_MODEL_NAME = "Qwen2.5-VL-7B-AWQ"
 DEFAULT_MODEL_REPO = Path("qwen-vl") / "Qwen2.5-VL-7B-Instruct-AWQ"
+
+
 
 ESSENTIAL_FILES = ("config.json", "tokenizer_config.json")
 TOKENIZER_ALTERNATIVES = ("tokenizer.json", "tokenizer.model")
@@ -74,6 +79,8 @@ def validate_model_directory(model_path: Path) -> List[str]:
         )
 
     return warnings
+
+
 
 
 def resolve_default_model_root(
@@ -243,10 +250,12 @@ def start_server() -> None:
     if args.model_path is None:
         args.model_path = str(default_path)
 
+
     model_path = Path(args.model_path).expanduser()
     try:
         warnings = validate_model_directory(model_path)
     except FileNotFoundError as exc:
+
         sys.stderr.write(f"❌ {exc}\n")
         sys.exit(2)
     except RuntimeError as exc:
@@ -254,29 +263,31 @@ def start_server() -> None:
             "❌ Missing critical model assets detected.\n"
             f"   {exc}\n"
             "   Ensure the downloader completed successfully or copy the files manually.\n"
+
         )
         sys.exit(2)
 
     if warnings:
         for warning in warnings:
+
             sys.stderr.write(f"⚠️  {warning}\n")
 
     args.model_path = str(model_path)
 
+
     if shutil.which("lmdeploy") is None:
-        sys.stderr.write(
-            "lmdeploy CLI not found. Install via 'uv add lmdeploy' or 'pip install lmdeploy'.\n"
+        logger.error(
+            "lmdeploy CLI not found. Install via 'uv add lmdeploy' or 'pip install lmdeploy'."
         )
         sys.exit(1)
 
     command = build_command(args)
-    print("🚀 Launching LMDeploy server with command:")
-    print(" ".join(command))
+    logger.info("🚀 Launching LMDeploy server with command: %s", " ".join(command))
 
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as exc:
-        sys.stderr.write(f"LMDeploy server exited with status {exc.returncode}\n")
+        logger.error("LMDeploy server exited with status %s", exc.returncode)
         sys.exit(exc.returncode)
 
 
