@@ -11,7 +11,7 @@ import tempfile
 import shutil
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Sequence, Union
 from dataclasses import dataclass
 
 from .config import get_config, DownloaderConfig
@@ -195,7 +195,7 @@ class ModelDownloader:
     def download(
         self,
         model_identifier: str,
-        format_preference: Optional[List[str]] = None,
+        format_preference: Optional[Union[Sequence[str], str]] = None,
         location_override: Optional[str] = None,
         include_optional: bool = False,
         force_redownload: bool = False,
@@ -206,10 +206,30 @@ class ModelDownloader:
         # Step 1: Analyze the URL/identifier
         analysis = self.url_analyzer.analyze_url(model_identifier)
 
+        # Normalise repository metadata for downstream routing
+        owner = analysis.repository.owner
+        repo_name = analysis.repository.repo
+        repository_id = f"{owner}/{repo_name}"
+        branch = analysis.repository.branch or "main"
+        storage_repo_name = (
+            repo_name if branch == "main" else f"{repo_name}@{branch.replace('/', '_')}"
+        )
+        registry_model_name = (
+            repository_id if branch == "main" else f"{repository_id}@{branch}"
+        )
+
+        # Normalise format preferences – accept single strings from callers
+        preferred_formats: Optional[List[str]]
+        if isinstance(format_preference, str):
+            preferred_formats = [format_preference]
+        elif format_preference is None:
+            preferred_formats = None
+        else:
+            preferred_formats = [str(fmt) for fmt in format_preference]
+
         # Step 2: Check if already downloaded
-        repository_id = f"{analysis.repository.owner}/{analysis.repository.repo}"
         if not force_redownload:
-            existing_models = self.registry.find_model(repository_id)
+            existing_models = self.registry.find_model(registry_model_name)
             if existing_models:
                 existing = existing_models[0]  # Use first match
 
@@ -258,8 +278,8 @@ class ModelDownloader:
             primary_format = "unknown"
         else:
             # Use format preference or first detected
-            if format_preference:
-                for pref in format_preference:
+            if preferred_formats:
+                for pref in preferred_formats:
                     for fmt in formats:
                         if fmt.format_type == pref:
                             primary_format = pref
@@ -276,9 +296,25 @@ class ModelDownloader:
 
         # Step 4: Determine target directory
         if location_override:
-            target_dir = Path(location_override) / repository_id
+            normalized_override = location_override.strip()
+            if normalized_override in {"linux_wsl", "windows_lmstudio"}:
+                if normalized_override == "linux_wsl":
+                    base_dir = self.config.linux_wsl.root / "weights"
+                else:
+                    base_dir = self.config.windows_lmstudio.root
+                target_dir = base_dir / owner / storage_repo_name
+            else:
+                target_dir = (
+                    Path(normalized_override).expanduser()
+                    / owner
+                    / storage_repo_name
+                )
         else:
-            target_dir = self.config.get_target_directory(primary_format, repository_id)
+            target_dir = self.config.get_target_directory(
+                primary_format,
+                storage_repo_name,
+                publisher=owner,
+            )
 
         target_dir.mkdir(parents=True, exist_ok=True)
         print(f"📁 Target directory: {target_dir}")
@@ -296,7 +332,7 @@ class ModelDownloader:
             raise RuntimeError("No essential model files found")
 
         # Step 6: Download files
-        base_url = f"https://huggingface.co/{repository_id}/resolve/main"
+        base_url = f"https://huggingface.co/{repository_id}/resolve/{branch}"
 
         # Prepare aria2c download
         print(f"📥 Downloading {len(required_files)} required files...")
@@ -326,20 +362,26 @@ class ModelDownloader:
         for f in all_files:
             downloaded_files.append(f.path)
 
+        if self.config.linux_wsl.root in target_dir.parents or self.config.linux_wsl.root == target_dir:
+            location_label = "linux_wsl"
+        elif self.config.windows_lmstudio.root in target_dir.parents or self.config.windows_lmstudio.root == target_dir:
+            location_label = "windows_lmstudio"
+        else:
+            location_label = "custom"
+
         entry = ModelEntry(
-            model_name=repository_id,
+            model_name=registry_model_name,
             format_type=primary_format,
             path=str(target_dir),
             size_bytes=total_size,
-            location=(
-                "linux_wsl" if "ai-models" in str(target_dir) else "windows_lmstudio"
-            ),
+            location=location_label,
             files=downloaded_files,
             downloaded_at="",  # Will be set by registry
             metadata={
                 "model_type": analysis.repository.model_type,
                 "library": analysis.repository.library_name,
                 "huggingface_id": repository_id,
+                "branch": branch,
                 "files_downloaded": len(all_files),
                 "verified_complete": True,  # Mark as verified
             },
@@ -399,18 +441,13 @@ class ModelDownloader:
                 str(self.config.max_connections_per_server),
                 "--max-concurrent-downloads",
                 str(self.config.max_concurrent_downloads),
-                "--continue",
-                "true" if self.config.enable_resume else "false",
-                "--auto-file-renaming",
-                "false",
-                "--allow-overwrite",
-                "true",
+                f"--continue={'true' if self.config.enable_resume else 'false'}",
+                "--auto-file-renaming=false",
+                "--allow-overwrite=true",
                 "--summary-interval",
                 "0",
-                "--truncate-console-readout",
-                "true",
-                "--human-readable",
-                "true",
+                "--truncate-console-readout=true",
+                "--human-readable=true",
                 "--console-log-level",
                 "warn",
                 # Clean, minimal progress display - warn level hides NOTICE messages
@@ -463,30 +500,47 @@ class ModelDownloader:
         # Could be extended with checksum verification
         return True
 
-    def remove_model(self, model_name: str, delete_files: bool = False) -> bool:
+    def remove_model(
+        self,
+        model_name: str,
+        format_type: Optional[str] = None,
+        location: Optional[str] = None,
+        delete_files: bool = False,
+    ) -> bool:
         """Remove model from registry and optionally delete files."""
-        entries = self.registry.find_model(model_name)
+        entries = self.registry.find_model(model_name, format_type, location)
         if not entries:
             return False
-        entry = entries[0]  # Use first match
 
-        # Remove from registry
-        success = self.registry.remove(model_name)
+        success = False
+        for entry in entries:
+            removed = self.registry.remove_model(
+                entry.model_name, entry.format_type, entry.location
+            )
+            success = success or removed
 
-        # Delete files if requested
-        if delete_files and entry.path.exists():
-            try:
-                shutil.rmtree(entry.path)
-                print(f"🗑️  Deleted files: {entry.path}")
-            except Exception as e:
-                print(f"⚠️  Could not delete files: {e}")
-                return False
+            if delete_files and entry.path.exists():
+                try:
+                    shutil.rmtree(entry.path)
+                    print(f"🗑️  Deleted files: {entry.path}")
+                except Exception as e:
+                    print(f"⚠️  Could not delete files: {e}")
+                    return False
 
         return success
 
-    def list_models(self) -> List[ModelEntry]:
-        """List all downloaded models."""
-        return self.registry.get_all_models()
+    def list_models(
+        self,
+        format_filter: Optional[str] = None,
+        location_filter: Optional[str] = None,
+    ) -> List[ModelEntry]:
+        """List downloaded models with optional filtering."""
+        models = self.registry.get_all_models()
+        if format_filter:
+            models = [m for m in models if m.format_type == format_filter]
+        if location_filter:
+            models = [m for m in models if m.location == location_filter]
+        return models
 
     def get_stats(self) -> Dict[str, Any]:
         """Get download statistics."""
