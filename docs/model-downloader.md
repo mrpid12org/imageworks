@@ -8,7 +8,9 @@ A comprehensive tool for downloading and managing AI models across multiple form
 - 🔍 **Format Detection**: Infers GGUF, AWQ, GPTQ, Safetensors, and more from filenames and configs
 - 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
 - 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
+
 - 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
+
 - ⚡ **Cross-Platform**: Built for mixed Windows/WSL setups with optional custom overrides
 - 🛡️ **Verification**: Validates completed downloads and registry integrity
 
@@ -101,6 +103,7 @@ The downloader manages two separate directories:
 
 **Compatible with**: LM Studio, llama.cpp, Ollama
 
+
 Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path. When a non-`main` branch is requested, the repository directory is suffixed with `@branch` (e.g. `DialoGPT-medium@dev`) to avoid collisions with the default branch.
 
 ## Format Detection
@@ -127,6 +130,7 @@ Every download is verified to ensure files are present and complete before an en
 - **Weights**: at least one `.safetensors`, `.bin`, `.pt`, `.awq`, or `.gguf` shard
 
 If any file fails to download, the downloader aborts with a verification error so you can retry without registering a broken model. The [LMDeploy helper](../scripts/start_lmdeploy_server.py) performs an additional sanity check when you launch the server, warning about missing chat templates or generation configs before it starts. This mirrors the most common causes of runtime issues (blank completions, misaligned role handling, or tokenisation failures) and provides actionable remediation guidance.
+
 
 ## Commands
 

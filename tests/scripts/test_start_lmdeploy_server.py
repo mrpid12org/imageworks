@@ -7,7 +7,9 @@ from pathlib import Path
 
 import types
 
+
 import pytest
+
 
 
 def load_module() -> types.ModuleType:
@@ -42,6 +44,7 @@ def test_resolve_default_model_path_home_fallback(tmp_path):
     assert resolved == expected
 
 
+
 def test_validate_model_directory_requires_tokenizer_assets(tmp_path):
     module = load_module()
     model_dir = tmp_path / "model"
@@ -64,3 +67,4 @@ def test_validate_model_directory_warns_on_optional_assets(tmp_path):
 
     warnings = module.validate_model_directory(model_dir)
     assert any("chat_template.json" in warning for warning in warnings)
+

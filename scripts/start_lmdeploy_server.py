@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import List, Mapping, Optional
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -24,8 +25,10 @@ if str(SRC_ROOT) not in sys.path:
 
 from imageworks.logging_utils import configure_logging
 
+
 DEFAULT_MODEL_NAME = "Qwen2.5-VL-7B-AWQ"
 DEFAULT_MODEL_REPO = Path("qwen-vl") / "Qwen2.5-VL-7B-Instruct-AWQ"
+
 
 LOG_PATH = configure_logging("lmdeploy_server")
 logger = logging.getLogger(__name__)
@@ -86,6 +89,7 @@ def validate_model_directory(model_path: Path) -> List[str]:
         )
 
     return warnings
+
 
 
 def resolve_default_model_root(
@@ -255,6 +259,7 @@ def start_server() -> None:
     if args.model_path is None:
         args.model_path = str(default_path)
 
+
     model_path = Path(args.model_path).expanduser()
     try:
         warnings = validate_model_directory(model_path)
@@ -273,6 +278,7 @@ def start_server() -> None:
             logger.warning("⚠️  %s", warning)
 
     args.model_path = str(model_path)
+
 
     if shutil.which("lmdeploy") is None:
         logger.error(
