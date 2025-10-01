@@ -195,6 +195,9 @@ pyproject.toml defaults → Environment variables → CLI arguments
 - Vision-specific batch sizing configuration
 - Eager mode for reduced VRAM usage
 - Model path resolution from environment variables
+- Automatically resolves the default Qwen2.5-VL AWQ checkpoint under
+  `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ`, matching
+  the Model Downloader's directory layout.
 
 #### vLLM Server (`start_vllm_server.py`)
 **Purpose**: Launches vLLM servers with advanced parallelization support.

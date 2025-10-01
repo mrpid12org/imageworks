@@ -14,18 +14,50 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Mapping, Optional
 
 DEFAULT_MODEL_NAME = "Qwen2.5-VL-7B-AWQ"
-DEFAULT_MODEL_PATH = str(
-    Path(os.environ.get("IMAGEWORKS_MODEL_ROOT", Path.home() / "ai-models" / "weights"))
-    / "Qwen2.5-VL-7B-Instruct-AWQ"
-)
+DEFAULT_MODEL_REPO = Path("qwen-vl") / "Qwen2.5-VL-7B-Instruct-AWQ"
+
+
+def resolve_default_model_root(
+    env: Optional[Mapping[str, str]] = None,
+    home: Optional[Path] = None,
+) -> Path:
+    """Resolve the base weights directory used for LMDeploy models.
+
+    When ``IMAGEWORKS_MODEL_ROOT`` points at the ``weights`` directory (the
+    default behaviour of the model downloader), use it verbatim. Otherwise append
+    a ``weights`` suffix so both ``~/ai-models`` and ``~/ai-models/weights`` work
+    without additional flags.
+    """
+
+    environ = env or os.environ
+    candidate = environ.get("IMAGEWORKS_MODEL_ROOT")
+    if candidate:
+        root = Path(candidate).expanduser()
+        if root.name.lower() == "weights":
+            return root
+        return root / "weights"
+
+    base_home = home or Path.home()
+    return base_home / "ai-models" / "weights"
+
+
+def resolve_default_model_path(
+    env: Optional[Mapping[str, str]] = None,
+    home: Optional[Path] = None,
+) -> Path:
+    """Return the default path to the bundled Qwen AWQ checkpoint."""
+
+    return resolve_default_model_root(env=env, home=home) / DEFAULT_MODEL_REPO
 
 
 def build_command(args: argparse.Namespace) -> List[str]:
     """Construct the lmdeploy CLI command."""
-    model_path = Path(args.model_path).expanduser()
+
+    resolved_path = args.model_path or str(resolve_default_model_path())
+    model_path = Path(resolved_path).expanduser()
     command = [
         "lmdeploy",
         "serve",
@@ -74,10 +106,14 @@ def start_server() -> None:
         description="Start an LMDeploy OpenAI-compatible API server",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    default_path = resolve_default_model_path()
     parser.add_argument(
         "--model-path",
-        default=DEFAULT_MODEL_PATH,
-        help="HuggingFace repo or local path to the model weights",
+        default=None,
+        help=(
+            "HuggingFace repo or local path to the model weights "
+            f"(defaults to {default_path})"
+        ),
     )
     parser.add_argument(
         "--model-name",
@@ -148,6 +184,8 @@ def start_server() -> None:
     )
 
     args = parser.parse_args()
+    if args.model_path is None:
+        args.model_path = str(default_path)
 
     if shutil.which("lmdeploy") is None:
         sys.stderr.write(
