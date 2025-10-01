@@ -210,6 +210,7 @@ class ModelDownloader:
         owner = analysis.repository.owner
         repo_name = analysis.repository.repo
         repository_id = f"{owner}/{repo_name}"
+
         branch = analysis.repository.branch or "main"
         storage_repo_name = (
             repo_name if branch == "main" else f"{repo_name}@{branch.replace('/', '_')}"
@@ -217,6 +218,7 @@ class ModelDownloader:
         registry_model_name = (
             repository_id if branch == "main" else f"{repository_id}@{branch}"
         )
+
 
         # Normalise format preferences – accept single strings from callers
         preferred_formats: Optional[List[str]]
@@ -302,6 +304,7 @@ class ModelDownloader:
                     base_dir = self.config.linux_wsl.root / "weights"
                 else:
                     base_dir = self.config.windows_lmstudio.root
+
                 target_dir = base_dir / owner / storage_repo_name
             else:
                 target_dir = (
@@ -313,6 +316,7 @@ class ModelDownloader:
             target_dir = self.config.get_target_directory(
                 primary_format,
                 storage_repo_name,
+
                 publisher=owner,
             )
 
