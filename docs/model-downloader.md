@@ -120,6 +120,7 @@ The downloader aggregates multiple detectors to determine the best storage locat
 
 Results are ranked by confidence; provide `--format awq,gguf` to express an explicit preference order when multiple matches are found.
 
+
 ## Validation & Troubleshooting
 
 Every download is verified to ensure files are present and complete before an entry is stored in the registry. The generated directories include all artefacts required by the serving helpers:

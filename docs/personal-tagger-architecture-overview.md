@@ -19,10 +19,6 @@ The Personal Tagger **does not download or serve AI models on its own**—it orc
 This separation ensures the tagger can target local GPU servers, remote inference stacks, or hosted APIs interchangeably. The downloader therefore runs *before* the personal tagger when you host models yourself, but the tagger can also point at existing infrastructure where the models are already available.
 
 
-## Logging & Observability
-
-Running `imageworks-personal-tagger` writes a full execution trace to `logs/personal_tagger.log` (or a custom directory specified via `IMAGEWORKS_LOG_DIR`). The CLI announces the log path during start-up and all pipeline stages emit structured INFO/WARN entries alongside the interactive console output. Companion utilities follow the same convention—for example `imageworks-download` records to `logs/model_downloader.log` and the LMDeploy launcher writes to `logs/lmdeploy_server.log`—so it is easy to correlate activity across modules when troubleshooting a tagging workflow.
-
 
 ## Core System Architecture
 

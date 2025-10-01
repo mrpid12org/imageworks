@@ -67,4 +67,3 @@ def test_validate_model_directory_warns_on_optional_assets(tmp_path):
 
     warnings = module.validate_model_directory(model_dir)
     assert any("chat_template.json" in warning for warning in warnings)
-

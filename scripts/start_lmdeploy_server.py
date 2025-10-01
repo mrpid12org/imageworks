@@ -18,21 +18,11 @@ from pathlib import Path
 from typing import List, Mapping, Optional
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from imageworks.logging_utils import configure_logging
-
 
 DEFAULT_MODEL_NAME = "Qwen2.5-VL-7B-AWQ"
 DEFAULT_MODEL_REPO = Path("qwen-vl") / "Qwen2.5-VL-7B-Instruct-AWQ"
 
 
-LOG_PATH = configure_logging("lmdeploy_server")
-logger = logging.getLogger(__name__)
-logger.info("LMDeploy startup logging initialised → %s", LOG_PATH)
 
 ESSENTIAL_FILES = ("config.json", "tokenizer_config.json")
 TOKENIZER_ALTERNATIVES = ("tokenizer.json", "tokenizer.model")
@@ -89,6 +79,7 @@ def validate_model_directory(model_path: Path) -> List[str]:
         )
 
     return warnings
+
 
 
 
@@ -264,18 +255,22 @@ def start_server() -> None:
     try:
         warnings = validate_model_directory(model_path)
     except FileNotFoundError as exc:
-        logger.error("❌ %s", exc)
+
+        sys.stderr.write(f"❌ {exc}\n")
         sys.exit(2)
     except RuntimeError as exc:
-        logger.error(
-            "❌ Missing critical model assets detected. %s. Ensure the downloader completed successfully or copy the files manually.",
-            exc,
+        sys.stderr.write(
+            "❌ Missing critical model assets detected.\n"
+            f"   {exc}\n"
+            "   Ensure the downloader completed successfully or copy the files manually.\n"
+
         )
         sys.exit(2)
 
     if warnings:
         for warning in warnings:
-            logger.warning("⚠️  %s", warning)
+
+            sys.stderr.write(f"⚠️  {warning}\n")
 
     args.model_path = str(model_path)
 
