@@ -149,13 +149,17 @@ class DownloaderConfig:
         self, format_type: str, model_name: str, publisher: Optional[str] = None
     ) -> Path:
         """Determine target directory for a model based on format."""
+        model_dir = model_name
+        if publisher and "/" not in model_dir:
+            model_dir = f"{publisher}/{model_dir}"
+
         if format_type == "gguf":
             if self.windows_lmstudio.publisher_structure and publisher:
                 return self.windows_lmstudio.root / publisher / model_name
             else:
-                return self.windows_lmstudio.root / model_name
+                return self.windows_lmstudio.root / model_dir
         else:
-            return self.linux_wsl.root / "weights" / model_name
+            return self.linux_wsl.root / "weights" / model_dir
 
     def get_compatible_backends(self, format_type: str) -> List[str]:
         """Get compatible backends for a given format."""
