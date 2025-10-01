@@ -541,9 +541,9 @@ class ModelDownloader:
                 try:
                     shutil.rmtree(entry.path)
 
-                    self._log(f"🗑️  Deleted files: {entry.path}")
+                    print(f"🗑️  Deleted files: {entry.path}")
                 except Exception as e:
-                    self._log(f"⚠️  Could not delete files: {e}", level=logging.WARNING)
+                    print(f"⚠️  Could not delete files: {e}")
 
                     return False
 
