@@ -8,7 +8,9 @@ A comprehensive tool for downloading and managing AI models across multiple form
 - 🔍 **Format Detection**: Infers GGUF, AWQ, GPTQ, Safetensors, and more from filenames and configs
 - 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
 - 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
+
 - 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
+
 - ⚡ **Cross-Platform**: Built for mixed Windows/WSL setups with optional custom overrides
 - 🛡️ **Verification**: Validates completed downloads and registry integrity
 
@@ -97,7 +99,9 @@ The downloader manages two separate directories:
 
 **Compatible with**: LM Studio, llama.cpp, Ollama
 
+
 Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path. When a non-`main` branch is requested, the repository directory is suffixed with `@branch` (e.g. `DialoGPT-medium@dev`) to avoid collisions with the default branch.
+
 
 ## Format Detection
 
