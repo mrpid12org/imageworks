@@ -5,12 +5,12 @@ A comprehensive tool for downloading and managing AI models across multiple form
 ## Features
 
 - 🚀 **Fast Downloads**: Uses aria2c for parallel, resumable downloads
-- 🔧 **Format Detection**: Automatically detects GGUF, AWQ, GPTQ, Safetensors, and more
-- 📁 **Smart Routing**: Routes models to appropriate directories (WSL vs Windows LM Studio)
-- 📋 **Model Registry**: Unified tracking across all download locations
-- 🔗 **URL Support**: Direct HuggingFace URLs and model names
-- ⚡ **Cross-Platform**: Works seamlessly with WSL and Windows
-- 🛡️ **Verification**: Integrity checking and duplicate detection
+- 🔍 **Format Detection**: Infers GGUF, AWQ, GPTQ, Safetensors, and more from filenames and configs
+- 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
+- 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
+- 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
+- ⚡ **Cross-Platform**: Built for mixed Windows/WSL setups with optional custom overrides
+- 🛡️ **Verification**: Validates completed downloads and registry integrity
 
 ## Quick Start
 
@@ -32,13 +32,16 @@ brew install aria2
 # Download a model by name
 imageworks-download download "microsoft/DialoGPT-medium"
 
+# Target a specific branch/tag
+imageworks-download download "microsoft/DialoGPT-medium@dev"
+
 # Download from URL
 imageworks-download download "https://huggingface.co/microsoft/DialoGPT-medium"
 
 # Download specific format
 imageworks-download download "casperhansen/llama-7b-instruct-awq" --format awq
 
-# Force location
+# Force location override (keyword or custom path)
 imageworks-download download "TheBloke/Llama-2-7B-Chat-GGUF" --location windows_lmstudio
 
 # List downloaded models
@@ -59,11 +62,11 @@ downloader = ModelDownloader()
 # Download a model
 model = downloader.download("microsoft/DialoGPT-medium")
 
-# List models
+# List models filtered by format
 models = downloader.list_models(format_filter="awq")
 
 # Get statistics
-stats = downloader.get_statistics()
+stats = downloader.get_stats()
 ```
 
 ## Directory Structure
@@ -73,13 +76,12 @@ The downloader manages two separate directories:
 ### Linux WSL Directory (`~/ai-models/`)
 ```
 ~/ai-models/
-├── weights/              # Safetensors, AWQ, GPTQ models
-│   ├── DialoGPT-medium/
-│   ├── llama-7b-awq/
-│   └── ...
-├── huggingface/         # HuggingFace cache
-├── registry/            # Model registry
-└── cache/              # Temporary files
+├── weights/              # Safetensors, AWQ, GPTQ, PyTorch models
+│   ├── microsoft/
+│   │   └── DialoGPT-medium/
+│   └── casperhansen/
+├── registry/            # Model registry JSON files
+└── cache/               # Temporary files
 ```
 
 **Compatible with**: vLLM, Transformers, AutoAWQ, AutoGPTQ
@@ -87,34 +89,40 @@ The downloader manages two separate directories:
 ### Windows LM Studio Directory
 ```
 /mnt/d/ai stuff/models/llm models/  (Windows: D:\ai stuff\models\llm models\)
-├── lmstudio-community/
 ├── TheBloke/
-├── microsoft/
-└── ...
+│   └── Llama-2-7B-Chat-GGUF/
+└── Qwen/
+    └── Qwen2.5-1.5B-GGUF/
 ```
 
 **Compatible with**: LM Studio, llama.cpp, Ollama
 
+Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path. When a non-`main` branch is requested, the repository directory is suffixed with `@branch` (e.g. `DialoGPT-medium@dev`) to avoid collisions with the default branch.
+
 ## Format Detection
 
-The downloader automatically detects model formats:
+The downloader aggregates multiple detectors to determine the best storage location:
 
-| Format | Detection Method | Target Directory |
-|--------|-----------------|------------------|
-| **GGUF** | File extensions, model names | Windows LM Studio |
-| **AWQ** | Config.json, model names | Linux WSL |
-| **GPTQ** | Config.json, model names | Linux WSL |
-| **Safetensors** | File extensions | Linux WSL |
-| **PyTorch** | File extensions (.bin, .pth) | Linux WSL |
+| Format | Detection Signals | Default Target |
+|--------|------------------|----------------|
+| **GGUF** | `.gguf` extensions, quantisation suffixes (`Q4_K`) | Windows LM Studio |
+| **AWQ** | Repository name patterns, `quantization_config.quant_method == "awq"` | Linux WSL |
+| **GPTQ** | Repository name patterns, config quantisation metadata | Linux WSL |
+| **Safetensors** | `.safetensors` files | Linux WSL |
+| **PyTorch** | `.bin`, `.pth`, `.pt` weights | Linux WSL |
 
-### Format Priority
+Results are ranked by confidence; provide `--format awq,gguf` to express an explicit preference order when multiple matches are found.
 
-When multiple formats are available:
-1. AWQ (best for vLLM)
-2. Safetensors (universal)
-3. GGUF (for LM Studio)
-4. GPTQ
-5. PyTorch
+## Validation & Troubleshooting
+
+Every download is verified to ensure files are present and complete before an entry is stored in the registry. The generated directories include all artefacts required by the serving helpers:
+
+- **Core configs**: `config.json` and `tokenizer_config.json`
+- **Tokenizer assets**: either `tokenizer.json` or `tokenizer.model`
+- **Serving aids**: `generation_config.json`, `chat_template.json`, and quantisation descriptors when the upstream repository ships them
+- **Weights**: at least one `.safetensors`, `.bin`, `.pt`, `.awq`, or `.gguf` shard
+
+If any file fails to download, the downloader aborts with a verification error so you can retry without registering a broken model. The [LMDeploy helper](../scripts/start_lmdeploy_server.py) performs an additional sanity check when you launch the server, warning about missing chat templates or generation configs before it starts. This mirrors the most common causes of runtime issues (blank completions, misaligned role handling, or tokenisation failures) and provides actionable remediation guidance.
 
 ## Commands
 
@@ -125,8 +133,8 @@ Download models from HuggingFace or URLs.
 imageworks-download download MODEL [OPTIONS]
 
 Options:
-  --format, -f TEXT          Preferred format (gguf, awq, gptq, safetensors)
-  --location, -l TEXT        Target location (linux_wsl, windows_lmstudio)
+  --format, -f TEXT          Preferred format(s) (comma separated: gguf, awq, gptq, safetensors)
+  --location, -l TEXT        Target location (linux_wsl, windows_lmstudio, or custom path)
   --include-optional, -o     Include optional files (docs, examples)
   --force                    Force re-download even if model exists
   --non-interactive, -y      Non-interactive mode (use defaults)
@@ -139,6 +147,9 @@ imageworks-download download "microsoft/DialoGPT-medium"
 
 # Specific format and location
 imageworks-download download "microsoft/DialoGPT-medium" --format safetensors --location linux_wsl
+
+# Branch selection with custom location
+imageworks-download download "microsoft/DialoGPT-medium@dev" --location ~/models
 
 # From URL with optional files
 imageworks-download download "https://huggingface.co/microsoft/DialoGPT-medium" --include-optional
@@ -273,12 +284,15 @@ Download a model from HuggingFace.
 ```python
 model = downloader.download(
     model_identifier="microsoft/DialoGPT-medium",
-    format_preference="awq",
+    format_preference=["awq", "safetensors"],
     location_override="linux_wsl",
     include_optional=False,
     force_redownload=False,
-    interactive=True
+    interactive=True,
 )
+
+# Target an alternate branch
+experimental = downloader.download("microsoft/DialoGPT-medium@dev", force_redownload=True)
 ```
 
 **`list_models(**kwargs)`**
@@ -298,15 +312,16 @@ Remove a model from registry.
 success = downloader.remove_model(
     model_name="microsoft/DialoGPT-medium",
     format_type="awq",
-    delete_files=True
+    location="linux_wsl",
+    delete_files=True,
 )
 ```
 
-**`get_statistics()`**
+**`get_stats()`**
 Get download statistics.
 
 ```python
-stats = downloader.get_statistics()
+stats = downloader.get_stats()
 print(f"Total models: {stats['total_models']}")
 print(f"Total size: {stats['total_size_bytes']} bytes")
 ```
@@ -385,16 +400,16 @@ macOS: brew install aria2
 ```
 
 ### Network Errors
-Network issues are automatically retried with exponential backoff.
+aria2c surfaces HTTP errors directly; failed transfers can be resumed by re-running the command.
 
 ### Disk Space
-The downloader checks available disk space before downloading large models.
+Ensure you have sufficient free space before starting large downloads (the downloader does not pre-validate capacity).
 
 ### File Conflicts
 If a model already exists, you can choose to:
 - Use the existing model
-- Re-download and overwrite
-- Download to a different location
+- Re-download and overwrite the registry entry (prompted interactively)
+- Re-run with `--location` to place the download somewhere else
 
 ## Integration with ImageWorks
 
@@ -418,6 +433,25 @@ downloader.download("Qwen/Qwen2.5-VL-7B-Instruct")
 # Use with color narrator
 from imageworks.apps.color_narrator import ColorNarrator
 narrator = ColorNarrator(model_name="Qwen2.5-VL-7B-Instruct")
+```
+
+### With Personal Tagger
+```bash
+# Fetch the caption/keyword/description models you plan to serve
+imageworks-download download "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ"
+imageworks-download download "llava-hf/llava-v1.6-mistral-7b-hf"
+
+# Launch backends (vLLM/LMDeploy) with the downloaded paths
+python scripts/start_personal_tagger_backends.py --launch \
+  --caption-model-path "~/ai-models/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ" \
+  --description-model-path "~/ai-models/weights/llava-hf/llava-v1.6-mistral-7b-hf"
+
+# The LMDeploy helper defaults to `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/…`, so
+# downloads made with the Model Downloader are discovered automatically when you
+# keep the standard directory layout.
+
+# Run the personal tagger once backends are online
+python -m imageworks.apps.personal_tagger.cli.main run --input ~/photos --backend http://localhost:8000
 ```
 
 ## Troubleshooting
