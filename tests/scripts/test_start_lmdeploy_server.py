@@ -7,7 +7,9 @@ from pathlib import Path
 
 import types
 
+
 import pytest
+
 
 
 def load_module() -> types.ModuleType:
@@ -40,6 +42,7 @@ def test_resolve_default_model_path_home_fallback(tmp_path):
     resolved = module.resolve_default_model_path(env={}, home=tmp_path)
     expected = tmp_path / "ai-models" / "weights" / module.DEFAULT_MODEL_REPO
     assert resolved == expected
+
 
 
 def test_validate_model_directory_requires_tokenizer_assets(tmp_path):
