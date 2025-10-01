@@ -20,6 +20,8 @@ import subprocess
 from datetime import datetime
 from collections import Counter
 
+from imageworks.logging_utils import configure_logging
+
 from ..core import prompts
 from ..core.metadata import XMPMetadataWriter
 from ..core.narrator import ColorNarrator, NarrationConfig, ProcessingResult
@@ -29,8 +31,9 @@ from ..core.region_based_vlm import (
 from ..core.vlm import VLMBackend, VLMClient
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+LOG_PATH = configure_logging("color_narrator")
 logger = logging.getLogger(__name__)
+logger.info("Color Narrator logging initialised → %s", LOG_PATH)
 
 app = typer.Typer(help="Color-Narrator - VLM-guided color localization")
 

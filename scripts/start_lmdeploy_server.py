@@ -9,6 +9,7 @@ Adjust arguments as needed for alternative deployments.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import shutil
 import subprocess
@@ -16,8 +17,79 @@ import sys
 from pathlib import Path
 from typing import List, Mapping, Optional
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from imageworks.logging_utils import configure_logging
+
+
 DEFAULT_MODEL_NAME = "Qwen2.5-VL-7B-AWQ"
 DEFAULT_MODEL_REPO = Path("qwen-vl") / "Qwen2.5-VL-7B-Instruct-AWQ"
+
+
+LOG_PATH = configure_logging("lmdeploy_server")
+logger = logging.getLogger(__name__)
+logger.info("LMDeploy startup logging initialised → %s", LOG_PATH)
+
+ESSENTIAL_FILES = ("config.json", "tokenizer_config.json")
+TOKENIZER_ALTERNATIVES = ("tokenizer.json", "tokenizer.model")
+SUPPORTING_FILES = (
+    "generation_config.json",
+    "chat_template.json",
+    "quantization_config.json",
+)
+WEIGHT_GLOBS = ("*.safetensors", "*.bin", "*.pt", "*.awq", "*.gguf")
+
+
+def validate_model_directory(model_path: Path) -> List[str]:
+    """Validate that essential model assets exist before launching LMDeploy.
+
+    Returns a list of warning messages for optional-but-recommended files that are
+    missing. Raises ``FileNotFoundError`` if the directory itself is absent and
+    ``RuntimeError`` when required assets are missing.
+    """
+
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"Model path '{model_path}' does not exist. Use --model-path to point to a valid directory."
+        )
+
+    if not model_path.is_dir():
+        raise RuntimeError(
+            f"Model path '{model_path}' is not a directory. Provide a directory that contains the exported weights."
+        )
+
+    missing_required: List[str] = []
+    for filename in ESSENTIAL_FILES:
+        candidate = model_path / filename
+        if not candidate.is_file():
+            missing_required.append(filename)
+
+    if not any((model_path / alt).is_file() for alt in TOKENIZER_ALTERNATIVES):
+        missing_required.append("tokenizer.json or tokenizer.model")
+
+    if missing_required:
+        raise RuntimeError(
+            "Missing required model files: " + ", ".join(missing_required)
+        )
+
+    warnings: List[str] = []
+    for filename in SUPPORTING_FILES:
+        if not (model_path / filename).is_file():
+            warnings.append(
+                f"Optional file '{filename}' not found — responses may be degraded or require manual template overrides."
+            )
+
+    if not any(model_path.glob(pattern) for pattern in WEIGHT_GLOBS):
+        warnings.append(
+            "No weight files detected (*.safetensors/*.bin/*.pt). Ensure the download completed successfully."
+        )
+
+    return warnings
+
 
 
 def resolve_default_model_root(
@@ -187,20 +259,40 @@ def start_server() -> None:
     if args.model_path is None:
         args.model_path = str(default_path)
 
+
+    model_path = Path(args.model_path).expanduser()
+    try:
+        warnings = validate_model_directory(model_path)
+    except FileNotFoundError as exc:
+        logger.error("❌ %s", exc)
+        sys.exit(2)
+    except RuntimeError as exc:
+        logger.error(
+            "❌ Missing critical model assets detected. %s. Ensure the downloader completed successfully or copy the files manually.",
+            exc,
+        )
+        sys.exit(2)
+
+    if warnings:
+        for warning in warnings:
+            logger.warning("⚠️  %s", warning)
+
+    args.model_path = str(model_path)
+
+
     if shutil.which("lmdeploy") is None:
-        sys.stderr.write(
-            "lmdeploy CLI not found. Install via 'uv add lmdeploy' or 'pip install lmdeploy'.\n"
+        logger.error(
+            "lmdeploy CLI not found. Install via 'uv add lmdeploy' or 'pip install lmdeploy'."
         )
         sys.exit(1)
 
     command = build_command(args)
-    print("🚀 Launching LMDeploy server with command:")
-    print(" ".join(command))
+    logger.info("🚀 Launching LMDeploy server with command: %s", " ".join(command))
 
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as exc:
-        sys.stderr.write(f"LMDeploy server exited with status {exc.returncode}\n")
+        logger.error("LMDeploy server exited with status %s", exc.returncode)
         sys.exit(exc.returncode)
 
 

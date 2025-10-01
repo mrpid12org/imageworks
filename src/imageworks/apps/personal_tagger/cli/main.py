@@ -8,11 +8,14 @@ from typing import List, Optional
 
 import typer
 
+from imageworks.logging_utils import configure_logging
+
 from ..core.config import PersonalTaggerConfig, build_runtime_config, load_config
 from ..core.runner import PersonalTaggerRunner
 
-logging.basicConfig(level=logging.INFO)
+LOG_PATH = configure_logging("personal_tagger")
 logger = logging.getLogger(__name__)
+logger.info("Personal tagger logging initialised → %s", LOG_PATH)
 
 app = typer.Typer(
     help="Generate personal-library keywords, captions, and descriptions."
