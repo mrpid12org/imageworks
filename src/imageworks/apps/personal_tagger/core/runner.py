@@ -94,8 +94,9 @@ class PersonalTaggerRunner:
             )
             return record
 
-        if self.config.dry_run:
-            record.notes = (record.notes + " | dry-run: metadata skipped").strip(" |")
+        if self.config.dry_run or self.config.no_meta:
+            reason = "dry-run" if self.config.dry_run else "no-meta"
+            record.notes = (record.notes + f" | {reason}: metadata skipped").strip(" |")
             return record
 
         try:
@@ -141,7 +142,12 @@ class PersonalTaggerRunner:
             "",
         ]
         if self.config.dry_run:
-            lines.append("_Dry run: metadata writes skipped._")
+            lines.append("_Dry run: fake test data used, metadata writes skipped._")
+            lines.append("")
+        elif self.config.no_meta:
+            lines.append(
+                "_No-meta mode: real AI inference used, metadata writes skipped._"
+            )
             lines.append("")
 
         grouped: Dict[Path, List[PersonalTaggerRecord]] = defaultdict(list)
@@ -153,9 +159,16 @@ class PersonalTaggerRunner:
             lines.append(f"## {directory} ({len(entries)} image(s))")
             lines.append("")
             for record in entries:
-                keywords = record.summary_keywords()
-                caption = shorten_text(record.caption, 120)
-                description = shorten_text(record.description, 240)
+                # Show all keywords without truncation
+                all_keywords = [kw.title() for kw in record.keywords_as_list()]
+                keywords = ", ".join(all_keywords) if all_keywords else "<none>"
+
+                # Show full caption and description without truncation
+                caption = record.caption.strip() if record.caption else "<none>"
+                description = (
+                    record.description.strip() if record.description else "<none>"
+                )
+
                 status = (
                     "metadata written"
                     if record.metadata_written

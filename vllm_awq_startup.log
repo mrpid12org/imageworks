@@ -1,0 +1,102 @@
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py:111: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+INFO 09-30 23:51:04 [__init__.py:216] Automatically detected platform cuda.
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:05 [api_server.py:1896] vLLM API server version 0.10.2
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:05 [utils.py:328] non-default args: {'model_tag': 'ybelkada/llava-1.5-7b-hf-awq', 'host': '0.0.0.0', 'port': 24001, 'chat_template': 'llava15_vicuna.jinja', 'model': 'ybelkada/llava-1.5-7b-hf-awq', 'dtype': 'float16', 'max_model_len': 2048, 'quantization': 'awq', 'gpu_memory_utilization': 0.88, 'max_num_seqs': 1}
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:11 [__init__.py:742] Resolved architecture: LlavaForConditionalGeneration
+[1;36m(APIServer pid=1024508)[0;0m `torch_dtype` is deprecated! Use `dtype` instead!
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:11 [__init__.py:1815] Using max model len 2048
+[1;36m(APIServer pid=1024508)[0;0m WARNING 09-30 23:51:11 [_ipex_ops.py:16] Import error msg: No module named 'intel_extension_for_pytorch'
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:11 [awq_marlin.py:121] Detected that the model can run with awq_marlin, however you specified quantization=awq explicitly, so forcing awq. Use quantization=awq_marlin for faster inference
+[1;36m(APIServer pid=1024508)[0;0m WARNING 09-30 23:51:11 [__init__.py:1217] awq quantization is not fully optimized yet. The speed can be slower than non-quantized models.
+[1;36m(APIServer pid=1024508)[0;0m INFO 09-30 23:51:11 [scheduler.py:222] Chunked prefill is enabled with max_num_batched_tokens=2048.
+[1;36m(APIServer pid=1024508)[0;0m /home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/mistral_common/protocol/instruct/messages.py:74: FutureWarning: ImageChunk has moved to 'mistral_common.protocol.instruct.chunk'. It will be removed from 'mistral_common.protocol.instruct.messages' in 1.10.0.
+[1;36m(APIServer pid=1024508)[0;0m   warnings.warn(msg, FutureWarning)
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib/python3.12/multiprocessing/spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/multiprocessing/spawn.py", line 131, in _main
+    prepare(preparation_data)
+  File "/usr/lib/python3.12/multiprocessing/spawn.py", line 246, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+  File "/usr/lib/python3.12/multiprocessing/spawn.py", line 297, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen runpy>", line 286, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/stewa/code/imageworks/.venv/bin/vllm", line 4, in <module>
+    from vllm.entrypoints.cli.main import main
+  File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/__init__.py", line 14, in <module>
+    import vllm.env_override  # noqa: F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/env_override.py", line 5, in <module>
+    import torch
+  File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/torch/__init__.py", line 416, in <module>
+    from torch._C import *  # noqa: F403
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 463, in _lock_unlock_module
+KeyboardInterrupt
+[1;36m(APIServer pid=1024508)[0;0m Traceback (most recent call last):
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/bin/vllm", line 10, in <module>
+[1;36m(APIServer pid=1024508)[0;0m     sys.exit(main())
+[1;36m(APIServer pid=1024508)[0;0m              ^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/main.py", line 54, in main
+[1;36m(APIServer pid=1024508)[0;0m     args.dispatch_function(args)
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/serve.py", line 50, in cmd
+[1;36m(APIServer pid=1024508)[0;0m     uvloop.run(run_server(args))
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 109, in run
+[1;36m(APIServer pid=1024508)[0;0m     return __asyncio.run(
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+[1;36m(APIServer pid=1024508)[0;0m     return runner.run(main)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+[1;36m(APIServer pid=1024508)[0;0m     return self._loop.run_until_complete(task)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 61, in wrapper
+[1;36m(APIServer pid=1024508)[0;0m     return await main
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1941, in run_server
+[1;36m(APIServer pid=1024508)[0;0m     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1961, in run_server_worker
+[1;36m(APIServer pid=1024508)[0;0m     async with build_async_engine_client(
+[1;36m(APIServer pid=1024508)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=1024508)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 179, in build_async_engine_client
+[1;36m(APIServer pid=1024508)[0;0m     async with build_async_engine_client_from_engine_args(
+[1;36m(APIServer pid=1024508)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=1024508)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 221, in build_async_engine_client_from_engine_args
+[1;36m(APIServer pid=1024508)[0;0m     async_llm = AsyncLLM.from_vllm_config(
+[1;36m(APIServer pid=1024508)[0;0m                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/utils/__init__.py", line 1589, in inner
+[1;36m(APIServer pid=1024508)[0;0m     return fn(*args, **kwargs)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 212, in from_vllm_config
+[1;36m(APIServer pid=1024508)[0;0m     return cls(
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 136, in __init__
+[1;36m(APIServer pid=1024508)[0;0m     self.engine_core = EngineCoreClient.make_async_mp_client(
+[1;36m(APIServer pid=1024508)[0;0m                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 102, in make_async_mp_client
+[1;36m(APIServer pid=1024508)[0;0m     return AsyncMPClient(*client_args)
+[1;36m(APIServer pid=1024508)[0;0m            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 769, in __init__
+[1;36m(APIServer pid=1024508)[0;0m     super().__init__(
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+[1;36m(APIServer pid=1024508)[0;0m     with launch_core_engines(vllm_config, executor_class,
+[1;36m(APIServer pid=1024508)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 144, in __exit__
+[1;36m(APIServer pid=1024508)[0;0m     next(self.gen)
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 729, in launch_core_engines
+[1;36m(APIServer pid=1024508)[0;0m     wait_for_engine_startup(
+[1;36m(APIServer pid=1024508)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 782, in wait_for_engine_startup
+[1;36m(APIServer pid=1024508)[0;0m     raise RuntimeError("Engine core initialization failed. "
+[1;36m(APIServer pid=1024508)[0;0m RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}

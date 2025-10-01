@@ -1,0 +1,94 @@
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py:111: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+INFO 09-30 20:32:25 [__init__.py:216] Automatically detected platform cuda.
+[1;36m(APIServer pid=976166)[0;0m INFO 09-30 20:32:27 [api_server.py:1896] vLLM API server version 0.10.2
+[1;36m(APIServer pid=976166)[0;0m INFO 09-30 20:32:27 [utils.py:328] non-default args: {'model_tag': '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf', 'host': '0.0.0.0', 'port': 24001, 'model': '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf', 'dtype': 'float16', 'max_model_len': 4096}
+[1;36m(APIServer pid=976166)[0;0m Traceback (most recent call last):
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 478, in cached_files
+[1;36m(APIServer pid=976166)[0;0m     hf_hub_download(
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[1;36m(APIServer pid=976166)[0;0m     validate_repo_id(arg_value)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[1;36m(APIServer pid=976166)[0;0m     raise HFValidationError(
+[1;36m(APIServer pid=976166)[0;0m huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf'. Use `repo_type` argument if needed.
+[1;36m(APIServer pid=976166)[0;0m
+[1;36m(APIServer pid=976166)[0;0m During handling of the above exception, another exception occurred:
+[1;36m(APIServer pid=976166)[0;0m
+[1;36m(APIServer pid=976166)[0;0m Traceback (most recent call last):
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py", line 721, in _get_config_dict
+[1;36m(APIServer pid=976166)[0;0m     resolved_config_file = cached_file(
+[1;36m(APIServer pid=976166)[0;0m                            ^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 321, in cached_file
+[1;36m(APIServer pid=976166)[0;0m     file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 531, in cached_files
+[1;36m(APIServer pid=976166)[0;0m     _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py", line 144, in _get_cache_file_to_return
+[1;36m(APIServer pid=976166)[0;0m     resolved_file = try_to_load_from_cache(
+[1;36m(APIServer pid=976166)[0;0m                     ^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[1;36m(APIServer pid=976166)[0;0m     validate_repo_id(arg_value)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[1;36m(APIServer pid=976166)[0;0m     raise HFValidationError(
+[1;36m(APIServer pid=976166)[0;0m huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf'. Use `repo_type` argument if needed.
+[1;36m(APIServer pid=976166)[0;0m
+[1;36m(APIServer pid=976166)[0;0m During handling of the above exception, another exception occurred:
+[1;36m(APIServer pid=976166)[0;0m
+[1;36m(APIServer pid=976166)[0;0m Traceback (most recent call last):
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/bin/vllm", line 10, in <module>
+[1;36m(APIServer pid=976166)[0;0m     sys.exit(main())
+[1;36m(APIServer pid=976166)[0;0m              ^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/main.py", line 54, in main
+[1;36m(APIServer pid=976166)[0;0m     args.dispatch_function(args)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/serve.py", line 50, in cmd
+[1;36m(APIServer pid=976166)[0;0m     uvloop.run(run_server(args))
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 109, in run
+[1;36m(APIServer pid=976166)[0;0m     return __asyncio.run(
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+[1;36m(APIServer pid=976166)[0;0m     return runner.run(main)
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+[1;36m(APIServer pid=976166)[0;0m     return self._loop.run_until_complete(task)
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 61, in wrapper
+[1;36m(APIServer pid=976166)[0;0m     return await main
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1941, in run_server
+[1;36m(APIServer pid=976166)[0;0m     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1961, in run_server_worker
+[1;36m(APIServer pid=976166)[0;0m     async with build_async_engine_client(
+[1;36m(APIServer pid=976166)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=976166)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 179, in build_async_engine_client
+[1;36m(APIServer pid=976166)[0;0m     async with build_async_engine_client_from_engine_args(
+[1;36m(APIServer pid=976166)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=976166)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 205, in build_async_engine_client_from_engine_args
+[1;36m(APIServer pid=976166)[0;0m     vllm_config = engine_args.create_engine_config(usage_context=usage_context)
+[1;36m(APIServer pid=976166)[0;0m                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/engine/arg_utils.py", line 1119, in create_engine_config
+[1;36m(APIServer pid=976166)[0;0m     model_config = self.create_model_config()
+[1;36m(APIServer pid=976166)[0;0m                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/engine/arg_utils.py", line 963, in create_model_config
+[1;36m(APIServer pid=976166)[0;0m     return ModelConfig(
+[1;36m(APIServer pid=976166)[0;0m            ^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/pydantic/_internal/_dataclasses.py", line 123, in __init__
+[1;36m(APIServer pid=976166)[0;0m     s.__pydantic_validator__.validate_python(ArgsKwargs(args, kwargs), self_instance=s)
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/config/__init__.py", line 603, in __post_init__
+[1;36m(APIServer pid=976166)[0;0m     self.model, self.tokenizer = maybe_override_with_speculators_target_model(  # noqa: E501
+[1;36m(APIServer pid=976166)[0;0m                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/transformers_utils/config.py", line 487, in maybe_override_with_speculators_target_model
+[1;36m(APIServer pid=976166)[0;0m     config_dict, _ = PretrainedConfig.get_config_dict(
+[1;36m(APIServer pid=976166)[0;0m                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py", line 662, in get_config_dict
+[1;36m(APIServer pid=976166)[0;0m     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+[1;36m(APIServer pid=976166)[0;0m                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=976166)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py", line 744, in _get_config_dict
+[1;36m(APIServer pid=976166)[0;0m     raise OSError(
+[1;36m(APIServer pid=976166)[0;0m OSError: Can't load the configuration of '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure '/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf' is the correct path to a directory containing a config.json file

@@ -359,7 +359,49 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         return predictions
 
 
-def create_inference_engine(config: PersonalTaggerConfig) -> BaseInferenceEngine:
-    """Factory to create the default inference engine."""
+class FakeInferenceEngine(BaseInferenceEngine):
+    """Test inference engine that generates fake data without AI calls."""
 
-    return OpenAIInferenceEngine(config)
+    def __init__(self, config: PersonalTaggerConfig) -> None:
+        super().__init__(config)
+        self._models = GenerationModels(
+            caption=f"fake/{config.caption_model}",
+            keywords=f"fake/{config.keyword_model}",
+            description=f"fake/{config.description_model}",
+        )
+
+    def process(self, image_path: Path) -> PersonalTaggerRecord:
+        # Generate fake but realistic-looking data
+        import time
+
+        time.sleep(0.01)  # Small delay to simulate processing
+
+        return PersonalTaggerRecord(
+            image=image_path,
+            keywords=[
+                KeywordPrediction(keyword="motorcycle", score=1.0),
+                KeywordPrediction(keyword="racing", score=0.95),
+                KeywordPrediction(keyword="speed", score=0.90),
+                KeywordPrediction(keyword="helmet", score=0.85),
+                KeywordPrediction(keyword="number", score=0.80),
+                KeywordPrediction(keyword="11", score=0.75),
+                KeywordPrediction(keyword="sponsor", score=0.70),
+                KeywordPrediction(keyword="advertisement", score=0.65),
+            ],
+            caption="A rider in a red and white suit leans into a turn on a track, with a blurred background of another motorcycle.",
+            description="A rider clad in a striking red and white suit, marked with the number 11, leans into a sharp turn on a racetrack, showcasing the precision and speed of motorcycle racing. The rider's helmet, adorned with a shark logo, adds to the intensity of the scene. The blurred background of another motorcycle emphasizes the high-speed motion, while the track's edge, lined with red and white, frames the action.",
+            duration_seconds=0.01,
+            backend=f"fake-{self.config.backend}",
+            models=self._models,
+            metadata_written=False,
+            notes="dry-run: fake test data",
+        )
+
+
+def create_inference_engine(config: PersonalTaggerConfig) -> BaseInferenceEngine:
+    """Factory to create the appropriate inference engine."""
+
+    if config.dry_run:
+        return FakeInferenceEngine(config)
+    else:
+        return OpenAIInferenceEngine(config)

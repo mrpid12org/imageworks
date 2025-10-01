@@ -1,0 +1,21 @@
+{# llava15_vicuna.jinja #}
+{% set image_token = "<image>" %}
+{% for m in messages %}
+{% if m['role'] == 'system' %}
+SYSTEM: {{ m['content'] | trim }}
+{% elif m['role'] == 'user' %}
+USER:
+{%- if m['content'] is string -%}
+  {{ m['content'] | trim }}
+{%- else -%}
+  {# handle OpenAI Vision content blocks #}
+  {%- for part in m['content'] -%}
+    {%- if part['type'] == 'text' -%}{{ part['text'] | trim }}{% endif -%}
+    {%- if part['type'] == 'image_url' -%} {{ image_token }} {% endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{% elif m['role'] == 'assistant' %}
+ASSISTANT: {{ m['content'] | trim }}
+{% endif %}
+{% endfor %}
+ASSISTANT:

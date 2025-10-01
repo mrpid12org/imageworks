@@ -103,6 +103,7 @@ class PersonalTaggerSettings:
     default_max_workers: int = 2
     default_recursive: bool = True
     default_dry_run: bool = False
+    default_no_meta: bool = False
     default_backup_originals: bool = True
     default_overwrite_metadata: bool = False
     caption_model: str = "Qwen2.5-VL-7B-AWQ"
@@ -142,6 +143,7 @@ class PersonalTaggerConfig:
     max_workers: int
     recursive: bool
     dry_run: bool
+    no_meta: bool
     backup_originals: bool
     overwrite_metadata: bool
     image_extensions: Tuple[str, ...]
@@ -369,6 +371,7 @@ def build_runtime_config(
     max_workers: Optional[int] = None,
     recursive: Optional[bool] = None,
     dry_run: Optional[bool] = None,
+    no_meta: Optional[bool] = None,
     backup_originals: Optional[bool] = None,
     overwrite_metadata: Optional[bool] = None,
     image_extensions: Optional[Sequence[str]] = None,
@@ -432,6 +435,7 @@ def build_runtime_config(
         recursive if recursive is not None else settings.default_recursive
     )
     resolved_dry_run = dry_run if dry_run is not None else settings.default_dry_run
+    resolved_no_meta = no_meta if no_meta is not None else settings.default_no_meta
     resolved_backup = (
         backup_originals
         if backup_originals is not None
@@ -476,6 +480,7 @@ def build_runtime_config(
         max_workers=resolved_max_workers,
         recursive=resolved_recursive,
         dry_run=resolved_dry_run,
+        no_meta=resolved_no_meta,
         backup_originals=resolved_backup,
         overwrite_metadata=resolved_overwrite,
         image_extensions=resolved_exts,

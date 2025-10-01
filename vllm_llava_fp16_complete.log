@@ -1,0 +1,62 @@
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/transformers/utils/hub.py:111: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+INFO 09-30 22:02:05 [__init__.py:216] Automatically detected platform cuda.
+[1;36m(APIServer pid=995899)[0;0m INFO 09-30 22:02:07 [api_server.py:1896] vLLM API server version 0.10.2
+[1;36m(APIServer pid=995899)[0;0m INFO 09-30 22:02:07 [utils.py:328] non-default args: {'model_tag': '/home/stewa/ai-models/weights/llava-1.5-7b-hf', 'host': '0.0.0.0', 'port': 24001, 'model': '/home/stewa/ai-models/weights/llava-1.5-7b-hf', 'dtype': 'float16', 'max_model_len': 4096}
+[1;36m(APIServer pid=995899)[0;0m Traceback (most recent call last):
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/bin/vllm", line 10, in <module>
+[1;36m(APIServer pid=995899)[0;0m     sys.exit(main())
+[1;36m(APIServer pid=995899)[0;0m              ^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/main.py", line 54, in main
+[1;36m(APIServer pid=995899)[0;0m     args.dispatch_function(args)
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/cli/serve.py", line 50, in cmd
+[1;36m(APIServer pid=995899)[0;0m     uvloop.run(run_server(args))
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 109, in run
+[1;36m(APIServer pid=995899)[0;0m     return __asyncio.run(
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+[1;36m(APIServer pid=995899)[0;0m     return runner.run(main)
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+[1;36m(APIServer pid=995899)[0;0m     return self._loop.run_until_complete(task)
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/uvloop/__init__.py", line 61, in wrapper
+[1;36m(APIServer pid=995899)[0;0m     return await main
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1941, in run_server
+[1;36m(APIServer pid=995899)[0;0m     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 1961, in run_server_worker
+[1;36m(APIServer pid=995899)[0;0m     async with build_async_engine_client(
+[1;36m(APIServer pid=995899)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=995899)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 179, in build_async_engine_client
+[1;36m(APIServer pid=995899)[0;0m     async with build_async_engine_client_from_engine_args(
+[1;36m(APIServer pid=995899)[0;0m   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+[1;36m(APIServer pid=995899)[0;0m     return await anext(self.gen)
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 205, in build_async_engine_client_from_engine_args
+[1;36m(APIServer pid=995899)[0;0m     vllm_config = engine_args.create_engine_config(usage_context=usage_context)
+[1;36m(APIServer pid=995899)[0;0m                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/engine/arg_utils.py", line 1119, in create_engine_config
+[1;36m(APIServer pid=995899)[0;0m     model_config = self.create_model_config()
+[1;36m(APIServer pid=995899)[0;0m                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/vllm/engine/arg_utils.py", line 963, in create_model_config
+[1;36m(APIServer pid=995899)[0;0m     return ModelConfig(
+[1;36m(APIServer pid=995899)[0;0m            ^^^^^^^^^^^^
+[1;36m(APIServer pid=995899)[0;0m   File "/home/stewa/code/imageworks/.venv/lib/python3.12/site-packages/pydantic/_internal/_dataclasses.py", line 123, in __init__
+[1;36m(APIServer pid=995899)[0;0m     s.__pydantic_validator__.validate_python(ArgsKwargs(args, kwargs), self_instance=s)
+[1;36m(APIServer pid=995899)[0;0m pydantic_core._pydantic_core.ValidationError: 1 validation error for ModelConfig
+[1;36m(APIServer pid=995899)[0;0m   Value error, Invalid repository ID or local directory specified: '/home/stewa/ai-models/weights/llava-1.5-7b-hf'.
+[1;36m(APIServer pid=995899)[0;0m Please verify the following requirements:
+[1;36m(APIServer pid=995899)[0;0m 1. Provide a valid Hugging Face repository ID.
+[1;36m(APIServer pid=995899)[0;0m 2. Specify a local directory that contains a recognized configuration file.
+[1;36m(APIServer pid=995899)[0;0m    - For Hugging Face models: ensure the presence of a 'config.json'.
+[1;36m(APIServer pid=995899)[0;0m    - For Mistral models: ensure the presence of a 'params.json'.
+[1;36m(APIServer pid=995899)[0;0m 3. For GGUF: pass the local path of the GGUF checkpoint.
+[1;36m(APIServer pid=995899)[0;0m    Loading GGUF from a remote repo directly is not yet supported.
+[1;36m(APIServer pid=995899)[0;0m  [type=value_error, input_value=ArgsKwargs((), {'model': ...rocessor_plugin': None}), input_type=ArgsKwargs]
+[1;36m(APIServer pid=995899)[0;0m     For further information visit https://errors.pydantic.dev/2.11/v/value_error
