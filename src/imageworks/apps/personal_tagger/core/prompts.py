@@ -112,6 +112,41 @@ PROFILES: Dict[int, TaggerPromptProfile] = {
             max_new_tokens=512,
         ),
     ),
+    3: TaggerPromptProfile(
+        id=3,
+        name="phototools_prompt",
+        description="PhotoTools-inspired prompts focused on expert photo editing perspective with ranked keyword generation.",
+        caption_stage=StagePrompt(
+            system="You write concise, photographic captions for personal photo libraries.",
+            user_template=(
+                "Provide an active-voice caption describing this image. "
+                "Limit the caption to at most two sentences and fewer than 200 characters. "
+                "Do not include quotation marks or extra commentary."
+            ),
+            max_new_tokens=128,
+        ),
+        keyword_stage=StagePrompt(
+            system="Act as an expert photo editor. Your task is to provide a ranked list of keywords for the image.",
+            user_template=(
+                "Generate a ranked list of the 25 most relevant Keywords, with the most important first. "
+                "Keywords must be specific and distinct. "
+                "Return ONLY valid JSON."
+            ),
+            max_new_tokens=256,
+        ),
+        description_stage=StagePrompt(
+            system=(
+                "Write rich, accessibility-friendly descriptions of photographs. "
+                "Compose warm but factual prose suitable for metadata fields."
+            ),
+            user_template=(
+                "Using the provided caption and keywords as context, craft a vivid 3-4 sentence description of the image. "
+                "Do not repeat the caption verbatim; expand on important subjects, setting, light, and mood. "
+                "Caption: {caption}. Keywords: {keyword_preview}."
+            ),
+            max_new_tokens=512,
+        ),
+    ),
 }
 
 DEFAULT_PROMPT_ID = 1

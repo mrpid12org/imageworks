@@ -115,7 +115,12 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
     dry_run: Optional[bool] = typer.Option(  # noqa: FBT001 - clarity over style
         None,
         "--dry-run/--no-dry-run",
-        help="Skip metadata writes and emit placeholder JSON.",
+        help="Skip AI inference and metadata writes, use fake test data.",
+    ),
+    no_meta: bool = typer.Option(
+        False,
+        "--no-meta",
+        help="Run real AI inference but skip metadata writing to image files.",
     ),
     backup_originals: Optional[
         bool
@@ -164,6 +169,7 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "max_workers": max_workers,
         "recursive": recursive,
         "dry_run": dry_run,
+        "no_meta": no_meta,
         "backup_originals": backup_originals,
         "overwrite_metadata": overwrite_metadata,
         "image_extensions": image_exts.split(",") if image_exts else None,
