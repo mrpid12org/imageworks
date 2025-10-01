@@ -4,6 +4,20 @@
 
 The Personal Tagger is a sophisticated AI-powered system for automatically enriching photo libraries with keywords, captions, and descriptions. It processes various image formats (JPG, JPEG, PNG, TIF, TIFF, ORF, CR2, CR3) and writes metadata directly into JPEG files or as XMP sidecars for RAW/TIFF files, making results visible in Lightroom and other photo management software.
 
+## Operational Flow & Dependencies
+
+The Personal Tagger **does not download or serve AI models on its own**—it orchestrates already-running Vision-Language Model (VLM) endpoints. A typical end-to-end workflow is:
+
+1. **Fetch model weights** with the [Model Downloader](model-downloader.md):
+   ```bash
+   imageworks-download download "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ"
+   imageworks-download download "llava-hf/llava-v1.6-mistral-7b-hf"
+   ```
+2. **Launch inference backends** (vLLM, LMDeploy, etc.) that expose OpenAI-compatible APIs using the downloaded paths (for example via `scripts/start_personal_tagger_backends.py --launch`).
+3. **Run the Personal Tagger CLI** once the endpoints are healthy; the runner connects to those servers using the configured base URLs and model identifiers.
+
+This separation ensures the tagger can target local GPU servers, remote inference stacks, or hosted APIs interchangeably. The downloader therefore runs *before* the personal tagger when you host models yourself, but the tagger can also point at existing infrastructure where the models are already available.
+
 ## Core System Architecture
 
 The Personal Tagger is built as a **modular, pipeline-based system** with clear separation of concerns across multiple layers:
@@ -53,12 +67,13 @@ pyproject.toml defaults → Environment variables → CLI arguments
 **Key Components**:
 - `StagePrompt`: Individual prompt templates with token limits and context variables
 - `TaggerPromptProfile`: Contains prompts for all three stages (caption, keywords, description)
-- Built-in profiles: "default" and "narrative_v2" with different tone/style approaches
+- Built-in profiles: "default", "narrative_v2", and "phototools_prompt" with distinct tone/style approaches
 - Template rendering with dynamic context substitution
 
 **Prompt Profiles**:
 - **Default**: Concise, factual outputs optimized for metadata fields
 - **Narrative v2**: More evocative, storyteller tone with broader keyword diversity
+- **PhotoTools Prompt**: PhotoTools-inspired phrasing with expert keyword emphasis
 
 #### `inference.py` - AI Orchestration
 **Purpose**: Manages the complete AI inference pipeline with multiple backend support.
@@ -67,7 +82,8 @@ pyproject.toml defaults → Environment variables → CLI arguments
 - `OpenAIChatClient`: Thin wrapper around VLM backends with unified interface
 - `BaseInferenceEngine`: Abstract interface for different inference approaches
 - `OpenAIInferenceEngine`: Sequential 3-stage pipeline implementation
-- Robust error handling with per-stage fallbacks and recovery
+- `FakeInferenceEngine`: Generates deterministic fixtures when `dry_run` mode is enabled
+- `create_inference_engine()`: Factory that chooses between real and fake engines
 - Base64 image encoding and intelligent JSON response parsing
 
 **Processing Flow**:
@@ -112,9 +128,9 @@ pyproject.toml defaults → Environment variables → CLI arguments
 
 **Responsibilities**:
 - **Image discovery**: Recursive directory scanning with extension filtering
-- **Processing coordination**: Sequential image processing with progress tracking
+- **Processing coordination**: Sequential image handling via the configured inference engine
 - **Output generation**: JSONL audit logs and human-readable Markdown summaries
-- **Error aggregation**: Collects and reports processing failures
+- **Result annotation**: Captures metadata write outcomes and attaches notes per image
 - **Dual testing modes**:
   - **Dry-run**: Uses fake test data, no AI inference, no metadata writes
   - **No-meta**: Real AI inference but skips metadata writes
@@ -147,9 +163,9 @@ pyproject.toml defaults → Environment variables → CLI arguments
 
 **Features**:
 - OpenAI-compatible API standardization
-- Health checking and error recovery
-- Configurable timeouts and retry logic
-- Backend-specific optimizations
+- Health checking with graceful error reporting
+- Configurable request timeouts
+- Backend-specific extensions (e.g. LMDeploy health endpoints, Triton stub)
 
 #### Prompt Library System (`prompting/`)
 **Purpose**: Reusable prompt management infrastructure shared across ImageWorks apps.

@@ -36,10 +36,13 @@ def download_model(
         None,
         "--format",
         "-f",
-        help="Preferred format (gguf, awq, gptq, safetensors, etc.)",
+        help="Preferred format(s) (comma separated: gguf, awq, gptq, safetensors, etc.)",
     ),
     location: Optional[str] = typer.Option(
-        None, "--location", "-l", help="Target location (linux_wsl, windows_lmstudio)"
+        None,
+        "--location",
+        "-l",
+        help="Target location (linux_wsl, windows_lmstudio, or custom path)",
     ),
     include_optional: bool = typer.Option(
         False,
@@ -59,10 +62,14 @@ def download_model(
     try:
         downloader = ModelDownloader()
 
+        preferred_formats = None
+        if format_preference:
+            preferred_formats = [fmt.strip() for fmt in format_preference.split(",") if fmt.strip()]
+
         # Run download directly, let aria2c show its native progress
         model_entry = downloader.download(
             model_identifier=model,
-            format_preference=format_preference,
+            format_preference=preferred_formats,
             location_override=location,
             include_optional=include_optional,
             force_redownload=force,
@@ -108,7 +115,9 @@ def list_models(
 
     try:
         downloader = ModelDownloader()
-        models = downloader.list_models()
+        models = downloader.list_models(
+            format_filter=format_filter, location_filter=location_filter
+        )
 
         if json_output:
             import json
@@ -270,7 +279,10 @@ def remove_model(
         # Remove models
         downloader = ModelDownloader()
         success = downloader.remove_model(
-            model_name, format_type, location, delete_files
+            model_name,
+            format_type=format_type,
+            location=location,
+            delete_files=delete_files,
         )
 
         if success:

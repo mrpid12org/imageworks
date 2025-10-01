@@ -62,6 +62,9 @@ class URLAnalyzer:
         "direct_file": re.compile(
             r"https?://.*\.(safetensors|gguf|bin|pth|onnx|pt)(?:\?.*)?$"
         ),
+        "huggingface_shorthand": re.compile(
+            r"^([\w.-]+)/([\w.-]+?)(?:@([\w./-]+))?$"
+        ),
     }
 
     def __init__(self, timeout: int = 30):
@@ -147,7 +150,29 @@ class URLAnalyzer:
                         file_info.priority = True
             return result
 
+        elif pattern_type == "huggingface_shorthand":
+            owner, repo, branch = groups
+            return self.analyze_huggingface_repo(
+                owner,
+                repo,
+                branch or "main",
+            )
+
         else:
+            # Support bare owner/repo identifiers even if they do not
+            # strictly match the shorthand regex (e.g. extra whitespace).
+            normalized = url.strip()
+            if normalized and "/" in normalized and not normalized.startswith(
+                ("http://", "https://")
+            ):
+                owner, repo_branch = normalized.split("/", 1)
+                repo, _, branch = repo_branch.partition("@")
+                if owner and repo:
+                    return self.analyze_huggingface_repo(
+                        owner,
+                        repo,
+                        branch or "main",
+                    )
             raise ValueError(f"Unsupported URL type: {pattern_type}")
 
     def _get_model_info(self, owner: str, repo: str) -> Dict[str, Any]:
