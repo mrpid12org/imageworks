@@ -53,6 +53,10 @@ imageworks-download list
 imageworks-download stats
 ```
 
+### Logging
+
+All downloader commands now stream structured logs to `logs/model_downloader.log` by default so you can audit each transfer. Set the `IMAGEWORKS_LOG_DIR` environment variable to relocate the log directory (for example when running inside a container or packaging the tool). Console output remains unchanged for interactive use, but every status icon and warning is mirrored into the log file for later review.
+
 ### Python API
 
 ```python
@@ -102,7 +106,6 @@ The downloader manages two separate directories:
 
 Downloads that use `--location windows_lmstudio` (or detect GGUF formats automatically) keep a publisher/`repo` structure. Other formats default to `~/ai-models/weights/<owner>/<repo>`. Supplying a custom path via `--location /path/to/models` stores the model beneath that path. When a non-`main` branch is requested, the repository directory is suffixed with `@branch` (e.g. `DialoGPT-medium@dev`) to avoid collisions with the default branch.
 
-
 ## Format Detection
 
 The downloader aggregates multiple detectors to determine the best storage location:
@@ -116,6 +119,18 @@ The downloader aggregates multiple detectors to determine the best storage locat
 | **PyTorch** | `.bin`, `.pth`, `.pt` weights | Linux WSL |
 
 Results are ranked by confidence; provide `--format awq,gguf` to express an explicit preference order when multiple matches are found.
+
+## Validation & Troubleshooting
+
+Every download is verified to ensure files are present and complete before an entry is stored in the registry. The generated directories include all artefacts required by the serving helpers:
+
+- **Core configs**: `config.json` and `tokenizer_config.json`
+- **Tokenizer assets**: either `tokenizer.json` or `tokenizer.model`
+- **Serving aids**: `generation_config.json`, `chat_template.json`, and quantisation descriptors when the upstream repository ships them
+- **Weights**: at least one `.safetensors`, `.bin`, `.pt`, `.awq`, or `.gguf` shard
+
+If any file fails to download, the downloader aborts with a verification error so you can retry without registering a broken model. The [LMDeploy helper](../scripts/start_lmdeploy_server.py) performs an additional sanity check when you launch the server, warning about missing chat templates or generation configs before it starts. This mirrors the most common causes of runtime issues (blank completions, misaligned role handling, or tokenisation failures) and provides actionable remediation guidance.
+
 
 ## Commands
 

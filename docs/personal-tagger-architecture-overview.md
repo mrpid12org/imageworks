@@ -18,6 +18,12 @@ The Personal Tagger **does not download or serve AI models on its own**—it orc
 
 This separation ensures the tagger can target local GPU servers, remote inference stacks, or hosted APIs interchangeably. The downloader therefore runs *before* the personal tagger when you host models yourself, but the tagger can also point at existing infrastructure where the models are already available.
 
+
+## Logging & Observability
+
+Running `imageworks-personal-tagger` writes a full execution trace to `logs/personal_tagger.log` (or a custom directory specified via `IMAGEWORKS_LOG_DIR`). The CLI announces the log path during start-up and all pipeline stages emit structured INFO/WARN entries alongside the interactive console output. Companion utilities follow the same convention—for example `imageworks-download` records to `logs/model_downloader.log` and the LMDeploy launcher writes to `logs/lmdeploy_server.log`—so it is easy to correlate activity across modules when troubleshooting a tagging workflow.
+
+
 ## Core System Architecture
 
 The Personal Tagger is built as a **modular, pipeline-based system** with clear separation of concerns across multiple layers:
@@ -198,6 +204,11 @@ pyproject.toml defaults → Environment variables → CLI arguments
 - Automatically resolves the default Qwen2.5-VL AWQ checkpoint under
   `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ`, matching
   the Model Downloader's directory layout.
+
+- Performs pre-flight validation of the model directory, failing fast when
+  `config.json`, tokenizer assets, or other critical metadata are missing and
+  surfacing actionable warnings for absent chat templates or generation configs.
+
 
 #### vLLM Server (`start_vllm_server.py`)
 **Purpose**: Launches vLLM servers with advanced parallelization support.
