@@ -435,6 +435,10 @@ python scripts/start_personal_tagger_backends.py --launch \
   --caption-model-path "~/ai-models/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ" \
   --description-model-path "~/ai-models/weights/llava-hf/llava-v1.6-mistral-7b-hf"
 
+# The LMDeploy helper defaults to `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/…`, so
+# downloads made with the Model Downloader are discovered automatically when you
+# keep the standard directory layout.
+
 # Run the personal tagger once backends are online
 python -m imageworks.apps.personal_tagger.cli.main run --input ~/photos --backend http://localhost:8000
 ```
