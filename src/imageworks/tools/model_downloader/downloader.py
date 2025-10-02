@@ -230,7 +230,6 @@ class ModelDownloader:
             repository_id if branch == "main" else f"{repository_id}@{branch}"
         )
 
-
         # Normalise format preferences – accept single strings from callers
         preferred_formats: Optional[List[str]]
         if isinstance(format_preference, str):
@@ -265,18 +264,25 @@ class ModelDownloader:
                                 .lower()
                             )
                             if response not in ["y", "yes"]:
-                                self._log("❌ Download cancelled by user", level=logging.WARNING)
+                                self._log(
+                                    "❌ Download cancelled by user",
+                                    level=logging.WARNING,
+                                )
                                 return existing  # Return existing entry without downloading
                             self._log("🔄 Proceeding with re-download...")
                         except (KeyboardInterrupt, EOFError):
-                            self._log("\n❌ Download cancelled by user", level=logging.WARNING)
+                            self._log(
+                                "\n❌ Download cancelled by user", level=logging.WARNING
+                            )
                             return existing
                         # Remove stale registry entry to avoid confusion
                         self.registry.remove_model(
                             existing.model_name, existing.format_type, existing.location
                         )
                     else:
-                        self._log("🔄 Non-interactive mode: proceeding with re-download...")
+                        self._log(
+                            "🔄 Non-interactive mode: proceeding with re-download..."
+                        )
                         # Remove stale registry entry
                         self.registry.remove_model(
                             existing.model_name, existing.format_type, existing.location
@@ -288,7 +294,10 @@ class ModelDownloader:
             all_files.extend(file_list)
         formats = self.format_detector.detect_from_filelist([f.path for f in all_files])
         if not formats:
-            self._log("⚠️  Could not detect model format, using default routing", level=logging.WARNING)
+            self._log(
+                "⚠️  Could not detect model format, using default routing",
+                level=logging.WARNING,
+            )
             primary_format = "unknown"
         else:
             # Use format preference or first detected
@@ -320,15 +329,12 @@ class ModelDownloader:
                 target_dir = base_dir / owner / storage_repo_name
             else:
                 target_dir = (
-                    Path(normalized_override).expanduser()
-                    / owner
-                    / storage_repo_name
+                    Path(normalized_override).expanduser() / owner / storage_repo_name
                 )
         else:
             target_dir = self.config.get_target_directory(
                 primary_format,
                 storage_repo_name,
-
                 publisher=owner,
             )
 
@@ -369,6 +375,72 @@ class ModelDownloader:
 
         self._log("✅ Download verification passed - all files complete")
 
+        # Chat template detection & root file harvesting
+        # 1. Embedded template inside tokenizer_config.json
+        tokenizer_cfg_path = target_dir / "tokenizer_config.json"
+        has_embedded_template = False
+        embedded_template_snippet = None
+        if tokenizer_cfg_path.exists():
+            try:
+                import json
+
+                data = json.loads(tokenizer_cfg_path.read_text(encoding="utf-8"))
+                tmpl = data.get("chat_template")
+                if tmpl and isinstance(tmpl, str) and "{{" in tmpl:
+                    has_embedded_template = True
+                    embedded_template_snippet = tmpl[:160] + (
+                        "..." if len(tmpl) > 160 else ""
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            self._log(
+                "ℹ️  tokenizer_config.json not present; cannot inspect chat template",
+                level=logging.INFO,
+            )
+
+        # 2. External template files placed at repo root (common patterns: *.jinja, chat_template*.json, *_chat_template*, *template*vicuna*)
+        template_files: List[str] = []
+        candidate_patterns = [
+            ".jinja",
+            "chat_template.json",
+            "chat_template",  # generic prefix
+            "template",  # broad safety net
+        ]
+        try:
+            for p in target_dir.iterdir():
+                if not p.is_file():
+                    continue
+                name_lower = p.name.lower()
+                if any(pattern in name_lower for pattern in candidate_patterns):
+                    # Ignore extremely large non-text files (heuristic)
+                    if (
+                        p.stat().st_size < 2_000_000
+                    ):  # 2MB safety limit for template-like files
+                        # simple text sniff
+                        try:
+                            head = p.read_text(encoding="utf-8", errors="ignore")[:400]
+                            if "{{" in head and "}}" in head:
+                                template_files.append(p.name)
+                        except Exception:
+                            pass
+        except Exception:  # noqa: BLE001
+            pass
+
+        has_external_template = len(template_files) > 0
+        has_chat_template = has_embedded_template or has_external_template
+
+        if has_chat_template:
+            detail = "embedded" if has_embedded_template else "external-file"
+            self._log(
+                f"💬 Chat template detected ({detail}). External files: {template_files if template_files else 'n/a'}"
+            )
+        else:
+            self._log(
+                "💬 No chat template detected (embedded or external). If you encounter 400 errors ('default chat template no longer allowed'), use --chat-template to supply one.",
+                level=logging.INFO,
+            )
+
         # Step 8: Calculate total size (now guaranteed to be accurate)
         total_size = sum((target_dir / f.path).stat().st_size for f in all_files)
 
@@ -378,9 +450,15 @@ class ModelDownloader:
         for f in all_files:
             downloaded_files.append(f.path)
 
-        if self.config.linux_wsl.root in target_dir.parents or self.config.linux_wsl.root == target_dir:
+        if (
+            self.config.linux_wsl.root in target_dir.parents
+            or self.config.linux_wsl.root == target_dir
+        ):
             location_label = "linux_wsl"
-        elif self.config.windows_lmstudio.root in target_dir.parents or self.config.windows_lmstudio.root == target_dir:
+        elif (
+            self.config.windows_lmstudio.root in target_dir.parents
+            or self.config.windows_lmstudio.root == target_dir
+        ):
             location_label = "windows_lmstudio"
         else:
             location_label = "custom"
@@ -400,6 +478,10 @@ class ModelDownloader:
                 "branch": branch,
                 "files_downloaded": len(all_files),
                 "verified_complete": True,  # Mark as verified
+                "has_chat_template": has_chat_template,
+                "has_embedded_chat_template": has_embedded_template,
+                "external_chat_template_files": template_files,
+                "embedded_chat_template_preview": embedded_template_snippet,
             },
         )
 

@@ -56,8 +56,10 @@ def build_command(args: argparse.Namespace) -> List[str]:
 
     model_arg = resolve_model_argument(args.model)
 
+    # Use the currently running interpreter (sys.executable) instead of a hardcoded
+    # 'python' binary. Some minimal distributions only expose 'python3'.
     command = [
-        "python",
+        sys.executable,
         "-m",
         "vllm.entrypoints.openai.api_server",
         "--model",
@@ -91,6 +93,10 @@ def build_command(args: argparse.Namespace) -> List[str]:
 
     if args.api_keys:
         command.extend(["--api-keys", args.api_keys])
+
+    # Attach chat template if provided (or auto-detected below)
+    if args.chat_template:
+        command.extend(["--chat-template", args.chat_template])
 
     if args.extra:
         command.extend(args.extra)
@@ -165,12 +171,32 @@ def start_server() -> None:
         help="Comma-separated API keys to require for access",
     )
     parser.add_argument(
+        "--chat-template",
+        default=None,
+        help=(
+            "Path to a Jinja2 chat template file. If omitted and the resolved model "
+            "appears to be a LLaVA/Vicuna variant, an attempt will be made to auto-"
+            "select 'llava15_vicuna.jinja' from the current working directory if present."
+        ),
+    )
+    parser.add_argument(
         "extra",
         nargs=argparse.REMAINDER,
         help="Additional arguments forwarded to vLLM",
     )
 
     args = parser.parse_args()
+
+    # Best-effort auto detection for common LLaVA models lacking an embedded chat template.
+    if not args.chat_template:
+        model_id_lower = (args.model or "").lower()
+        if "llava" in model_id_lower or "vicuna" in model_id_lower:
+            candidate = Path("llava15_vicuna.jinja")
+            if candidate.exists():
+                args.chat_template = str(candidate.resolve())
+                print(
+                    f"[auto-chat-template] Using {args.chat_template} for model '{args.model or 'auto-resolved'}'"
+                )
 
     if shutil.which("python") is None:
         sys.stderr.write("Python interpreter not found in PATH.\n")

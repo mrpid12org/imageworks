@@ -1,0 +1,10 @@
+[
+  {
+    "slug": "qwen2.5-vl-7b-awq_vllm",
+    "model_repo": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "served_model_name": "qwen2.5-vl-7b-awq",
+    "backend": "vllm",
+    "status": "success",
+    "date_utc": "2025-10-01T00:00:00Z"
+  }
+]

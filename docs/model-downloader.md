@@ -2,6 +2,8 @@
 
 A comprehensive tool for downloading and managing AI models across multiple formats and directories, with support for quantized models and cross-platform compatibility.
 
+> GGUF: Previous fallback guidance referenced a custom GGUF server script now removed. Use Ollama for GGUF experimentation; production multimodal flows rely on vLLM.
+
 ## Features
 
 - 🚀 **Fast Downloads**: Uses aria2c for parallel, resumable downloads
