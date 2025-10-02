@@ -18,6 +18,7 @@ class VLMBackend(str, Enum):
     VLLM = "vllm"
     LMDEPLOY = "lmdeploy"
     TRITON = "triton"
+    OLLAMA = "ollama"
 
 
 class VLMBackendError(RuntimeError):
@@ -132,6 +133,7 @@ BACKEND_REGISTRY: Dict[VLMBackend, Type[BaseBackendClient]] = {
     VLMBackend.VLLM: OpenAICompatibleBackend,
     VLMBackend.LMDEPLOY: LMDeployBackend,
     VLMBackend.TRITON: TritonStubBackend,
+    VLMBackend.OLLAMA: OpenAICompatibleBackend,
 }
 
 

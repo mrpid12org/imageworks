@@ -97,7 +97,9 @@ def resolve_default_model_root(
     without additional flags.
     """
 
-    environ = env or os.environ
+    # Important: respect an explicitly provided empty mapping (tests) rather than
+    # falling back to process environment.
+    environ = env if env is not None else os.environ
     candidate = environ.get("IMAGEWORKS_MODEL_ROOT")
     if candidate:
         root = Path(candidate).expanduser()
@@ -105,7 +107,9 @@ def resolve_default_model_root(
             return root
         return root / "weights"
 
-    base_home = home or Path.home()
+    # Use injected home (for tests) when provided; do not default to real user home to
+    # keep path resolution deterministic in test environments.
+    base_home = home if home is not None else Path.home()
     return base_home / "ai-models" / "weights"
 
 

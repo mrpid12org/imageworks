@@ -154,6 +154,10 @@ class PersonalTaggerConfig:
     max_keywords: int
     api_key: str
     preflight: bool
+    use_registry: bool = False
+    caption_role: str = "caption"
+    keyword_role: str = "keywords"
+    description_role: str = "description"
 
 
 def _merge_dict(
@@ -384,6 +388,10 @@ def build_runtime_config(
     image_extensions: Optional[Sequence[str]] = None,
     max_keywords: Optional[int] = None,
     preflight: Optional[bool] = None,
+    use_registry: Optional[bool] = None,
+    caption_role: Optional[str] = None,
+    keyword_role: Optional[str] = None,
+    description_role: Optional[str] = None,
 ) -> PersonalTaggerConfig:
     """Compose a runtime configuration from defaults and CLI overrides."""
 
@@ -474,6 +482,13 @@ def build_runtime_config(
     else:
         resolved_exts = settings.image_extensions
 
+    resolved_use_registry = bool(use_registry) if use_registry is not None else False
+    resolved_caption_role = (caption_role or "caption").strip() or "caption"
+    resolved_keyword_role = (keyword_role or "keywords").strip() or "keywords"
+    resolved_description_role = (
+        description_role or "description"
+    ).strip() or "description"
+
     return PersonalTaggerConfig(
         input_paths=tuple(resolved_inputs),
         output_jsonl=resolved_output,
@@ -500,4 +515,8 @@ def build_runtime_config(
         keyword_model=resolved_keyword_model,
         max_keywords=resolved_max_keywords,
         preflight=resolved_preflight,
+        use_registry=resolved_use_registry,
+        caption_role=resolved_caption_role,
+        keyword_role=resolved_keyword_role,
+        description_role=resolved_description_role,
     )

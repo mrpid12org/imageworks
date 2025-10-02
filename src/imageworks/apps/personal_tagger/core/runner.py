@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
 from .config import PersonalTaggerConfig
+from imageworks.model_loader.metrics import BatchRunMetrics
 from .inference import BaseInferenceEngine, create_inference_engine
 from .metadata_writer import PersonalMetadataWriter
 from .models import PersonalTaggerRecord
@@ -47,13 +48,21 @@ class PersonalTaggerRunner:
         if not images:
             logger.warning("No images discovered for personal tagging")
 
+        batch_metrics = BatchRunMetrics(
+            model_name=self.config.description_model,
+            backend=self.config.backend,
+        )
         records: List[PersonalTaggerRecord] = []
         for image_path in images:
+            stage_timing = batch_metrics.start_stage("image")
             record = self._process_image(image_path)
+            batch_metrics.end_stage(stage_timing)
             records.append(record)
 
+        batch_metrics.close_batch()
         self._write_jsonl(records)
         self._write_summary(records)
+        self._write_batch_metrics(batch_metrics)
 
         logger.info(
             "Completed personal tagging for %d image(s) (dry_run=%s)",
@@ -122,6 +131,28 @@ class PersonalTaggerRunner:
     def _matches_extension(self, path: Path) -> bool:
         suffix = path.suffix.lower()
         return suffix in {ext.lower() for ext in self.config.image_extensions}
+
+    def _write_batch_metrics(self, batch_metrics: BatchRunMetrics) -> None:
+        try:
+            out_dir = Path("outputs/metrics")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            path = out_dir / "personal_tagger_batch_metrics.json"
+            existing: Dict[str, object] = {}
+            if path.exists():
+                try:
+                    existing = json.loads(path.read_text())
+                except Exception:  # noqa: BLE001
+                    existing = {}
+            summary = batch_metrics.summary()
+            summary["timestamp"] = datetime.now(UTC).isoformat()
+            history = existing.get("history") if isinstance(existing, dict) else None
+            if not isinstance(history, list):
+                history = []
+            history.append(summary)
+            payload = {"history": history, "last": summary}
+            path.write_text(json.dumps(payload, indent=2))
+        except Exception:  # pragma: no cover - metrics persistence is best-effort
+            logger.debug("Failed to write batch metrics", exc_info=True)
 
     # ------------------------------------------------------------------
     # Preflight

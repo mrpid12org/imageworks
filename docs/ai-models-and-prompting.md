@@ -42,6 +42,7 @@ This document consolidates all AI model usage, experiments, and lessons learned 
 - **Quality**: Noticeably richer spatial grounding and cleaner prose than the 2 B baseline while keeping VRAM within consumer limits
 - **Server**: LMDeploy TurboMind backend (`uv run lmdeploy serve api_server …`)
 - **Notes**: Default LMDeploy port 24001; weights live at `$IMAGEWORKS_MODEL_ROOT/Qwen2.5-VL-7B-Instruct-AWQ`
+- **Registry Roles**: `caption`, `description`, `keywords` (multi-purpose vision model) — see `configs/model_registry.json`.
 
 #### Secondary Model: Qwen2-VL-2B-Instruct (vLLM)
 - **Model Size**: 4.2 GB
@@ -49,6 +50,7 @@ This document consolidates all AI model usage, experiments, and lessons learned 
 - **Inference Speed**: <1 s per image
 - **Quality**: Still solid for contamination calls; kept for lightweight setups or as a regression check
 - **Server**: vLLM OpenAI API (`scripts/start_vllm_server.py`)
+- **Registry Roles**: `caption`, `description` (lightweight alternative)
 
 #### Alternative Models Tested
 
@@ -146,6 +148,40 @@ VLMClient(
 ---
 
 ## Prompt Engineering
+### Unified Registry & Role-Based Model Selection (Cross-App)
+The project now uses a unified deterministic model registry (`configs/model_registry.json`) as the single source of truth for deployable models across Personal Tagger and (soon) Color Narrator.
+
+Key points:
+- Each model entry declares `roles` (e.g. `caption`, `keywords`, `description`, `narration`).
+- Applications request functional roles instead of hard‑coding model names using `--use-registry` plus role flags (Personal Tagger: `--caption-role`, `--keyword-role`, `--description-role`).
+- Central upgrades: change one registry entry + recompute/lock hash; no CLI/script edits.
+- Drift detection: `verify <model> --lock` enforces reproducibility via aggregate artifact hashing.
+
+Example (Personal Tagger):
+```bash
+uv run imageworks-personal-tagger run \
+  -i ./images \
+  --use-registry \
+  --caption-role caption \
+  --keyword-role keywords \
+  --description-role description \
+  --output-jsonl outputs/results/tagger.jsonl
+```
+
+Color Narrator will adopt the same pattern with a forthcoming `--use-registry` + `--vision-role` (see `color-narrator-reference.md`).
+
+Further reading: `personal_tagger/model_registry.md` (Section 11) and `deterministic-model-serving.md` (Section 21.15).
+
+#### When NOT to Use Explicit Model Names
+Avoid hard-coding `model=...` in application CLI invocations when:
+- You want centralized upgrades (most production + shared environments).
+- Multiple roles map to the same underlying model (de-duplicates config churn).
+- You rely on hash locking / reproducible deployments.
+
+Still use explicit names temporarily when:
+- Rapid local experiments with unregistered checkpoints.
+- Benchmarking alternate weights before assigning roles.
+- Debugging backend launch issues (use `--served-model-name` low-level flag).
 
 ### Evolution of Prompting Strategies
 
@@ -375,6 +411,8 @@ uv run imageworks-color-narrator analyze-regions \
 --max-model-len 4096            # Sufficient for image+text context
 --trust-remote-code             # Required for Qwen2-VL
 --served-model-name "Qwen2-VL-2B-Instruct"
+# (Note) For new pipelines prefer registry role-based resolution; direct --served-model-name
+# remains for backend launch scripts & low-level tuning.
 ```
 
 #### Production Setup (RTX 6000 Pro 48GB)

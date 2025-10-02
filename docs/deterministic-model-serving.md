@@ -78,6 +78,46 @@ FUTURE (Deferred but design accommodates):
 10. API surface stability → Versioned under /v1/ with explicit schema docs; additive changes only in Phase 1.
 
 ## 4. Data Model (Registry Schema)
+### 4.1 Variant Naming Convention
+Logical model ("variant") names follow a normalized, hyphen‑joined pattern to ensure stability, discoverability, and ergonomic filtering:
+
+```
+<family>-<backend>-<format>-<quant>
+```
+
+Only the first two components are strictly required (`family`, `backend`). `format` and `quant` are included when they disambiguate materially different artifacts. Examples:
+
+| Scenario | Input Source (HF ID / Context) | Derived Variant Name |
+|----------|--------------------------------|----------------------|
+| AWQ quantized vision model (vLLM) | liuhaotian/llava-v1.5-13b (AWQ) | llava-v1.5-13b-vllm-awq |
+| FP16 vision model (vLLM) | liuhaotian/llava-v1.5-13b (fp16) | llava-v1.5-13b-vllm-fp16 |
+| GGUF quant (Ollama / llama.cpp) | TheBloke/Mistral-7B-Instruct-v0.2-GGUF (Q4_K_M) | mistral-7b-instruct-v0.2-ollama-gguf-q4_k_m |
+| Plain instruct (no quant) | mistralai/Mistral-7B-Instruct-v0.2 (fp16) | mistral-7b-instruct-v0.2-vllm-fp16 |
+| Embedding model | google/siglip-base-patch16-256 | siglip-base-patch16-256-vllm (format omitted if single) |
+
+Normalization Rules:
+1. `family` is derived from the HuggingFace repo tail (optionally with branch suffix) lower‑cased; characters `/`, `_`, spaces, and `@` become `-`; repeated `-` collapsed.
+2. `backend` is one of: `vllm`, `ollama`, `lmdeploy`, `gguf` (future backends may append). For Ollama backed GGUF we still use `ollama` as backend; the `format` captures `gguf`.
+3. `format` (optional) denotes storage/serving format or weight packaging: examples `awq`, `gguf`, `fp16`, `bf16`, `safetensors`. Omit when no ambiguity (e.g., single canonical form) OR when already implied by quant (e.g., `gguf` present).
+4. `quant` (optional) is a quantization spec or tier, lower‑cased, preserving inner underscores (e.g., `q4_k_m`, `int4`, `awq`, `gptq`). If quant string equals `format` it is not duplicated.
+5. Components that are `None` / empty are skipped; no trailing hyphens.
+6. Final name must be <= 80 chars; if longer, middle segments may be abbreviated (future enhancement; not yet implemented in adapter).
+
+Collision Handling:
+- If two downloads would produce the same name (e.g. same family/backend/format/quant) the second updates the existing entry rather than creating a duplicate. Distinguish by adding an explicit quant or format if both variants are required concurrently.
+
+Rationale:
+- Encourages ergonomic shell filtering (`grep -F '-awq'`, `grep vllm`), consistent table alignment, and deterministic reverse mapping from variant → source.
+- Minimizes surprises when scripting environment variable names or log parsing.
+
+Adapter Behavior:
+- The download adapter infers `family` and constructs the name automatically; manual overrides are currently not exposed (future `--name-override` may be added if needed).
+- Re-download with different format/quant updates the same entry unless the naming changes; to preserve both, download into a distinct format/quant combination.
+
+Cross‑Reference:
+- See `docs/model-downloader.md` for CLI examples (`remove`, `verify`, `list-roles`) operating on these variant names.
+
+---
 Logical model registry entry (YAML or JSON persisted plus optional DB/JSONL):
 ```
 {
@@ -180,6 +220,17 @@ Design allows future: percentile computation; merging with external quality metr
 - version_lock.locked=true → selection requires hash equality; mismatch triggers 409 error with details (expected vs actual) — no auto-correction.
 - Manual verify command recomputes and updates last_verified when consistent.
 - Drift policy (Phase 1): Fail hard; future phases might allow soft warning mode.
+
+### 9.1 Sync & Source File Hashes (New)
+`sync-downloader` now imports downloader manifests and enriches each entry's `source.files` with `size` and (optionally) per-file `sha256` (controlled by `--include-file-hashes/--no-include-file-hashes`). This supplements (not replaces) the reproducibility `artifacts` block. The `artifacts` block is intended for the *subset of critical runtime files* whose aggregate hash drives version locking, whereas `source.files` provides provenance & inventory metadata.
+
+Recommended practice:
+1. Run `sync-downloader` after adding new models (this seeds `source`).
+2. Inspect and prune unnecessary large binary files from the future hashing scope if you later migrate to full recursive hashing (keeps aggregate stable and fast).
+3. Run `verify <name>` to compute `artifacts.*`.
+4. Lock with `verify <name> --lock` (or separate `lock` command if using the multi-command CLI) once satisfied.
+
+Rationale for split: `source.files` may contain dozens/hundreds of weight shards or auxiliary files; locking all recursively can be expensive. We start with targeted essential files and can graduate to full-directory hashing per model as needed (configurable via future `include_patterns`).
 
 ## 10. Implementation Phases
 P0 (Core Determinism):
@@ -371,3 +422,295 @@ All deterministic serving components (registry files, loader service, tests, log
 
 ## 20. Updated Summary
 All deterministic serving elements adhere to the repository’s established directory responsibilities, ensuring reproducibility metadata and operational logs are easy to locate while avoiding repo clutter. This alignment reduces friction for contributors, simplifies CI inclusion of new tests, and keeps future extensions (profiles, fallback, advanced metrics) straightforward to layer in without structural rework.
+
+## 21. Implementation Deep-Dive Addendum (2025-10-02)
+This addendum captures the detailed analysis and recommended initial implementation slices so the actionable plan is preserved outside of transient discussion.
+
+### 21.1 Codebase Review Highlights
+- Personal Tagger currently selects backends via raw config fields: `backend`, `base_url`, and individual model names (`caption_model`, `keyword_model`, `description_model`). No deterministic registry indirection or capability validation layer exists yet.
+- Both Personal Tagger (`OpenAIInferenceEngine`) and Color Narrator (`VLMClient`) invoke `create_backend_client` directly—clear seams for replacing with a loader selection abstraction.
+- Inference requests are non‑streaming (`"stream": False`) everywhere; TTFT (time to first token) cannot be measured yet. We will design metrics infra now so streaming can be introduced behind a flag without structural upheaval.
+- No existing `configs/model_registry.json`; schema introduction is greenfield. A lightweight JSON file plus dataclass models is sufficient for Phase 1; pydantic is optional.
+- Backend abstraction (`VLMBackend` enum) currently enforces explicit enumeration (vllm, lmdeploy, triton stub). Loader integration should reduce the need for application code to know the backend type directly.
+
+### 21.2 Recommended Phase 1 (P0) Implementation Slice
+1. Registry + hashing (read-only + verify CLI) introduced first—no process management side effects initially.
+2. Loader service skeleton (Python module API only): selection + minimal process manager stubs.
+3. Opt-in adaptation path for Personal Tagger (least invasive, keeps legacy path).
+4. Vision probe CLI (manual use) storing results to `outputs/probes/`.
+5. Metrics rolling window structure (TTFT placeholder, throughput later once streaming added).
+6. After stabilization, migrate Color Narrator similarly.
+
+### 21.3 Registry Schema (Initial Fields)
+Mandatory:
+- name, backend, backend_config (port, model_path, extra_args[])
+- capabilities {text, vision, audio}
+- artifacts.aggregate_sha256 (may be empty until first verify)
+- version_lock {locked: bool, expected_aggregate_sha256?, last_verified?}
+Optional / Deferred but scaffolded:
+- chat_template {source, path, sha256}
+
+### 21.7 Phase 1 Implementation Status (Code Landed)
+The following components have been fully implemented in the repository (2025‑10‑02 snapshot):
+
+- Registry core: `configs/model_registry.json` + dataclass models (`model_loader/models.py`).
+- Registry load/save/update: `model_loader/registry.py` with atomic write (`save_registry`).
+- Hashing & lock enforcement: `model_loader/hashing.py` (`verify_model`, `VersionLockViolation`).
+- Selection service: `model_loader/service.py` (`select_model`, capability guard + endpoint synthesis).
+- Metrics primitives: `model_loader/metrics.py` (`RollingMetrics`, `BatchRunMetrics`, `StageTiming`).
+- Vision probe: `model_loader/probe.py` (manual, records vision probe outcome in registry entry).
+- FastAPI HTTP API: `model_loader/api.py` exposing list/select/verify/probe/metrics.
+- Typer CLI: `model_loader/cli.py` with commands: list, select, verify, probe-vision, metrics, lock/unlock.
+- Application integration:
+  * Personal Tagger: deterministic selection for caption/keyword/description stages pre-config; batch metrics persisted to `outputs/metrics/personal_tagger_batch_metrics.json`.
+  * Color Narrator: deterministic selection via `--vlm-registry-model`; batch metrics persisted to `outputs/metrics/color_narrator_batch_metrics.json`.
+
+### 21.8 CLI Reference (Implemented)
+`imageworks-models list` → Lists logical models (name, backend, vision capability, lock state).
+
+`imageworks-models select <name>` → Returns JSON descriptor: `{endpoint, backend, internal_model_id, capabilities}`.
+
+`imageworks-models verify <name>` → Recomputes artifact hashes, updates `artifacts.files` & `aggregate_sha256`; if locked and mismatch → non‑zero exit (VersionLockViolation message).
+
+`imageworks-models probe-vision <name> <image_path>` → Runs vision probe, updates `probes.vision` block.
+
+`imageworks-models metrics <name>` → Dumps rolling performance summary (placeholder until streaming metrics wired).
+
+`imageworks-models lock <name>` / `unlock <name>` → Toggles `version_lock.locked`. When locking with empty `expected_aggregate_sha256`, next successful verify seeds the expected hash.
+
+### 21.9 HTTP API Reference (FastAPI)
+Base: `/v1` (served via `imageworks-models-api`).
+
+- `GET /v1/models` → `[ { name, backend, capabilities, version_lock, performance, probes } ]` (subset fields).
+- `POST /v1/select {"name": "..."}` → `{ endpoint, backend, internal_model_id, capabilities }` (HTTP 404 if missing, 409 if lock mismatch & design later, currently raised in verify path only, capability error 400/409 depending on configuration).
+- `POST /v1/verify {"name": "..."}` → `{ status: "ok", aggregate_sha256, last_verified }` or 409 on lock violation.
+- `POST /v1/probe/vision {"name": "...", "image_b64"|"image_url": "..."}` → `{ vision_ok, latency_ms, timestamp, notes }`.
+- `GET /v1/models/{name}/metrics` → Performance summary from rolling window (empty placeholder if no samples yet).
+
+Error Semantics (current): simple JSON `{ "error": "message" }` with HTTP status codes (404, 409). Future improvements: structured `code` field.
+
+### 21.10 Version Lock Workflow (Operational)
+1. Add / edit registry entry with `version_lock.locked = false`.
+2. Run `imageworks-models verify <name>` to compute initial hashes.
+3. Enable lock: `imageworks-models lock <name>` (sets `locked=true`; if `expected_aggregate_sha256` empty it will be populated on next verify).
+4. Re-run `verify` (or allow selection flows to optionally call verify preflight in future) → if mismatch with expected, command exits with lock violation, and selection SHOULD be avoided until resolved.
+5. To intentionally update artifacts: unlock → verify (new hash) → lock → verify (seeds new expectation).
+
+### 21.11 Batch Metrics Persistence
+Both Personal Tagger and Color Narrator now emit aggregated per-run metrics:
+- Personal Tagger: `outputs/metrics/personal_tagger_batch_metrics.json`
+- Color Narrator: `outputs/metrics/color_narrator_batch_metrics.json`
+
+Schema:
+```
+{
+  "history": [ { "model_name": str, "backend": str, "batch_total_seconds": float, "stages": { "image": {"count": int, "avg_seconds": float, ... } }, "timestamp": ISO8601, "model_load_seconds": null|float } ],
+  "last": { ... duplicate of most recent summary }
+}
+```
+Stage granularity is currently limited to `image` items; future additions may include `download`, `preprocess`, `inference`, `metadata_write` if instrumentation is expanded inside the processing loops (low-risk additive change).
+
+### 21.12 Test Coverage Snapshot
+Added tests under `tests/model_loader/`:
+- `test_registry.py`: registry load success, duplicate detection, missing entry, selection capability enforcement.
+- `test_hashing.py`: verify unlocked path, lock violation, initial lock seeding of expected hash.
+- `test_metrics.py`: RollingMetrics aggregation math, BatchRunMetrics stage aggregates.
+- `test_cli.py`: Typer CLI smoke tests for list, select, verify.
+
+Planned (future enhancements): streaming metrics sampling tests once streaming integration introduced; probe vision test with synthetic image (manual path currently untested in CI due to external dependencies).
+
+### 21.13 Known Gaps / Deferred Items (Post‑Phase 1)
+- Streaming integration (TTFT real measurement) not yet wired; RollingMetrics presently unused in app flows.
+- Automated probe scheduling & historical probe retention.
+- Registry backup snapshot rotation & integrity checksum.
+- Profiles & fallback semantics.
+- Extended stage timing (multi-phase segmentation) and percentile metrics.
+
+### 21.14 Usage Quickstart (Practical Example)
+1. Inspect models: `imageworks-models list`
+2. Verify hashes (after placing model artifacts): `imageworks-models verify llava-1.5-7b-awq`
+3. Lock model: `imageworks-models lock llava-1.5-7b-awq` then re-verify.
+4. Run personal tagger with deterministic models: `imageworks-personal-tagger run --caption-registry-model llava-1.5-7b-awq ...`
+5. Run color narrator: `imageworks-color-narrator narrate --vlm-registry-model llava-1.5-7b-awq -i <images> -o <overlays> -j <mono.jsonl>`
+6. Review batch metrics: `cat outputs/metrics/personal_tagger_batch_metrics.json`.
+
+### 21.14.1 Ollama (GGUF) Vision Model Quickstart
+Experimental support added for an `ollama` backend entry assuming Ollama provides OpenAI-compatible `/v1` endpoints.
+
+1. Install & start Ollama:
+  ```bash
+  curl -fsSL https://ollama.com/install.sh | sh
+  ollama serve
+  ```
+2. Pull a vision model (example – adjust tag if repository layout changes):
+  ```bash
+  ollama pull qwen2.5-vl:7b-q4
+  ```
+  (If an exact tag does not exist, use an available Qwen2.5-VL 7B 4‑bit variant or build a Modelfile referencing a local GGUF.)
+3. Registry entry (already added in repo) named `qwen2.5-vl-7b-gguf-q4` targets port `11434`.
+4. Run personal tagger deterministically:
+  ```bash
+  uv run imageworks-personal-tagger run \
+    --input-dir /path/to/images \
+    --dry-run \
+    --use-loader \
+    --caption-registry-model qwen2.5-vl-7b-gguf-q4 \
+    --keyword-registry-model qwen2.5-vl-7b-gguf-q4 \
+    --description-registry-model qwen2.5-vl-7b-gguf-q4
+  ```
+5. First run uses unlocked hash (no artifacts recorded). To lock later, stage critical files in a managed folder, update `model_path`, then:
+  ```bash
+  imageworks-models verify qwen2.5-vl-7b-gguf-q4
+  imageworks-models lock qwen2.5-vl-7b-gguf-q4
+  ```
+
+Notes:
+- Endpoint assumption: Ollama exposes `/v1/chat/completions`. If not available, add or run an OpenAI proxy; otherwise selection will succeed but inference may fail.
+- Streaming still disabled; TTFT metrics remain placeholder.
+- For consistent comparisons with AWQ vLLM model, keep prompt & token settings identical.
+
+### 21.15 Running Log (Appended)
+2025-10-02: Integrated deterministic selection into both personal tagger and color narrator; added batch metrics persistence and initial automated test suite.
+- performance {rolling_samples, ttft_ms_avg, throughput_toks_per_s_avg, last_sample{...}}
+- probes {vision {...}}
+- profiles_placeholder (null)
+- metadata {notes}
+
+### 21.4 Hashing Utility Design
+Functions:
+- `compute_file_hash(path: Path) -> str`
+- `compute_aggregate_hash(file_hashes: list[str]) -> str` (SHA256 of sorted concatenated per-file hashes)
+- `collect_artifact_hashes(entry) -> list[(relative_path, sha256)]`
+Edge Cases:
+- Missing file → raise explicit error (fail fast)
+- Empty file list → aggregate hash of empty string (documented)
+
+### 21.5 Loader Service Skeleton
+Modules (under `src/imageworks/model_loader/`):
+- `models.py`: dataclasses: RegistryEntry, BackendConfig, SelectedModel, PerformanceSnapshot, VisionProbeResult.
+- `registry.py`: load/validate JSON file → in-memory dict keyed by name.
+- `hashing.py`: utilities above.
+- `process_manager.py`: stubs `ensure_started(entry)` (vLLM stub logs intent; Ollama noop with readiness check placeholder).
+- `metrics.py`: rolling window structure.
+- `service.py`: `select_model(name, require_capabilities=None)` orchestrating: lookup → (future) hash verify (manual now) → process ensure → return descriptor.
+Contract of `SelectedModel`:
+```
+{
+  logical_name: str,
+  endpoint_url: str,  # e.g. http://localhost:<port>/v1
+  internal_model_id: str,  # may equal logical name
+  backend: str,
+  capabilities: dict
+}
+```
+
+### 21.6 Performance Metrics Design
+Classes:
+- `PerformanceSample(ttft_ms: Optional[float], tokens_generated: int, duration_ms: float)`
+- `RollingMetrics(maxlen=50)` with `add(sample)` and `summary()` ignoring None TTFT values.
+Future accommodation: flag to exclude first-sample cold start from averages.
+
+### 21.7 Vision Probe CLI
+### 21.7.1 Batch & Stage Metrics Extension (Added 2025-10-02)
+In addition to per-request TTFT/throughput, a lightweight batch/run metrics facility was introduced:
+- `BatchRunMetrics`: captures model load time, total batch duration, and per-stage aggregated stats (caption/keyword/description or others).
+- `StageTiming`: start/end wrapper enabling multiple occurrences of the same stage.
+Export structure example:
+```
+{
+  "model_name": "llava-1.5-7b-awq",
+  "backend": "vllm",
+  "model_load_seconds": 4.21,
+  "batch_total_seconds": 123.45,
+  "stages": {
+    "caption": {"count": 50, "total_seconds": 40.2, "avg_seconds": 0.80, "min_seconds": 0.65, "max_seconds": 1.10},
+    "keyword": {"count": 50, ...},
+    "description": {"count": 50, ...}
+  }
+}
+```
+Integration Guidance:
+1. Instantiate once per tagger run.
+2. Record model load (when loader triggers a cold start).
+3. Wrap each stage inference call with `start_stage` / `end_stage`.
+4. At end call `close_batch()` and persist summary JSON alongside existing run artifacts (e.g. `outputs/results/personal_tagger_batch_metrics.json`).
+5. (Optional) Append per-batch line to a rolling `outputs/metrics/<model>/batches.jsonl` for longitudinal analysis.
+
+Command: `imageworks-models probe-vision <logical_name> <image_path>`
+Flow:
+1. Load registry entry.
+2. (Future) verify hash if locked.
+3. Ensure backend running.
+4. Send minimal prompt with embedded image.
+5. Determine success: HTTP 200 and non-empty text.
+6. Record latency (request→completion) and store JSON at `outputs/probes/<model>/vision_<timestamp>.json`.
+7. Update in-memory registry and optionally persist `probes.vision` block back to file.
+Failure modes: missing model (404), capability mismatch (409-like), backend not ready (424-like), inference error.
+
+### 21.8 Personal Tagger Adaptation Plan (Incremental)
+New CLI flags:
+- `--caption-registry-model`, `--keyword-registry-model`, `--description-registry-model`
+- `--use-loader` (boolean, auto-enabled if any registry model arg supplied)
+Steps:
+1. Early in run, if loader mode, call `select_model` for each logical name (deduplicate if same).
+2. Validate `vision` capability for all selected entries.
+3. Override `base_url` from returned endpoint and model names from `internal_model_id` before instantiating `OpenAIChatClient`.
+4. Record note `selected_via_loader` in `PersonalTaggerRecord.notes`.
+5. Metrics hook: capture total stage duration for now; placeholder for future TTFT once streaming enabled via `--stream` flag.
+Legacy Support:
+- If legacy backend flags provided without loader flags, continue old path but emit deprecation warning.
+
+### 21.9 Color Narrator Adaptation Plan
+Analogous single flag: `--vlm-registry-model` (or config key). If present:
+- Perform selection (require vision capability) → set `base_url` and `model_name` before creating `VLMClient`.
+- Deprecate direct `vlm_backend`, `vlm_base_url`, `vlm_model` (warn if used with new flag absent).
+
+### 21.10 Streaming & Metrics Future Hook
+Add `--stream` flag in both modules (no-op initially). When implemented:
+- Use streaming API to timestamp first token (TTFT) and final token, compute throughput = (tokens_generated-1)/(t_done - t_first)*1000.
+- Feed `RollingMetrics` with real samples.
+
+### 21.11 Testing Strategy (Concrete Additions)
+- `tests/model_loader/test_registry_load.py`: load & validate sample registry.
+- `tests/model_loader/test_hashing.py`: deterministic hash outputs (fixed tiny temp files).
+- `tests/model_loader/test_selection_capabilities.py`: capability mismatch raises error.
+- `tests/personal_tagger/test_loader_integration.py`: mock selection returns endpoint; ensures config override applied.
+- (Optional) `tests/model_loader/test_metrics.py`: rolling average computations.
+
+### 21.12 Sequencing & Risk Mitigation
+Order:
+1. Registry + hashing + models (isolated, testable).
+2. Loader service (pure Python API) + metrics skeleton.
+3. Personal Tagger opt-in adaptation.
+4. Vision probe CLI.
+5. Color Narrator migration.
+6. (Later) Streaming enablement & HTTP microservice facade.
+Risks & Mitigations:
+- Cold start outlier: future flag to exclude first sample.
+- Dual path complexity: isolate legacy logic under clear `if legacy_mode:` with TODO removal comments.
+- Capability drift: loader enforces; add CI test enumerating required vision models.
+
+### 21.13 Immediate Next Actions (Actionable Checklist)
+- [ ] Create `configs/model_registry.json` sample with one vLLM model.
+- [ ] Implement `model_loader` package skeleton (models, registry, hashing, service stubs).
+- [ ] Add `RollingMetrics` and unit tests.
+- [ ] Introduce selection helper module (`imageworks/model_selection.py`).
+- [ ] Wire Personal Tagger optional loader mode + flags.
+- [ ] Draft vision probe CLI (non-streaming).
+
+### 21.14 Summary
+This plan establishes a minimally invasive deterministic selection path while preserving existing workflows. By landing the registry + loader skeleton first, downstream modules migrate incrementally, reducing risk and enabling early feedback before streaming and full metrics are introduced.
+
+### 21.15 Role-Based Selection (Cross-Reference)
+Personal Tagger now supports dynamic role-based resolution via `--use-registry` and role flags (`--caption-role`, `--keyword-role`, `--description-role`). Each role maps to the first non-deprecated registry entry advertising that role and required capabilities (vision). This indirection allows changing recommended models centrally by editing `configs/model_registry.json` without modifying deployment scripts. See `docs/personal_tagger/model_registry.md` section 11 for full details.
+
+### 21.15 Implemented CLI Flags & Utilities (Running Log)
+Implemented (Phase 1 skeleton):
+- Personal Tagger: `--use-loader`, `--caption-registry-model`, `--keyword-registry-model`, `--description-registry-model` (currently resolve and log selections; runtime config mutation staged for full integration step).
+- Color Narrator: `--vlm-registry-model` (overrides backend/base-url/model when selection succeeds).
+- Vision Probe: `run_vision_probe(model_name, image_path)` persists JSON under `outputs/probes/<model>/`.
+- Metrics: `RollingMetrics` for per-request samples (TTFT placeholder) and `BatchRunMetrics` for batch/stage aggregation including model load time.
+Pending wiring:
+- Update runners to emit batch metrics JSON automatically.
+- Mutate tagger runtime config with selected endpoint/model IDs (currently only logged).
+- Expose a CLI wrapper for `run_vision_probe` (future `imageworks-models probe-vision`).

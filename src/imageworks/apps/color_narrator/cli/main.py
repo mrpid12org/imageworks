@@ -29,6 +29,7 @@ from ..core.region_based_vlm import (
     RegionBasedVLMAnalyzer,
 )
 from ..core.vlm import VLMBackend, VLMClient
+from imageworks.model_loader.metrics import BatchRunMetrics
 
 # Configure logging
 LOG_PATH = configure_logging("color_narrator")
@@ -235,6 +236,28 @@ def _resolve_vlm_runtime_settings(
         resolved_api_key,
         backend_options,
     )
+
+
+# ---------------- Deterministic Loader Integration (Phase 1 Skeleton) -----------------
+def select_registry_model(logical_name: str) -> Optional[Dict[str, str]]:
+    """Attempt to select a logical model via deterministic loader.
+
+    Returns a mapping with endpoint/model/backend on success, or None if selection fails.
+    """
+    try:
+        from imageworks.model_loader import select_model  # lazy import
+    except Exception:
+        return None
+    try:
+        desc = select_model(logical_name, require_capabilities=["vision"])
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Loader selection failed for %s: %s", logical_name, exc)
+        return None
+    return {
+        "endpoint": desc.endpoint_url,
+        "model": desc.internal_model_id,
+        "backend": desc.backend,
+    }
 
 
 def _start_vllm_server(port: Optional[int] = None) -> subprocess.Popen:
@@ -715,6 +738,34 @@ def _duplicate_summary_with_label(
     return new_path
 
 
+def _write_narrator_batch_metrics(batch_metrics: BatchRunMetrics) -> None:
+    """Persist batch metrics history for color narrator runs.
+
+    Writes/updates outputs/metrics/color_narrator_batch_metrics.json with a
+    rolling history list and the last run summary.
+    """
+    from datetime import UTC, datetime as _dt
+    import json as _json
+
+    out_dir = Path("outputs/metrics")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "color_narrator_batch_metrics.json"
+    existing: Dict[str, object] = {}
+    if path.exists():
+        try:
+            existing = _json.loads(path.read_text())
+        except Exception:  # noqa: BLE001
+            existing = {}
+    summary = batch_metrics.summary()
+    summary["timestamp"] = _dt.now(UTC).isoformat()
+    history = existing.get("history") if isinstance(existing, dict) else None
+    if not isinstance(history, list):
+        history = []
+    history.append(summary)
+    payload = {"history": history, "last": summary}
+    path.write_text(_json.dumps(payload, indent=2))
+
+
 def _write_results_json(
     results: List[ProcessingResult],
     output_path: Path,
@@ -799,6 +850,11 @@ def narrate(
         "--prompt",
         "-p",
         help="Prompt template id (use --list-prompts to inspect options)",
+    ),
+    vlm_registry_model: Optional[str] = typer.Option(
+        None,
+        "--vlm-registry-model",
+        help="Logical registry model name for deterministic loader selection (overrides backend/base-url/model).",
     ),
     list_prompts: bool = typer.Option(
         False, "--list-prompts", help="List available prompt templates and exit"
@@ -970,6 +1026,30 @@ def narrate(
     overwrite_existing = _to_bool(cfg.get("overwrite_existing_metadata", False), False)
     backup_originals = _to_bool(cfg.get("backup_original_files", True), True)
 
+    # Attempt deterministic loader selection if logical registry model provided.
+    if vlm_registry_model:
+        selection = select_registry_model(vlm_registry_model)
+        if selection:
+            # Override user-provided backend/model/base_url prior to resolution
+            vlm_backend_opt = selection["backend"]
+            vlm_base_url_opt = selection["endpoint"]
+            vlm_model_opt = selection["model"]
+            typer.echo(
+                f"🔐 Deterministic selection: {vlm_registry_model} -> {selection['backend']} {selection['model']} @ {selection['endpoint']}"
+            )
+            logger.info(
+                "loader_selection",
+                extra={
+                    "event_type": "select",
+                    "logical_model": vlm_registry_model,
+                    "endpoint": vlm_base_url_opt,
+                },
+            )
+        else:
+            typer.echo(
+                f"⚠️ Failed to select registry model '{vlm_registry_model}', falling back to legacy configuration"
+            )
+
     try:
         (
             backend_enum,
@@ -1032,11 +1112,25 @@ def narrate(
     narrator.metadata_writer.backup_original = backup_originals
 
     typer.echo("🚀 Starting narration pipeline...")
+    # Batch metrics instrumentation (similar pattern to personal tagger)
+    batch_metrics = BatchRunMetrics(model_name=vlm_model, backend=backend_enum.value)
     try:
+        # We instrument per-image processing by wrapping the underlying process_all logic.
+        # For minimal intrusion, invoke process_all, then compute per-item stage durations
+        # using the recorded processing_time in each ProcessingResult.
         results = narrator.process_all()
     except Exception as exc:
         typer.echo(f"❌ Narration pipeline failed: {exc}")
         raise typer.Exit(1)
+
+    # Record per-image stage timings
+    for result in results:
+        timing = batch_metrics.start_stage("image")
+        # We approximate stage duration using the recorded processing_time from result
+        # by manually setting the end time relative to start.
+        # This avoids changing the internal processing loop for now.
+        timing.end = timing.start + max(result.processing_time, 0.0)
+    batch_metrics.close_batch()
 
     total = len(results)
     failures = [r for r in results if r.error]
@@ -1063,6 +1157,12 @@ def narrate(
 
     _write_results_json(results, results_path, prompt_definition, narration_config)
     typer.echo(f"💾 Results JSON written to {results_path}")
+
+    # Persist batch metrics history
+    try:
+        _write_narrator_batch_metrics(batch_metrics)
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to write narrator batch metrics", exc_info=True)
 
     if failures:
         typer.echo("\n⚠️  Sample errors (first 5):")

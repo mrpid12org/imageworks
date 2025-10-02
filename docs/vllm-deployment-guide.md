@@ -128,7 +128,19 @@ PY
 | Vision requests very slow | Large base64 images | Downscale client-side (e.g. max 1024px) before embedding in data URI. |
 
 ### Served Model Names
-The Personal Tagger and other tools must pass the exact `--served-model-name` value in the `model` field. If you change it (e.g. from `qwen2.5-vl-7b-awq` to `qwen2.5-vl`), update downstream configs or use the `--model` / `--caption-model` CLI overrides.
+Historically the Personal Tagger passed explicit model identifiers via `--caption-model`, `--keyword-model`, `--description-model`. These flags are now deprecated in normal workflows.
+
+Preferred path:
+```bash
+uv run imageworks-personal-tagger run \
+  -i ./images \
+  --use-registry \
+  --caption-role caption \
+  --keyword-role keywords \
+  --description-role description
+```
+
+If you change the served model (e.g. `qwen2.5-vl-7b-awq` → `qwen2.5-vl`) simply update `configs/model_registry.json` and re-lock hashes. Only use legacy explicit flags for rapid experiments; they will be removed after the migration window.
 
 ### Preflight Checks
 The Personal Tagger now performs an optional preflight (enabled by default) that validates:
@@ -137,6 +149,22 @@ The Personal Tagger now performs an optional preflight (enabled by default) that
 3. Vision (1x1 PNG) chat returns 200
 
 Skip with `--skip-preflight` if running against a high-latency remote endpoint.
+
+## Appendix: Unified Registry Glossary (Condensed)
+Field | Meaning
+----- | -------
+`name` | Logical registry key for selection.
+`backend` | Serving implementation (vLLM/LMDeploy/etc.).
+`served_model_id` | Name advertised by backend (must match `/v1/models`).
+`backend_config.model_path` | Filesystem location of model weights.
+`roles[]` | Functional purposes (e.g. `caption`, `description`).
+`capabilities` | Modalities; vLLM multimodal builds require `vision=true`.
+`version_lock` | Hash drift control (`verify --lock`).
+`artifacts.aggregate_sha256` | Deterministic snapshot identity.
+`model_aliases[]` | Fallback identifiers for discovery/preflight.
+`deprecated` | Still usable but excluded from default role resolution.
+
+Use role-based selection in higher-level apps; use explicit `--served-model-name` only for low-level server tuning or experiments.
 
 ## Further Reading
 
