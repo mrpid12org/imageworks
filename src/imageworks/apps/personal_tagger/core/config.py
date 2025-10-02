@@ -104,6 +104,7 @@ class PersonalTaggerSettings:
     default_recursive: bool = True
     default_dry_run: bool = False
     default_no_meta: bool = False
+    default_preflight: bool = True
     default_backup_originals: bool = True
     default_overwrite_metadata: bool = False
     caption_model: str = "Qwen2.5-VL-7B-AWQ"
@@ -152,6 +153,7 @@ class PersonalTaggerConfig:
     keyword_model: str
     max_keywords: int
     api_key: str
+    preflight: bool
 
 
 def _merge_dict(
@@ -224,6 +226,7 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         "max_keywords": defaults.max_keywords,
         "image_extensions": defaults.image_extensions,
         "json_schema_version": defaults.json_schema_version,
+        "default_preflight": defaults.default_preflight,
     }
 
     result = _merge_dict(result, _load_pyproject_settings(start))
@@ -308,6 +311,9 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
     overwrite_metadata = _coerce_bool(
         result.get("default_overwrite_metadata"), defaults.default_overwrite_metadata
     )
+    preflight = _coerce_bool(
+        result.get("default_preflight"), defaults.default_preflight
+    )
     max_keywords = _coerce_int(result.get("max_keywords"), defaults.max_keywords)
 
     image_exts = _normalise_iterable(result.get("image_extensions"))
@@ -337,6 +343,7 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         default_dry_run=dry_run,
         default_backup_originals=backup_originals,
         default_overwrite_metadata=overwrite_metadata,
+        default_preflight=preflight,
         caption_model=caption_model,
         keyword_model=keyword_model,
         description_model=description_model,
@@ -376,6 +383,7 @@ def build_runtime_config(
     overwrite_metadata: Optional[bool] = None,
     image_extensions: Optional[Sequence[str]] = None,
     max_keywords: Optional[int] = None,
+    preflight: Optional[bool] = None,
 ) -> PersonalTaggerConfig:
     """Compose a runtime configuration from defaults and CLI overrides."""
 
@@ -446,6 +454,9 @@ def build_runtime_config(
         if overwrite_metadata is not None
         else settings.default_overwrite_metadata
     )
+    resolved_preflight = (
+        preflight if preflight is not None else settings.default_preflight
+    )
     resolved_max_keywords = (
         max_keywords if max_keywords is not None else settings.max_keywords
     )
@@ -488,4 +499,5 @@ def build_runtime_config(
         caption_model=resolved_caption_model,
         keyword_model=resolved_keyword_model,
         max_keywords=resolved_max_keywords,
+        preflight=resolved_preflight,
     )

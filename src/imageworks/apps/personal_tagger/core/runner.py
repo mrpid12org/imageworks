@@ -36,6 +36,13 @@ class PersonalTaggerRunner:
     # ------------------------------------------------------------------
     def run(self) -> List[PersonalTaggerRecord]:
         logger.info("Starting personal tagger run")
+        # Optional preflight before any heavy work
+        if getattr(self.config, "preflight", False):
+            try:
+                self._run_preflight()
+            except Exception:  # pragma: no cover - defensive; we log details
+                logger.exception("Preflight checks failed; aborting run")
+                raise
         images = self.discover_images()
         if not images:
             logger.warning("No images discovered for personal tagging")
@@ -115,6 +122,103 @@ class PersonalTaggerRunner:
     def _matches_extension(self, path: Path) -> bool:
         suffix = path.suffix.lower()
         return suffix in {ext.lower() for ext in self.config.image_extensions}
+
+    # ------------------------------------------------------------------
+    # Preflight
+    # ------------------------------------------------------------------
+    def _run_preflight(self) -> None:
+        """Validate basic backend availability and multimodal support.
+
+        The preflight performs three lightweight probes:
+          1. /v1/models listing to ensure the server responds.
+          2. A minimal text-only chat completion.
+          3. A minimal vision chat (1x1 PNG) to confirm image handling.
+
+        Any failure raises a RuntimeError with actionable guidance.
+        """
+        import base64
+        import requests
+        import io
+        from PIL import Image
+
+        base_url = self.config.base_url.rstrip("/")
+        model_name = self.config.caption_model
+        headers = (
+            {"Authorization": f"Bearer {self.config.api_key}"}
+            if self.config.api_key
+            else {}
+        )
+
+        # 1. Model list
+        models_url = f"{base_url}/models"
+        try:
+            resp = requests.get(models_url, timeout=10, headers=headers)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"Preflight: failed to connect to {models_url}: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Preflight: model listing returned HTTP {resp.status_code}: {resp.text[:120]}"
+            )
+        if model_name not in json.dumps(resp.json()):
+            logger.warning(
+                "Preflight: model '%s' not explicitly listed; continuing but verify served-model-name",
+                model_name,
+            )
+
+        # 2. Text-only chat
+        chat_url = f"{base_url}/chat/completions"
+        payload_text = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": "You are a health check."},
+                {"role": "user", "content": "Say READY once."},
+            ],
+            "max_tokens": 4,
+        }
+        resp = requests.post(chat_url, json=payload_text, timeout=15, headers=headers)
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Preflight: text chat failed HTTP {resp.status_code}: {resp.text[:160]}"
+            )
+        try:
+            ready_text = (
+                resp.json().get("choices", [{}])[0]["message"]["content"].lower()
+            )
+            if "ready" not in ready_text:
+                logger.debug("Preflight: unexpected text response: %s", ready_text)
+        except Exception:  # noqa: BLE001
+            logger.debug("Preflight: could not parse text readiness response")
+
+        # 3. Vision chat (generate tiny in-memory image)
+        img = Image.new("RGB", (1, 1), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        payload_vision = {
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Describe the dominant color."},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+                        },
+                    ],
+                }
+            ],
+            "max_tokens": 8,
+        }
+        resp = requests.post(chat_url, json=payload_vision, timeout=20, headers=headers)
+        if resp.status_code != 200:
+            raise RuntimeError(
+                "Preflight: vision chat failed HTTP %s: %s"
+                % (resp.status_code, resp.text[:160])
+            )
+        logger.info("Preflight succeeded for model '%s'", model_name)
 
     # ------------------------------------------------------------------
     # Outputs

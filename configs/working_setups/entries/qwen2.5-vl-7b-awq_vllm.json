@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": {
+    "repo_id": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "local_path": "~/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+    "served_model_name": "qwen2.5-vl-7b-awq",
+    "format": "awq",
+    "quantization": "awq_marlin",
+    "vision": true
+  },
+  "server": {
+    "backend": "vllm",
+    "command": "nohup uv run vllm serve ~/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ --served-model-name qwen2.5-vl-7b-awq --host 0.0.0.0 --port 24001 --trust-remote-code --max-model-len 4096 --enforce-eager > vllm_qwen2.5_vl_7b_awq.log 2>&1 &",
+    "port": 24001,
+    "flags": {
+      "max-model-len": 4096,
+      "enforce-eager": true,
+      "trust-remote-code": true
+    },
+    "chat_template": null
+  },
+  "tagger": {
+    "command": "uv run imageworks-personal-tagger --input-dir tests/shared/sample_production_images --no-meta --backend vllm --base-url http://localhost:24001/v1 --caption-model qwen2.5-vl-7b-awq --keyword-model qwen2.5-vl-7b-awq --description-model qwen2.5-vl-7b-awq --summary outputs/summaries/personal_tagger_sample_summary.md --output-jsonl outputs/results/personal_tagger_sample_qwen.jsonl --max-new-tokens 256 --batch-size 1 --max-workers 1",
+    "base_url": "http://localhost:24001/v1",
+    "models": {
+      "caption": "qwen2.5-vl-7b-awq",
+      "keywords": "qwen2.5-vl-7b-awq",
+      "description": "qwen2.5-vl-7b-awq"
+    },
+    "max_new_tokens": 256,
+    "temperature": 0.2,
+    "top_p": 0.9
+  },
+  "verification": {
+    "date_utc": "2025-10-01T00:00:00Z",
+    "git_commit": null,
+    "images_processed": 22,
+    "status": "success"
+  },
+  "notes": "Multimodal vision inference successful for all stages (caption, keywords, description). Preflight passed; model served with AWQ marlin kernels.",
+  "performance": {
+    "avg_latency_s": null
+  }
+}

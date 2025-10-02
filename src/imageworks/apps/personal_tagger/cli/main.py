@@ -149,6 +149,11 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "--max-keywords",
         help="Maximum number of keywords to retain per image.",
     ),
+    skip_preflight: bool = typer.Option(
+        False,
+        "--skip-preflight",
+        help="Skip initial connectivity + vision capability preflight checks.",
+    ),
 ) -> None:
     """Run the personal tagger with CLI/pyproject configuration."""
 
@@ -177,6 +182,9 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "overwrite_metadata": overwrite_metadata,
         "image_extensions": image_exts.split(",") if image_exts else None,
         "max_keywords": max_keywords,
+        "preflight": (
+            False if skip_preflight else None
+        ),  # explicit override only when skipping
     }
 
     try:

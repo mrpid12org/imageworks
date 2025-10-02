@@ -54,6 +54,7 @@ imageworks/
 ### Component Guides
 - [Color-Narrator Reference](docs/color-narrator-reference.md) - VLM-based color analysis system
 - [vLLM Deployment Guide](docs/vllm-deployment-guide.md) - Production AI model deployment
+- [Deterministic Model Serving](docs/deterministic-model-serving.md) - Hybrid vLLM + Ollama design (deterministic selection, locking, metrics)
 
 ### Developer Environment
 - [IDE Setup (WSL/VSCode)](docs/dev-env/ide-setup-wsl-vscode.md) - Development environment configuration
