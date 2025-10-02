@@ -1,0 +1,254 @@
+{
+  "existing_qwen2.5_vl_7b_instruct_awq_safetensors_linux_wsl": {
+    "checksum": "d659ee647a141964",
+    "downloaded_at": "2025-09-30T22:29:36.636636+00:00",
+    "files": [
+      "model-00002-of-00002.safetensors",
+      "model-00001-of-00002.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "migrated": true,
+      "registered_at": "2025-09-30T22:29:36.635433+00:00"
+    },
+    "model_name": "existing/Qwen2.5-VL-7B-Instruct-AWQ",
+    "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+    "size_bytes": 6939953111
+  },
+  "existing_qwen2.5_vl_7b_instruct_safetensors_linux_wsl": {
+    "checksum": "1d783bb63d37d961",
+    "downloaded_at": "2025-09-30T22:29:36.634836+00:00",
+    "files": [
+      "model-00003-of-00005.safetensors",
+      "model-00002-of-00005.safetensors",
+      "model-00004-of-00005.safetensors",
+      "model-00005-of-00005.safetensors",
+      "model-00001-of-00005.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "migrated": true,
+      "registered_at": "2025-09-30T22:29:36.634508+00:00"
+    },
+    "model_name": "existing/Qwen2.5-VL-7B-Instruct",
+    "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
+    "size_bytes": 16595962707
+  },
+  "existing_qwen2_vl_2b_instruct_safetensors_linux_wsl": {
+    "checksum": "bf250853e9601f43",
+    "downloaded_at": "2025-09-30T22:29:36.638322+00:00",
+    "files": [
+      "model-00002-of-00002.safetensors",
+      "model-00001-of-00002.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "migrated": true,
+      "registered_at": "2025-09-30T22:29:36.637210+00:00"
+    },
+    "model_name": "existing/Qwen2-VL-2B-Instruct",
+    "path": "/home/stewa/ai-models/weights/existing/Qwen2-VL-2B-Instruct",
+    "size_bytes": 4429624359
+  },
+  "huggingfacem4_idefics2_8b_awq_safetensors_linux_wsl": {
+    "checksum": "86106d42ec4e6843",
+    "downloaded_at": "2025-09-30T22:29:36.638889+00:00",
+    "files": [
+      "model-00002-of-00002.safetensors",
+      "model-00001-of-00002.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "migrated": true,
+      "registered_at": "2025-09-30T22:29:36.638609+00:00"
+    },
+    "model_name": "HuggingFaceM4/idefics2-8b-awq",
+    "path": "/home/stewa/ai-models/weights/HuggingFaceM4/idefics2-8b-awq",
+    "size_bytes": 6475392040
+  },
+  "llava_hf_llava_1.5_7b_hf_safetensors_linux_wsl": {
+    "checksum": "616f8f2091cd6a50",
+    "downloaded_at": "2025-09-30T22:35:42.352313+00:00",
+    "files": [
+      "model-00002-of-00003.safetensors",
+      "model-00003-of-00003.safetensors",
+      "model-00001-of-00003.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "cleaned_up": true
+    },
+    "model_name": "llava-hf/llava-1.5-7b-hf",
+    "path": "/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf",
+    "size_bytes": 14131068964
+  },
+  "llava_hf_llava_next_video_7b_hf_safetensors_linux_wsl": {
+    "checksum": "fff9967477ea7d77",
+    "downloaded_at": "2025-10-01T22:05:16.710353+00:00",
+    "files": [
+      "model-00001-of-00003.safetensors",
+      "model-00002-of-00003.safetensors",
+      "model-00003-of-00003.safetensors",
+      "config.json",
+      "generation_config.json",
+      "preprocessor_config.json",
+      "processor_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "added_tokens.json",
+      "tokenizer.json",
+      "tokenizer.model"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "branch": "main",
+      "files_downloaded": 12,
+      "has_chat_template": false,
+      "huggingface_id": "llava-hf/LLaVA-NeXT-Video-7B-hf",
+      "library": "transformers",
+      "model_type": "video-text-to-text",
+      "verified_complete": true
+    },
+    "model_name": "llava-hf/LLaVA-NeXT-Video-7B-hf",
+    "path": "/home/stewa/ai-models/weights/llava-hf/LLaVA-NeXT-Video-7B-hf",
+    "size_bytes": 14129302497
+  },
+  "microsoft_dialogpt_small_safetensors_linux_wsl": {
+    "checksum": "c93b7cf87af7ea9a",
+    "downloaded_at": "2025-09-30T22:29:36.639356+00:00",
+    "files": [
+      "pytorch_model.bin",
+      "model.safetensors"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "migrated": true,
+      "registered_at": "2025-09-30T22:29:36.639151+00:00"
+    },
+    "model_name": "microsoft/DialoGPT-small",
+    "path": "/home/stewa/ai-models/weights/microsoft/DialoGPT-small",
+    "size_bytes": 702999577
+  },
+  "sentence_transformers_all_mpnet_base_v2_safetensors_linux_wsl": {
+    "checksum": "5b8a4b65ff3b0c33",
+    "downloaded_at": "2025-09-30T16:52:21.220837+00:00",
+    "files": [
+      "model.safetensors",
+      "pytorch_model.bin",
+      "config.json",
+      "data_config.json",
+      "sentence_bert_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "tokenizer.json",
+      "vocab.txt"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "files_downloaded": 9,
+      "huggingface_id": "sentence-transformers/all-mpnet-base-v2",
+      "library": "sentence-transformers",
+      "model_type": "sentence-similarity"
+    },
+    "model_name": "sentence-transformers/all-mpnet-base-v2",
+    "path": "/home/stewa/ai-models/weights/sentence-transformers/all-mpnet-base-v2",
+    "size_bytes": 876721873
+  },
+  "sentence_transformers_paraphrase_minilm_l6_v2_safetensors_linux_wsl": {
+    "checksum": "05585ed670420472",
+    "downloaded_at": "2025-09-30T17:00:54.284690+00:00",
+    "files": [
+      "model.safetensors",
+      "pytorch_model.bin",
+      "config.json",
+      "sentence_bert_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "tokenizer.json",
+      "vocab.txt"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "files_downloaded": 8,
+      "huggingface_id": "sentence-transformers/paraphrase-MiniLM-L6-v2",
+      "library": "sentence-transformers",
+      "model_type": "sentence-similarity"
+    },
+    "model_name": "sentence-transformers/paraphrase-MiniLM-L6-v2",
+    "path": "/home/stewa/ai-models/weights/sentence-transformers/paraphrase-MiniLM-L6-v2",
+    "size_bytes": 182462223
+  },
+  "thebloke_llava_v1.5_13b_awq_safetensors_linux_wsl": {
+    "checksum": "3bd7d1844dccdeb9",
+    "downloaded_at": "2025-10-01T21:23:20.823721+00:00",
+    "files": [
+      "model.safetensors",
+      "config.json",
+      "generation_config.json",
+      "quant_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "added_tokens.json",
+      "tokenizer.json",
+      "tokenizer.model"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "branch": "main",
+      "files_downloaded": 9,
+      "huggingface_id": "TheBloke/llava-v1.5-13B-AWQ",
+      "library": "transformers",
+      "model_type": "text-generation",
+      "verified_complete": true
+    },
+    "model_name": "TheBloke/llava-v1.5-13B-AWQ",
+    "path": "/home/stewa/ai-models/weights/TheBloke/llava-v1.5-13B-AWQ",
+    "size_bytes": 7250332662
+  },
+  "ybelkada_llava_1.5_7b_hf_awq_safetensors_linux_wsl": {
+    "checksum": "9a166970546e4f34",
+    "downloaded_at": "2025-09-30T16:24:50.611291+00:00",
+    "files": [
+      "model.safetensors",
+      "config.json",
+      "generation_config.json",
+      "preprocessor_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "added_tokens.json",
+      "tokenizer.json"
+    ],
+    "format_type": "safetensors",
+    "last_accessed": null,
+    "location": "linux_wsl",
+    "metadata": {
+      "files_downloaded": 8,
+      "huggingface_id": "ybelkada/llava-1.5-7b-hf-awq",
+      "library": "transformers",
+      "model_type": "image-to-text"
+    },
+    "model_name": "ybelkada/llava-1.5-7b-hf-awq",
+    "path": "/home/stewa/ai-models/weights/ybelkada/llava-1.5-7b-hf-awq",
+    "size_bytes": 4541326758
+  }
+}

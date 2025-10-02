@@ -16,9 +16,12 @@ from typing import Dict, List, Optional, Any, Sequence, Union
 from dataclasses import dataclass
 
 from .config import get_config, DownloaderConfig
-from .registry import get_registry, ModelRegistry, ModelEntry
+from imageworks.model_loader.registry import load_registry, update_entries, remove_entry
+from imageworks.model_loader.download_adapter import record_download
+from imageworks.model_loader.models import RegistryEntry
 from .url_analyzer import URLAnalyzer
 from .formats import FormatDetector
+from .format_utils import detect_format_and_quant
 
 
 @dataclass
@@ -39,13 +42,10 @@ logger = logging.getLogger(__name__)
 class ModelDownloader:
     """Main model downloader class."""
 
-    def __init__(
-        self,
-        config: Optional[DownloaderConfig] = None,
-        registry: Optional[ModelRegistry] = None,
-    ):
+    def __init__(self, config: Optional[DownloaderConfig] = None) -> None:
         self.config = config or get_config()
-        self.registry = registry or get_registry()
+        # unified registry (JSON) only
+        self._registry_cache = load_registry()
         self.url_analyzer = URLAnalyzer()
         self.format_detector = FormatDetector()
 
@@ -211,7 +211,7 @@ class ModelDownloader:
         include_optional: bool = False,
         force_redownload: bool = False,
         interactive: bool = True,
-    ) -> ModelEntry:
+    ) -> RegistryEntry:
         """Download a model from a URL or HuggingFace identifier."""
 
         # Step 1: Analyze the URL/identifier
@@ -241,24 +241,22 @@ class ModelDownloader:
 
         # Step 2: Check if already downloaded
         if not force_redownload:
-            existing_models = self.registry.find_model(registry_model_name)
-            if existing_models:
-                existing = existing_models[0]  # Use first match
-
-                # Check if the model directory actually exists
-                if existing.path_obj.exists():
-                    self._log(f"✅ Model already downloaded: {existing.model_name}")
+            existing = self._registry_cache.get(registry_model_name)
+            if existing and existing.download_path:
+                existing_path = Path(existing.download_path).expanduser()
+                if existing_path.exists():
+                    self._log(f"✅ Model already downloaded: {existing.name}")
                     return existing
                 else:
                     self._log(
-                        f"⚠️  Model '{existing.model_name}' found in registry but directory missing: {existing.path}",
+                        f"⚠️  Model '{existing.name}' found in registry but directory missing: {existing.download_path}",
                         level=logging.WARNING,
                     )
                     if interactive:
                         try:
                             response = (
                                 input(
-                                    "Directory not found. Do you want to re-download the model? (y/N): "
+                                    "Directory not found. Re-download the model? (y/N): "
                                 )
                                 .strip()
                                 .lower()
@@ -268,24 +266,17 @@ class ModelDownloader:
                                     "❌ Download cancelled by user",
                                     level=logging.WARNING,
                                 )
-                                return existing  # Return existing entry without downloading
+                                return existing
                             self._log("🔄 Proceeding with re-download...")
                         except (KeyboardInterrupt, EOFError):
                             self._log(
                                 "\n❌ Download cancelled by user", level=logging.WARNING
                             )
                             return existing
-                        # Remove stale registry entry to avoid confusion
-                        self.registry.remove_model(
-                            existing.model_name, existing.format_type, existing.location
-                        )
+                        # allow overwrite by continuing; we will update fields after download
                     else:
                         self._log(
                             "🔄 Non-interactive mode: proceeding with re-download..."
-                        )
-                        # Remove stale registry entry
-                        self.registry.remove_model(
-                            existing.model_name, existing.format_type, existing.location
                         )
 
         # Step 3: Detect format from file list
@@ -463,46 +454,48 @@ class ModelDownloader:
         else:
             location_label = "custom"
 
-        entry = ModelEntry(
-            model_name=registry_model_name,
-            format_type=primary_format,
-            path=str(target_dir),
-            size_bytes=total_size,
-            location=location_label,
-            files=downloaded_files,
-            downloaded_at="",  # Will be set by registry
-            metadata={
-                "model_type": analysis.repository.model_type,
-                "library": analysis.repository.library_name,
-                "huggingface_id": repository_id,
-                "branch": branch,
-                "files_downloaded": len(all_files),
-                "verified_complete": True,  # Mark as verified
-                "has_chat_template": has_chat_template,
-                "has_embedded_chat_template": has_embedded_template,
-                "external_chat_template_files": template_files,
-                "embedded_chat_template_preview": embedded_template_snippet,
-            },
-        )
-
-        # Step 10: Add to registry with error handling
+        # Use unified adapter to record / update download entry
+        # Local detection refinement (format/quant) after files are present
+        det_fmt, det_quant = detect_format_and_quant(target_dir)
+        final_format = det_fmt or primary_format
         try:
-            registry_key = self.registry.add_model(
-                model_name=entry.model_name,
-                format_type=entry.format_type,
-                location=entry.location,
-                path=entry.path,
-                size_bytes=entry.size_bytes,
-                files=entry.files,
-                metadata=entry.metadata,
+            entry = record_download(
+                hf_id=repository_id,
+                backend="unassigned",
+                format_type=final_format,
+                quantization=det_quant,
+                path=str(target_dir),
+                location=location_label,
+                files=downloaded_files,
+                size_bytes=total_size,
+                source_provider="hf",
+                roles=[],
+                role_priority=None,
             )
-            self._log(f"✅ Added to registry: {registry_key}")
-        except Exception as e:
+            # enrich metadata post-record (non-core fields)
+            entry.metadata.update(
+                {
+                    "model_type": analysis.repository.model_type,
+                    "library": analysis.repository.library_name,
+                    "files_downloaded": len(all_files),
+                    "verified_complete": True,
+                    "has_chat_template": has_chat_template,
+                    "has_embedded_chat_template": has_embedded_template,
+                    "external_chat_template_files": template_files,
+                    "embedded_chat_template_preview": embedded_template_snippet,
+                    "branch": branch,
+                }
+            )
+            update_entries([entry], save=True)
+            self._registry_cache = load_registry(force=True)  # type: ignore[arg-type]
+            self._log(f"✅ Registry updated for {entry.name}")
+            return entry
+        except Exception as e:  # noqa: BLE001
             self._log(
-                f"⚠️  Warning: Could not add to registry: {e}", level=logging.WARNING
+                f"⚠️  Warning: Could not update unified registry via adapter: {e}",
+                level=logging.WARNING,
             )
-
-        return entry
+            raise
 
     def _download_files_with_aria2c(
         self, files: List[Any], base_url: str, target_dir: Path
@@ -586,18 +579,16 @@ class ModelDownloader:
             self._current_file_count = 0
 
     def verify_model(self, model_name: str) -> bool:
-        """Verify model integrity."""
-        entries = self.registry.find_model(model_name)
-        if not entries:
+        entry = self._registry_cache.get(model_name)
+        if not entry or not entry.download_path:
             return False
-        entry = entries[0]  # Use first match
-
-        # Check if path exists
-        if not entry.path.exists():
+        path = Path(entry.download_path).expanduser()
+        if not path.exists():
             return False
-
-        # Basic file existence check
-        # Could be extended with checksum verification
+        # optional: verify directory checksum if present
+        if entry.download_directory_checksum:
+            if _calculate_directory_checksum(path) != entry.download_directory_checksum:
+                return False
         return True
 
     def remove_model(
@@ -608,55 +599,63 @@ class ModelDownloader:
         delete_files: bool = False,
     ) -> bool:
         """Remove model from registry and optionally delete files."""
-        entries = self.registry.find_model(model_name, format_type, location)
-        if not entries:
+        entry = self._registry_cache.get(model_name)
+        if not entry:
             return False
-
-        success = False
-        for entry in entries:
-            removed = self.registry.remove_model(
-                entry.model_name, entry.format_type, entry.location
-            )
-            success = success or removed
-
-            if delete_files and entry.path.exists():
-                try:
-                    shutil.rmtree(entry.path)
-
-                    print(f"🗑️  Deleted files: {entry.path}")
-                except Exception as e:
-                    print(f"⚠️  Could not delete files: {e}")
-
-                    return False
-
-        return success
+        path = Path(entry.download_path) if entry.download_path else None
+        if delete_files and path and path.exists():
+            try:
+                shutil.rmtree(path)
+                print(f"🗑️  Deleted files: {path}")
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️  Could not delete files: {e}")
+                return False
+        # If entry is only a download placeholder (unassigned backend & no roles) remove entirely
+        if entry.backend == "unassigned" and not entry.roles:
+            removed = remove_entry(model_name, save=True)
+            if removed:
+                self._registry_cache = load_registry(force=True)  # type: ignore[arg-type]
+            return removed
+        # Otherwise just clear download fields
+        entry.download_format = None
+        entry.download_location = None
+        entry.download_path = None
+        entry.download_size_bytes = None
+        entry.download_files = []
+        entry.download_directory_checksum = None
+        update_entries([entry], save=True)
+        self._registry_cache = load_registry(force=True)  # type: ignore[arg-type]
+        return True
 
     def list_models(
         self,
         format_filter: Optional[str] = None,
         location_filter: Optional[str] = None,
-    ) -> List[ModelEntry]:
+    ) -> List[RegistryEntry]:
         """List downloaded models with optional filtering."""
-        models = self.registry.get_all_models()
+        models = [
+            e for e in self._registry_cache.values() if e.download_path is not None
+        ]
         if format_filter:
-            models = [m for m in models if m.format_type == format_filter]
+            models = [m for m in models if m.download_format == format_filter]
         if location_filter:
-            models = [m for m in models if m.location == location_filter]
+            models = [m for m in models if m.download_location == location_filter]
         return models
 
     def get_stats(self) -> Dict[str, Any]:
         """Get download statistics."""
-        models = self.registry.get_all_models()
-
-        total_size = sum(m.size_bytes for m in models)
+        models = [
+            e for e in self._registry_cache.values() if e.download_path is not None
+        ]
+        total_size = sum((m.download_size_bytes or 0) for m in models)
         format_counts = {}
         location_counts = {}
 
         for model in models:
-            format_counts[model.format_type] = (
-                format_counts.get(model.format_type, 0) + 1
-            )
-            location_counts[model.location] = location_counts.get(model.location, 0) + 1
+            fmt = model.download_format or "unknown"
+            loc = model.download_location or "unknown"
+            format_counts[fmt] = format_counts.get(fmt, 0) + 1
+            location_counts[loc] = location_counts.get(loc, 0) + 1
 
         return {
             "total_models": len(models),
@@ -664,3 +663,19 @@ class ModelDownloader:
             "by_format": format_counts,
             "by_location": location_counts,
         }
+
+
+def _calculate_directory_checksum(directory: Path) -> str:
+    """Lightweight directory checksum (names + sizes) first 16 chars of sha256."""
+    import hashlib
+
+    if not directory.exists():
+        return ""
+    hasher = hashlib.sha256()
+    files = sorted(directory.rglob("*"))
+    for file_path in files:
+        if file_path.is_file():
+            rel_path = file_path.relative_to(directory)
+            hasher.update(str(rel_path).encode())
+            hasher.update(str(file_path.stat().st_size).encode())
+    return hasher.hexdigest()[:16]

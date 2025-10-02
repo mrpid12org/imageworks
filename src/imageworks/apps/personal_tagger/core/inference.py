@@ -10,11 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from imageworks.libs.vlm import (
-    VLMBackend,
-    VLMBackendError,
-    create_backend_client,
-)
+from imageworks.libs.vlm import VLMBackend, VLMBackendError, create_backend_client
+from imageworks.model_loader.role_selection import select_by_role
+from imageworks.model_loader.service import select_model, CapabilityError
 
 from . import prompts as prompt_registry
 from .config import PersonalTaggerConfig
@@ -125,12 +123,45 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         start = time.perf_counter()
         image_b64 = self._encode_image(image_path)
 
+        # Resolve role → logical model names once per run if registry mode enabled
+        if self.config.use_registry:
+            # Cache resolved names to avoid re-resolution on each stage
+            self._resolved_caption_model = getattr(
+                self, "_resolved_caption_model", None
+            ) or self._resolve_role_model(
+                self.config.caption_role, self.config.caption_model
+            )
+            self._resolved_keyword_model = getattr(
+                self, "_resolved_keyword_model", None
+            ) or self._resolve_role_model(
+                self.config.keyword_role, self.config.keyword_model
+            )
+            self._resolved_description_model = getattr(
+                self, "_resolved_description_model", None
+            ) or self._resolve_role_model(
+                self.config.description_role, self.config.description_model
+            )
+            logger.info(
+                "role_resolution",
+                extra={
+                    "event_type": "role_resolution",
+                    "caption_role": self.config.caption_role,
+                    "caption_model": self._resolved_caption_model,
+                    "keyword_role": self.config.keyword_role,
+                    "keyword_model": self._resolved_keyword_model,
+                    "description_role": self.config.description_role,
+                    "description_model": self._resolved_description_model,
+                },
+            )
+        else:
+            self._resolved_caption_model = self.config.caption_model
+            self._resolved_keyword_model = self.config.keyword_model
+            self._resolved_description_model = self.config.description_model
+
         caption_text, caption_error = self._run_caption_stage(image_b64)
         keyword_strings, keyword_error = self._run_keyword_stage(image_b64)
         description_text, description_error = self._run_description_stage(
-            image_b64,
-            caption_text,
-            keyword_strings,
+            image_b64, caption_text, keyword_strings
         )
 
         keywords = self._convert_keywords(keyword_strings)
@@ -149,9 +180,9 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             duration_seconds=duration,
             backend=self.config.backend,
             models=GenerationModels(
-                caption=self.config.caption_model,
-                keywords=self.config.keyword_model,
-                description=self.config.description_model,
+                caption=self._resolved_caption_model,
+                keywords=self._resolved_keyword_model,
+                description=self._resolved_description_model,
             ),
             metadata_written=False,
             notes="; ".join(notes),
@@ -164,8 +195,11 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
     def _run_caption_stage(self, image_b64: str) -> tuple[str, Optional[str]]:
         stage = self._prompt_profile.caption_stage
         try:
+            model_name = getattr(
+                self, "_resolved_caption_model", self.config.caption_model
+            )
             result = self._chat(
-                model=self.config.caption_model,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": stage.system},
                     {
@@ -193,8 +227,11 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
     def _run_keyword_stage(self, image_b64: str) -> tuple[List[str], Optional[str]]:
         stage = self._prompt_profile.keyword_stage
         try:
+            model_name = getattr(
+                self, "_resolved_keyword_model", self.config.keyword_model
+            )
             result = self._chat(
-                model=self.config.keyword_model,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": stage.system},
                     {
@@ -229,8 +266,11 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         stage = self._prompt_profile.description_stage
         try:
             keyword_preview = ", ".join(keywords[:10]) if keywords else "none"
+            model_name = getattr(
+                self, "_resolved_description_model", self.config.description_model
+            )
             result = self._chat(
-                model=self.config.description_model,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": stage.system},
                     {
@@ -281,6 +321,30 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         return result
 
     def _get_client(self, model_name: str) -> OpenAIChatClient:
+        # If registry mode enabled, use selection service to derive endpoint + internal id.
+        if self.config.use_registry:
+            try:
+                selected = select_model(model_name, require_capabilities=["vision"])
+            except CapabilityError as exc:  # noqa: BLE001
+                raise RuntimeError(
+                    f"Registry model '{model_name}' missing capabilities: {exc}"
+                ) from exc
+            endpoint = selected.endpoint_url
+            internal_name = selected.internal_model_id
+            cache_key = f"{model_name}@{endpoint}"
+            client = self._clients.get(cache_key)
+            if client is None:
+                client = OpenAIChatClient(
+                    base_url=endpoint,
+                    model_name=internal_name,
+                    api_key=self.config.api_key,
+                    backend=selected.backend,
+                    timeout=self.config.timeout,
+                )
+                self._clients[cache_key] = client
+            return client
+
+        # Legacy direct backend path
         client = self._clients.get(model_name)
         if client is None:
             client = OpenAIChatClient(
@@ -292,6 +356,16 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             )
             self._clients[model_name] = client
         return client
+
+    # Registry-role resolution helpers (used before stages when enabled)
+    def _resolve_role_model(self, role: str, fallback: str) -> str:
+        if not self.config.use_registry:
+            return fallback
+        try:
+            logical_name = select_by_role(role, preferred=[fallback])
+            return logical_name
+        except CapabilityError as exc:  # noqa: BLE001
+            raise RuntimeError(f"Failed to resolve role '{role}': {exc}") from exc
 
     @staticmethod
     def _encode_image(path: Path) -> str:

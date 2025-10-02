@@ -1,4 +1,5 @@
 # Model Downloader
+# Model Downloader
 
 A comprehensive tool for downloading and managing AI models across multiple formats and directories, with support for quantized models and cross-platform compatibility.
 
@@ -10,6 +11,7 @@ A comprehensive tool for downloading and managing AI models across multiple form
 - 🔍 **Format Detection**: Infers GGUF, AWQ, GPTQ, Safetensors, and more from filenames and configs
 - 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
 - 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
+- ♻️ **Normalization & Rebuild**: `normalize-formats` command re-detects formats/quantization and optionally rebuilds dynamic fields safely
 
 - 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
 
@@ -54,6 +56,314 @@ imageworks-download list
 # Show statistics
 imageworks-download stats
 ```
+
+### Unified Registry & Variant Names
+All downloads are recorded in a single deterministic registry: `configs/model_registry.json`.
+Variant names follow the pattern `<family>-<backend>-<format>-<quant>` (see Variant Naming Convention section below). These names are what you pass to commands like `remove`, `verify`, or future serving selectors.
+
+### Listing Variants
+Human-readable table (installed + metadata):
+```bash
+imageworks-download list
+```
+
+Add roles column & quant info (already included by default):
+```bash
+imageworks-download list --details
+```
+
+Filter by format (e.g. AWQ only):
+Filter by backend (e.g. show only Ollama-managed logical/synthetic GGUF entries):
+```bash
+imageworks-download list --backend ollama
+```
+
+Show `served_model_id` and roles (details adds these columns; served_model_id now always shown when `--details` supplied):
+```bash
+imageworks-download list --details
+```
+
+Include logical (non-downloaded) entries that lack `download_path` (mainly historical Ollama logical-only variants) alongside real downloads:
+```bash
+imageworks-download list --include-logical
+```
+
+```bash
+imageworks-download list --format awq
+```
+
+Filter by location:
+```bash
+imageworks-download list --location linux_wsl
+```
+
+JSON output for scripting:
+```bash
+imageworks-download list --json > downloads.json
+```
+
+`installed` in JSON is computed (path exists) so stale entries show `false`.
+
+
+### Scanning Existing Downloads
+Import previously downloaded HuggingFace repositories laid out as `~/ai-models/weights/<owner>/<repo>`:
+
+Dry run (no changes):
+```bash
+imageworks-download scan --base ~/ai-models/weights --dry-run
+```
+Import:
+```bash
+imageworks-download scan --base ~/ai-models/weights
+```
+Update existing entries and (optionally) supply a fallback format used ONLY when auto-detection fails:
+```bash
+imageworks-download scan --base ~/ai-models/weights --update-existing --format awq
+```
+Enhanced heuristics detect (in priority order):
+- gguf (`*.gguf`)
+- awq (directory name contains `awq`, weight shards `*.awq`, or `quantization_config.json` with `quant_method: awq`)
+- gptq (`*.gptq` or name contains `gptq`)
+- safetensors → fp16 fallback
+
+Quant hints extracted from filenames or config: `q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`, and for AWQ configs a compact `w<bit>g<group>` label (e.g. `w4g128`).
+
+After scanning:
+```bash
+imageworks-download list --details | grep awq
+```
+
+If a variant was misclassified earlier (e.g. AWQ marked fp16), re-run with `--update-existing`. Supplying `--format` will NOT overwrite a correctly detected format; it only fills in missing ones.
+
+### Normalizing / Rebuilding Registry Entries
+Keep the registry consistent as heuristics improve or files change on disk:
+
+Preview proposed updates (format/quant changes only):
+```bash
+imageworks-download normalize-formats --dry-run
+```
+Apply detected format/quantization updates:
+```bash
+imageworks-download normalize-formats --apply
+```
+Rebuild dynamic fields (size, file list, checksum) while preserving curated metadata (backend, roles, aliases):
+```bash
+imageworks-download normalize-formats --rebuild --apply
+```
+Prune entries whose `download_path` no longer exists:
+```bash
+imageworks-download normalize-formats --rebuild --prune-missing --apply
+```
+Mark (rather than remove) missing entries as deprecated (default if not pruning). A timestamped backup of `configs/model_registry.json` is written unless `--no-backup` is supplied.
+
+Diff display columns:
+- `download_format:old→new`
+- `quantization:old→new`
+- `download_size_bytes:old→new` (rebuild mode)
+- `download_directory_checksum:old→new` (rebuild mode)
+- `download_files_count:old→new` (rebuild mode)
+
+Use this before commits to ensure deterministic metadata following manual edits or external modifications.
+
+
+### Importing Ollama Models
+Locally pulled Ollama models (e.g. via `ollama pull qwen2.5vl:7b`) are stored in Ollama's internal model store (typically `~/.ollama/models`). To ingest them into the unified registry use the helper script. The importer now implements **Strategy A naming**:
+
+> Strategy A Naming: `<base>:<tag>` becomes a variant where:
+>  * If `<tag>` is a quant token (e.g. `q6_k`, `q4_k_m`, `int4`, `int8`, `fp16`) → `family = base`, `quant = normalized tag`
+>  * Otherwise `<tag>` is treated as part of the family → `family = base-tag`, `quant = None`
+>  * Variant name pattern: `<family>-ollama-gguf[-<quant>]`
+>  * `served_model_id` stores the original `base:tag` so runtime tooling can reference the canonical Ollama identifier.
+
+Examples:
+```
+qwen2.5vl:7b                -> qwen2.5vl-7b-ollama-gguf
+llava:7b                    -> llava-7b-ollama-gguf
+hf.co/...-GGUF:Q6_K         -> hf.co/...-gguf-ollama-gguf-q6_k  (quant detected)
+pixtral-local:latest        -> pixtral-local-latest-ollama-gguf
+```
+
+Dry run (no writes):
+```bash
+uv run python scripts/import_ollama_models.py --dry-run
+```
+
+Import for real:
+```bash
+uv run python scripts/import_ollama_models.py
+```
+
+Options:
+```bash
+uv run python scripts/import_ollama_models.py --backend ollama --location linux_wsl
+# Mark legacy placeholder entries (model-ollama-gguf*) deprecated while importing
+uv run python scripts/import_ollama_models.py --deprecate-placeholders
+```
+
+What gets populated:
+* `download_format = gguf`
+* `family` derived per Strategy A
+* `quantization` detected (regex: `q\d(_k(_m)?)?|int4|int8|fp16|f16` case-insensitive)
+* `served_model_id = original_name_with_tag`
+* `source_provider = ollama`
+* `download_path` points to the real store directory if discoverable, else a synthetic `ollama://<name>` URI
+
+Normalization update:
+The importer now normalizes names by replacing `/` and spaces with `-`, collapsing repeated dashes, while preserving underscores inside quant tokens (e.g. `Q6_K` -> `q6_k`).
+
+### Backfilling Legacy Ollama Entries (Option A)
+### Undeprecating / Normalizing Ollama Entries
+
+If earlier placeholder or partially imported Ollama entries are marked deprecated (and thus hidden) you can clear their deprecated flags and normalize synthetic paths:
+
+```bash
+imageworks-download undeprecate-ollama --dry-run -v   # preview
+imageworks-download undeprecate-ollama -v            # apply
+```
+
+Behaviour:
+* Clears `deprecated` where `backend=ollama`
+* Normalizes `download_path` to `ollama://<served_model_id|name>` for consistency
+* Idempotent (re-running when clean produces no changes)
+
+
+If you previously created logical Ollama entries (e.g. via manual edits or earlier imports) they may lack `download_path` and thus not appear in `imageworks-download list` (which enumerates entries with download metadata). Populate synthetic paths so they show up:
+
+```bash
+uv run imageworks-download backfill-ollama-paths --dry-run -v
+uv run imageworks-download backfill-ollama-paths
+```
+
+Behaviour:
+* Detects store via `$OLLAMA_MODELS` or `~/.ollama/models`
+* Sets `download_path` → `<store>/<served_model_id>` (or `ollama://<id>` if store missing)
+* Sets `download_format=gguf` when missing (disable with `--no-set-format`)
+* Sets `download_location` if empty (default `linux_wsl`)
+* Leaves size/checksum blank (can rebuild later with `normalize-formats --rebuild` once per-entry export is desired)
+
+Dry-run first to review; then re-run the standard list:
+```bash
+uv run imageworks-download list
+```
+```
+
+Deprecated placeholder imports:
+Previously imported placeholder variants named `model-ollama-gguf*` can be deprecated automatically with `--deprecate-placeholders`. Deprecated entries are hidden by default in listings (see below) but remain in the registry for auditability until purged.
+
+You can still assign roles later by editing the registry JSON or a future role-assignment command.
+
+### Deprecated Entries & Purging
+
+Entries may be marked `deprecated: true` (e.g. when original files were removed, or placeholder naming was superseded). Tools now support:
+
+Hide deprecated by default when listing (default behaviour):
+```bash
+imageworks-download list
+```
+Show deprecated explicitly:
+```bash
+imageworks-download list --show-deprecated
+```
+
+Purge all deprecated entries:
+```bash
+imageworks-download purge-deprecated
+```
+Only purge legacy placeholder Ollama entries:
+```bash
+imageworks-download purge-deprecated --placeholders-only
+```
+Preview (no write):
+```bash
+imageworks-download purge-deprecated --dry-run
+```
+
+### JSON Output Stability
+`imageworks-download list --json` now emits plain stdout JSON (no Rich wrapping) to avoid inserted newlines in long names; safe for piping into `jq`:
+```bash
+imageworks-download list --json | jq '.[].name'
+```
+### Roles Overview
+List every role-capable model (one row per role):
+```bash
+imageworks-download list-roles
+```
+Include capability flags:
+```bash
+imageworks-download list-roles --show-capabilities
+```
+
+### Verifying Downloads
+Check that directories still exist and (if previously hashed) checksum unchanged:
+```bash
+imageworks-download verify
+```
+Specific variant:
+```bash
+imageworks-download verify llava-v1.5-13b-vllm-awq
+```
+Auto-clear missing/broken download metadata (keeps entry for re-download):
+```bash
+imageworks-download verify --fix-missing
+```
+
+### Removing vs Purging
+Remove just the download (retain logical entry with roles/capabilities):
+```bash
+imageworks-download remove llava-v1.5-13b-vllm-awq --force
+```
+Remove and delete files:
+```bash
+imageworks-download remove llava-v1.5-13b-vllm-awq --delete-files --force
+```
+Purge (delete entry + optionally files):
+```bash
+imageworks-download remove llava-v1.5-13b-vllm-awq --purge --delete-files --force
+```
+
+### Statistics
+Summarize counts & total size:
+```bash
+imageworks-download stats
+```
+
+### Programmatic Adapter Usage
+Instead of the legacy `ModelRegistry`, use the unified adapter:
+```python
+from imageworks.model_loader.download_adapter import record_download, list_downloads, remove_download
+
+entry = record_download(
+  hf_id="liuhaotian/llava-v1.5-13b",
+  backend="unassigned",  # fill with concrete serving backend later
+  format_type="awq",
+  quantization=None,
+  path="/abs/path/to/weights/liuhaotian/llava-v1.5-13b",
+  location="linux_wsl",
+)
+
+for d in list_downloads():
+  print(d.name, d.download_size_bytes)
+
+remove_download(entry.name, keep_entry=True)   # clears download fields only
+```
+
+### Troubleshooting
+| Symptom | Likely Cause | Resolution |
+|---------|--------------|-----------|
+| `imageworks-download list` empty | No downloads yet or removed metadata | Download a model or verify registry path (`configs/model_registry.json`). |
+| Variant shows `✗` in Inst column | Path missing (deleted/moved) | Re-download or run `verify --fix-missing` to clear download fields. |
+| `aria2c not found` | aria2c not installed | Install via `sudo apt install aria2` or `brew install aria2`. |
+| Removal failed (not found) | Wrong variant name | Use `list` / `--json` to confirm exact name. |
+| Checksum changed warning in verify | Files altered after download | Re-download if integrity matters; lock logic (future) can enforce stability. |
+| ImportError referencing legacy registry | Using deprecated `imageworks.tools.model_downloader.registry` | Switch to adapter functions (`record_download`, `list_downloads`). |
+
+Exit Codes:
+- `0` success
+- `1` generic failure (not found, verification error, exception)
+
+### Cross References
+- Variant naming rationale: `docs/deterministic-model-serving.md` (section 4.1)
+- Naming quick reference below.
 
 ### Logging
 
@@ -121,6 +431,15 @@ The downloader aggregates multiple detectors to determine the best storage locat
 | **PyTorch** | `.bin`, `.pth`, `.pt` weights | Linux WSL |
 
 Results are ranked by confidence; provide `--format awq,gguf` to express an explicit preference order when multiple matches are found.
+
+Unified Detection Logic:
+Both `scan` and post-download registration now share the same utility (`detect_format_and_quant`) which:
+1. Prioritises: gguf → awq → gptq → fp16
+2. Parses `quantization_config.json` / `quant_config.json` for AWQ and derives `w<bit>g<group>` labels
+3. Extracts filename-based quant hints (`q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`)
+4. Leaves format unset when insufficient evidence (allowing future improvements without overwriting existing correct entries)
+
+The downloader performs a second pass after files are written to refine format/quantization (e.g., if initial network analysis was ambiguous). The `--format` option during `scan` acts only as a fallback when auto-detection fails (never overwrites determined values).
 
 
 ## Validation & Troubleshooting
@@ -316,59 +635,91 @@ models = downloader.list_models(
 )
 ```
 
-**`remove_model(model_name, **kwargs)`**
-Remove a model from registry.
+**Unified Removal / Purge (CLI)**
+The legacy `ModelRegistry` API has been deprecated in favor of the unified deterministic registry plus the download adapter.
 
+Remove a downloaded variant (keeps entry metadata):
+```bash
+imageworks-download remove mistral-7b-instruct-awq --force
+```
+
+Purge (delete entry entirely) and delete files:
+```bash
+imageworks-download remove mistral-7b-instruct-awq --purge --delete-files --force
+```
+
+Verify integrity (checks existence + directory checksum where available):
+```bash
+imageworks-download verify
+```
+
+List roles (from unified registry):
+```bash
+imageworks-download list-roles
+```
+
+Stats:
+```bash
+imageworks-download stats
+```
+
+Programmatic recording now flows through:
 ```python
-success = downloader.remove_model(
-    model_name="microsoft/DialoGPT-medium",
-    format_type="awq",
-    location="linux_wsl",
-    delete_files=True,
+from imageworks.model_loader.download_adapter import record_download
+entry = record_download(
+  hf_id="microsoft/DialoGPT-medium",
+  backend="unassigned",
+  format_type="awq",
+  quantization=None,
+  path="/abs/path/to/model",
+  location="linux_wsl",
 )
 ```
 
-**`get_stats()`**
-Get download statistics.
-
+Listing programmatically:
 ```python
-stats = downloader.get_stats()
-print(f"Total models: {stats['total_models']}")
-print(f"Total size: {stats['total_size_bytes']} bytes")
+from imageworks.model_loader.download_adapter import list_downloads
+downloads = list_downloads(only_installed=False)
 ```
 
-### ModelRegistry
-
-Registry for tracking downloaded models.
-
+Removal programmatically (retain entry):
 ```python
-from imageworks.tools.model_downloader import get_registry
-
-registry = get_registry()
+from imageworks.model_loader.download_adapter import remove_download
+remove_download("mistral-7b-instruct-awq", keep_entry=True)
 ```
 
-#### Methods
+Attempting to import `imageworks.tools.model_downloader.registry` now raises an ImportError with guidance; update any legacy code to use the adapter functions above.
 
-**`find_model(model_name, format_type=None, location=None)`**
-Find models matching criteria.
+## Variant Naming Convention
 
-```python
-models = registry.find_model("microsoft/DialoGPT-medium")
-awq_models = registry.find_model("microsoft/DialoGPT-medium", format_type="awq")
+All downloaded variants are registered using a deterministic hyphenated pattern to ensure stable selection and scriptability:
+
+```
+<family>-<backend>-<format>-<quant>
 ```
 
-**`add_model(model_name, format_type, location, path, **kwargs)`**
-Add a model to registry.
+Where:
+- `family`: Normalized HuggingFace repo tail (and branch if present). Lowercase; `/`, `_`, spaces, and `@` → `-`.
+- `backend`: Serving backend target (`vllm`, `ollama`, `lmdeploy`, `gguf`, ...).
+- `format` (optional): Artifact/weight packaging (`awq`, `gguf`, `fp16`, `bf16`, `safetensors`, ...). Omitted if singular/unambiguous.
+- `quant` (optional): Quantization spec (`q4_k_m`, `int4`, `awq`, `gptq`, etc.). Not repeated if identical to `format`.
 
-```python
-registry.add_model(
-    model_name="microsoft/DialoGPT-medium",
-    format_type="awq",
-    location="linux_wsl",
-    path="/path/to/model",
-    size_bytes=1000000
-)
-```
+Examples:
+| Source HF ID | Backend | Format | Quant | Variant Name |
+|--------------|---------|--------|-------|--------------|
+| liuhaotian/llava-v1.5-13b | vllm | awq | (implied) | llava-v1.5-13b-vllm-awq |
+| liuhaotian/llava-v1.5-13b | vllm | fp16 | - | llava-v1.5-13b-vllm-fp16 |
+| TheBloke/Mistral-7B-Instruct-v0.2-GGUF | ollama | gguf | q4_k_m | mistral-7b-instruct-v0.2-ollama-gguf-q4_k_m |
+| google/siglip-base-patch16-256 | vllm | (single) | - | siglip-base-patch16-256-vllm |
+
+Rules Recap:
+1. Skip empty components; collapse multiple `-`.
+2. Length target <= 80 chars (future abbreviation may apply for extreme cases).
+3. Name collision (same tuple) updates existing entry; vary `format` or `quant` to keep both.
+
+Why this matters: All CLI subcommands (`remove`, `verify`, `list`, `list-roles`) reference the variant name. Scripts can reliably grep/sort by suffixes (e.g. `-awq`, `-gguf-q4_k_m`).
+
+See also: Detailed rationale and collision policy in `docs/deterministic-model-serving.md` (section 4.1).
 
 ### FormatDetector
 
@@ -446,24 +797,54 @@ from imageworks.apps.color_narrator import ColorNarrator
 narrator = ColorNarrator(model_name="Qwen2.5-VL-7B-Instruct")
 ```
 
-### With Personal Tagger
+### With Personal Tagger (Role-Based Recommended)
 ```bash
-# Fetch the caption/keyword/description models you plan to serve
+# Fetch at least one multimodal model (will satisfy caption/keywords/description roles)
 imageworks-download download "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ"
+
+# (Optional) Fetch an alternative model to compare for description role
 imageworks-download download "llava-hf/llava-v1.6-mistral-7b-hf"
 
-# Launch backends (vLLM/LMDeploy) with the downloaded paths
-python scripts/start_personal_tagger_backends.py --launch \
-  --caption-model-path "~/ai-models/weights/qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ" \
-  --description-model-path "~/ai-models/weights/llava-hf/llava-v1.6-mistral-7b-hf"
+# Update / add entries in configs/model_registry.json assigning roles, then verify & (optionally) lock
+uv run imageworks-model-registry verify qwen2.5-vl-7b-awq --lock
 
-# The LMDeploy helper defaults to `$IMAGEWORKS_MODEL_ROOT/weights/qwen-vl/…`, so
-# downloads made with the Model Downloader are discovered automatically when you
-# keep the standard directory layout.
+# Start serving backend(s) (example vLLM helper referencing registry paths)
+python scripts/start_vllm_server.py --model "~/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ"
 
-# Run the personal tagger once backends are online
-python -m imageworks.apps.personal_tagger.cli.main run --input ~/photos --backend http://localhost:8000
+# Run the tagger using role-based resolution
+uv run imageworks-personal-tagger run \
+  -i ~/photos \
+  --use-registry \
+  --caption-role caption \
+  --keyword-role keywords \
+  --description-role description \
+  --output-jsonl outputs/results/role_mode.jsonl \
+  --summary outputs/summaries/role_mode.md
 ```
+
+Legacy explicit flags (`--caption-model-path`, `--description-model-path`) are deprecated. Use them only for temporary experiments; long-term reproducibility should flow through the unified registry.
+
+## Appendix: Unified Registry Glossary (Condensed)
+Field | Meaning
+----- | -------
+`name` | Canonical key (edit cautiously—affects role resolution caches).
+`backend` | Serving stack (`vllm`, `lmdeploy`, `ollama`, etc.).
+`served_model_id` | External identity exposed at runtime (used in OpenAI API requests).
+`backend_config.model_path` | Local weight path (download target).
+`roles[]` | Functional assignments (e.g. `caption`, `keywords`, `description`).
+`capabilities` | Modalities and feature switches (`vision`, `text`, etc.).
+`artifacts.aggregate_sha256` | Deterministic hash representing tracked files.
+`version_lock.locked` | If true, drift from expected hash blocks verification.
+`model_aliases[]` | Alternate names for preflight/discovery.
+`deprecated` | Kept for rollback; excluded from default role auto-selection.
+`download_format` | Raw downloaded format (awq, gguf, safetensors, etc.) if acquired via downloader.
+`download_location` | Logical storage location label (`linux_wsl`, `windows_lmstudio`, or `custom`).
+`download_path` | Absolute path to downloaded weights directory.
+`download_files[]` | Relative file paths captured at download time (basis for artifact hashing when artifact list empty).
+`download_directory_checksum` | Lightweight directory hash (names + sizes) for quick invalidation.
+`downloaded_at` / `last_accessed` | ISO timestamps for provenance & scheduling heuristics.
+
+Use `uv run imageworks-model-registry verify <name> --lock` after adding new files to ensure reproducibility across environments.
 
 ## Troubleshooting
 
@@ -484,8 +865,8 @@ python -m imageworks.apps.personal_tagger.cli.main run --input ~/photos --backen
 - For Windows LM Studio directory, ensure WSL can access the drive
 
 **Registry corruption**
-- Run `imageworks-download verify --fix-missing` to clean up
-- Delete `~/ai-models/registry/models.json` to reset registry
+- Run `imageworks-download verify --fix-missing` to clean up missing download paths
+- Hard reset: edit `configs/model_registry.json` directly (single unified registry) then re-run `imageworks-model-registry verify <name>`
 
 ### Debug Mode
 
@@ -497,15 +878,7 @@ imageworks-download download "model-name"
 
 ### File Issues
 
-Check file integrity:
-```bash
-imageworks-download verify
-```
-
-Clean up missing models:
-```bash
-imageworks-download verify --fix-missing
-```
+File integrity (reproducible hash drift): use `imageworks-model-registry verify <name>` which now derives artifacts from `download_files` when present.
 
 ## Contributing
 

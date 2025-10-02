@@ -98,6 +98,23 @@ For GPUs with ≥48 GB VRAM you can point either script at larger Qwen2/VL che
 
 ## Usage
 
+### Upcoming: Registry + Role-Based Model Selection
+Color Narrator will shortly adopt the unified model registry and the same role indirection pattern already live in Personal Tagger (see `docs/personal_tagger/model_registry.md`, Section 11). Instead of hardcoding `vlm_model` / backend combinations in `pyproject.toml`, you will be able to run:
+
+```bash
+uv run imageworks-color-narrator narrate \
+  --use-registry \
+  --vision-role caption  # or a future purpose-specific role e.g. colour_audit
+```
+
+Planned behaviour:
+- `--use-registry` enables dynamic resolution through `configs/model_registry.json`.
+- A new `--vision-role` (name tentative) flag will choose the first non-deprecated registry entry advertising that role + required capabilities (vision, openai-compatible backend).
+- Central model upgrades (e.g. swapping Qwen2.5-VL-7B-AWQ → a newer checkpoint) will then require only a registry edit—no CLI or config changes.
+- Logging will emit an `event_type=role_resolution` entry mirroring Personal Tagger for observability.
+
+Until this lands, continue using the explicit backend + model flags / config values documented below.
+
 ### Narrate Residual Colour
 ```bash
 uv run imageworks-color-narrator narrate \
@@ -225,6 +242,24 @@ manager.register_template(
 Integration tests rely on assets under `tests/shared/`. Keep personally identifiable imagery out of the repository and rely on synthetic or licensed examples.
 
 ## Troubleshooting
+
+## Appendix: Unified Registry Glossary (Condensed)
+Key fields from `configs/model_registry.json` relevant to upcoming Color Narrator role integration:
+
+Field | Meaning
+----- | -------
+`name` | Canonical key used for selection & logging.
+`backend` | Serving stack (`vllm`, `lmdeploy`, `ollama`, etc.).
+`backend_config.model_path` | Local path to model weights (launch scripts reference this).
+`served_model_id` | Identifier the backend exposes via `/v1/models`.
+`capabilities` | Modalities and features (must include `vision` for narrator).
+`roles[]` | Functional purposes (e.g. `caption`, `description`, future `narration`).
+`version_lock` | Drift gate (locked aggregate SHA256 expected when `locked=true`).
+`artifacts.files[]` | Tracked subset of files hashed for reproducibility.
+`model_aliases[]` | Alternate names tried during health/preflight detection.
+`deprecated` | Hide from defaults; still selectable explicitly.
+
+Color Narrator will resolve a future `--vision-role` against `roles[]` with `capabilities.vision == true` and prefer non‑deprecated entries.
 
 | Symptom | Likely Cause | Suggested Fix |
 |---------|--------------|---------------|

@@ -1,0 +1,110 @@
+import json
+from pathlib import Path
+import pytest
+
+from imageworks.model_loader import registry
+from imageworks.model_loader.registry import RegistryLoadError
+from imageworks.model_loader.service import select_model, CapabilityError
+
+
+def test_load_registry_success(tmp_path: Path):
+    sample = [
+        {
+            "name": "demo-model",
+            "backend": "vllm",
+            "backend_config": {"port": 8000, "model_path": "/models/demo"},
+            "capabilities": {"vision": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    # Reset global cache to ensure isolation
+    registry._REGISTRY_CACHE = None  # type: ignore[attr-defined]
+    loaded = registry.load_registry(path, force=True)
+    assert "demo-model" in loaded
+    entry = loaded["demo-model"]
+    assert entry.backend == "vllm"
+
+
+def test_load_registry_duplicate_name(tmp_path: Path):
+    sample = [
+        {"name": "dup", "backend": "vllm"},
+        {"name": "dup", "backend": "lmdeploy"},
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    with pytest.raises(RegistryLoadError):
+        registry.load_registry(path, force=True)
+
+
+def test_get_entry_missing(monkeypatch):
+    # ensure cache is cleared
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", {})
+    with pytest.raises(KeyError):
+        registry.get_entry("missing")
+
+
+def test_select_model_and_capabilities(tmp_path: Path, monkeypatch):
+    sample = [
+        {
+            "name": "vision-ok",
+            "backend": "vllm",
+            "backend_config": {"port": 8123, "model_path": "/m"},
+            "capabilities": {"vision": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        },
+        {
+            "name": "text-only",
+            "backend": "vllm",
+            "backend_config": {"port": 8124, "model_path": "/m"},
+            "capabilities": {"vision": False},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        },
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", None)
+    registry.load_registry(path, force=True)
+
+    sel = select_model("vision-ok", require_capabilities=["vision"])
+    assert sel.endpoint_url.endswith(":8123/v1")
+    assert sel.capabilities["vision"] is True
+
+    with pytest.raises(CapabilityError):
+        select_model("text-only", require_capabilities=["vision"])
+
+
+def test_select_ollama_backend(tmp_path: Path, monkeypatch):
+    sample = [
+        {
+            "name": "qwen2.5-vl-7b-gguf-q4",
+            "backend": "ollama",
+            "backend_config": {"port": 11434, "model_path": "/unused"},
+            "capabilities": {"vision": True, "text": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", None)
+    registry.load_registry(path, force=True)
+    sel = select_model("qwen2.5-vl-7b-gguf-q4", require_capabilities=["vision"])
+    assert sel.backend == "ollama"
+    assert sel.endpoint_url.endswith(":11434/v1")

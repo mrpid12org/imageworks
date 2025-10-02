@@ -6,20 +6,28 @@ following imageworks conventions.
 """
 
 from pathlib import Path
-from typing import Optional
-import logging
+from typing import Optional, Any, List, Dict
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
+import json
 
 from imageworks.logging_utils import configure_logging
+from types import SimpleNamespace
+from imageworks.model_loader.registry import load_registry as _load_unified_registry
 
-from .downloader import ModelDownloader
-from .registry import get_registry
+from .format_utils import detect_format_and_quant
+from imageworks.model_loader import registry as unified_registry
+from imageworks.model_loader.download_adapter import (
+    record_download,
+    list_downloads as unified_list_downloads,
+    remove_download as unified_remove_download,
+    compute_directory_checksum,
+)
 from .config import get_config
-from .url_analyzer import URLAnalyzer
+
+# URLAnalyzer and ModelDownloader imports removed (unused)
 
 
 app = typer.Typer(
@@ -29,73 +37,20 @@ app = typer.Typer(
 )
 console = Console()
 LOG_PATH = configure_logging("model_downloader")
-logger = logging.getLogger(__name__)
-logger.info("Model downloader logging initialised → %s", LOG_PATH)
 
 
-@app.command("download")
-def download_model(
-    model: str = typer.Argument(
-        ..., help="Model name (owner/repo) or HuggingFace URL to download"
-    ),
-    format_preference: Optional[str] = typer.Option(
-        None,
-        "--format",
-        "-f",
-        help="Preferred format(s) (comma separated: gguf, awq, gptq, safetensors, etc.)",
-    ),
-    location: Optional[str] = typer.Option(
-        None,
-        "--location",
-        "-l",
-        help="Target location (linux_wsl, windows_lmstudio, or custom path)",
-    ),
-    include_optional: bool = typer.Option(
-        False,
-        "--include-optional",
-        "-o",
-        help="Include optional files (documentation, examples, etc.)",
-    ),
-    force: bool = typer.Option(
-        False, "--force", help="Force re-download even if model exists"
-    ),
-    non_interactive: bool = typer.Option(
-        False, "--non-interactive", "-y", help="Non-interactive mode (use defaults)"
-    ),
-):
-    """Download a model from HuggingFace or URL."""
+def _enable_dupe_tolerance():
+    """Allow tolerant duplicate handling for CLI operations.
 
-    try:
-        downloader = ModelDownloader()
+    Tests inject duplicate synthetic entries; production registry should remain clean.
+    This helper centralizes the environment flag enabling tolerant loading.
+    """
+    import os as _os
 
-        preferred_formats = None
-        if format_preference:
-            preferred_formats = [fmt.strip() for fmt in format_preference.split(",") if fmt.strip()]
+    _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
 
-        # Run download directly, let aria2c show its native progress
-        model_entry = downloader.download(
-            model_identifier=model,
-            format_preference=preferred_formats,
-            location_override=location,
-            include_optional=include_optional,
-            force_redownload=force,
-            interactive=not non_interactive,
-        )
 
-        # Success message
-        rprint(f"✅ [green]Successfully downloaded:[/green] {model_entry.model_name}")
-        rprint(f"   📁 Location: {model_entry.path}")
-        rprint(f"   🔧 Format: {model_entry.format_type}")
-        rprint(f"   💾 Size: {_format_size(model_entry.size_bytes)}")
-
-        # Show compatible backends
-        config = get_config()
-        backends = config.get_compatible_backends(model_entry.format_type)
-        rprint(f"   ⚡ Compatible with: {', '.join(backends)}")
-
-    except Exception as e:
-        rprint(f"❌ [red]Download failed:[/red] {str(e)}")
-        raise typer.Exit(code=1)
+## undeprecate-ollama command removed in layered registry design.
 
 
 @app.command("list")
@@ -112,193 +67,1027 @@ def list_models(
         "-l",
         help="Filter by location (linux_wsl, windows_lmstudio)",
     ),
+    backend_filter: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        "-b",
+        help="Filter by backend (vllm, ollama, lmdeploy, unassigned, etc.)",
+    ),
+    show_deprecated: bool = typer.Option(
+        False,
+        "--show-deprecated",
+        help="Include deprecated entries in the listing",
+    ),
     show_details: bool = typer.Option(
         False, "--details", "-d", help="Show detailed information"
     ),
     json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    include_logical: bool = typer.Option(
+        False,
+        "--include-logical",
+        help="Also include logical entries without download metadata",
+    ),
+    dedupe: bool = typer.Option(
+        False,
+        "--dedupe",
+        help="Condense rows by family/backend/format/quant (optional)",
+    ),
+    show_internal_names: bool = typer.Option(
+        False,
+        "--show-internal-names",
+        help="Include internal variant name column for debugging",
+    ),
 ):
     """List downloaded models."""
 
     try:
-        downloader = ModelDownloader()
-        models = downloader.list_models(
-            format_filter=format_filter, location_filter=location_filter
-        )
+        _enable_dupe_tolerance()
+        base_entries = unified_list_downloads(only_installed=False)
+        entries = list(base_entries)
+        if include_logical:
+            have = {e.name for e in entries}
+            try:
+                raw = json.loads(
+                    Path("configs/model_registry.json").read_text(encoding="utf-8")
+                )
+            except Exception as _exc:  # noqa: BLE001
+                rprint(
+                    f"❌ [red]Failed to read registry for logical entries:[/red] {_exc}"
+                )
+                raise typer.Exit(code=1)
+            reg_map = unified_registry.load_registry(force=True)
+            for obj in raw:
+                name = obj.get("name")
+                if not name or name in have:
+                    continue
+                if obj.get("download_path") is not None:
+                    continue  # only logical-only (no path)
+                if (not show_deprecated) and obj.get("deprecated"):
+                    continue
+                e = reg_map.get(name)
+                if e is None:
+                    # Create lightweight logical-only stub
+                    e = SimpleNamespace(
+                        name=name,
+                        backend=obj.get("backend", "unknown"),
+                        download_format=obj.get("download_format"),
+                        quantization=obj.get("quantization"),
+                        backend_config=None,
+                        download_location=obj.get("download_location"),
+                        download_path=None,
+                        download_size_bytes=obj.get("download_size_bytes"),
+                        roles=obj.get("roles") or [],
+                        family=obj.get("family"),
+                        served_model_id=obj.get("served_model_id"),
+                        deprecated=obj.get("deprecated", False),
+                    )
+                entries.append(e)
+        # Apply filters (format/location) only to entries that have those fields
+        filtered = []
+        for e in entries:
+            # Determine logical-only status (no real path or synthetic ollama path with no downloaded_at attr)
+            synthetic = False
+            try:
+                dp = e.download_path
+            except AttributeError:
+                dp = None
+            if isinstance(dp, str) and dp.startswith("ollama://"):
+                synthetic = True
+            # logical_only_flag removed (unused)
+            if (not show_deprecated) and getattr(e, "deprecated", False):
+                continue
+            if backend_filter and e.backend != backend_filter:
+                continue
+            if (
+                format_filter
+                and e.download_format
+                and e.download_format != format_filter
+            ):
+                continue
+            if (
+                location_filter
+                and e.download_location
+                and e.download_location != location_filter
+            ):
+                continue
+            filtered.append(e)
+        entries = sorted(filtered, key=lambda x: x.name)
+
+        # --- Robust family parsing helpers (avoid collapsing distinct multi-token families) ---
+        _KNOWN_BACKENDS = {"ollama", "vllm", "lmdeploy", "unassigned"}
+        _KNOWN_FORMATS = {"gguf", "safetensors", "awq", "gptq", "fp16", "bf16"}
+
+        def _parse_family(e):
+            if getattr(e, "family", None):
+                return e.family
+            parts = e.name.split("-")
+            if len(parts) < 3:
+                return e.name  # nothing to parse
+            # Walk from right stripping quant (heuristic: contains underscore or starts with q/digit or in known set)
+            tail = parts[:]
+            # Potential quant token criteria
+            if tail and (
+                tail[-1].lower().startswith("q")
+                or "_" in tail[-1]
+                or tail[-1].upper() in {tail[-1]}
+            ):
+                # rely on stored quantization if present to confirm
+                if (
+                    getattr(e, "quantization", None)
+                    and tail[-1].lower() == getattr(e, "quantization").lower()
+                ):
+                    tail = tail[:-1]
+                elif getattr(e, "quantization", None) is None and any(
+                    c.isdigit() for c in parts[-1]
+                ):
+                    tail = tail[:-1]
+            if tail and tail[-1].lower() in _KNOWN_FORMATS:
+                tail = tail[:-1]
+            if tail and tail[-1].lower() in _KNOWN_BACKENDS:
+                tail = tail[:-1]
+            return "-".join(tail) if tail else e.name
+
+        # Deduplicate only if explicitly requested
+        if dedupe:
+
+            def _score(e):
+                s = 0
+                if getattr(e, "quantization", None):
+                    s += 3
+                if getattr(e, "download_path", None):
+                    s += 2
+                if getattr(e, "download_size_bytes", None):
+                    s += 1
+                meta = getattr(e, "metadata", {}) or {}
+                s += len(meta)
+                return s
+
+            grouped = {}
+            for e in entries:
+                fam = _parse_family(e)
+                key = (
+                    fam,
+                    e.backend,
+                    getattr(e, "download_format", None),
+                    getattr(e, "quantization", None),
+                )
+                grouped.setdefault(key, []).append(e)
+            deduped = []
+            for key, items in grouped.items():
+                if len(items) == 1:
+                    deduped.extend(items)
+                    continue
+                # Only dedup if at least one item has download_path (avoid hiding purely logical diversity)
+                if not any(getattr(i, "download_path", None) for i in items):
+                    deduped.extend(items)
+                    continue
+                best = max(items, key=_score)
+                deduped.append(best)
+            entries = sorted(deduped, key=lambda x: x.name)
+
+        # Layer-aware logical inclusion: read discovered layer directly for pure logical entries
+        if include_logical:
+            existing_names = {e.name for e in entries}
+            discovered_path = Path("configs/model_registry.discovered.json")
+            logical_candidates = []
+            if discovered_path.exists():
+                try:
+                    logical_candidates = json.loads(
+                        discovered_path.read_text(encoding="utf-8")
+                    )
+                except Exception:  # noqa: BLE001
+                    logical_candidates = []
+            from types import SimpleNamespace as _NS
+
+            for obj in logical_candidates:
+                name = obj.get("name")
+                if not name or name in existing_names:
+                    continue
+                dp = obj.get("download_path")
+                downloaded_at = obj.get("downloaded_at")
+                synthetic = (
+                    isinstance(dp, str)
+                    and dp.startswith("ollama://")
+                    and not downloaded_at
+                )
+                is_logical = (dp is None) or synthetic
+                if not is_logical:
+                    continue
+                if (not show_deprecated) and obj.get("deprecated"):
+                    continue
+                entries.append(
+                    _NS(
+                        name=name,
+                        backend=obj.get("backend", "unknown"),
+                        download_format=obj.get("download_format"),
+                        quantization=obj.get("quantization"),
+                        backend_config=None,
+                        download_location=obj.get("download_location"),
+                        download_path=dp,
+                        download_size_bytes=obj.get("download_size_bytes"),
+                        roles=obj.get("roles") or [],
+                        family=obj.get("family"),
+                        served_model_id=obj.get("served_model_id"),
+                        deprecated=obj.get("deprecated", False),
+                    )
+                )
+            entries = sorted(entries, key=lambda x: x.name)
+
+        def _derive_display_name(e):
+            fam = getattr(e, "family", None)
+            quant = getattr(e, "quantization", None)
+            # Always include quant if present per user preference.
+            if fam and quant:
+                return f"{fam}-{quant.lower()}"
+            if fam:
+                return fam
+            # Fallback: strip backend/format tokens from name heuristically
+            parts = e.name.split("-")
+            if len(parts) >= 4:
+                # assume pattern: family... backend format quant
+                fam_guess = "-".join(parts[:-3])
+                quant_guess = parts[-1]
+                return f"{fam_guess}-{quant_guess}" if quant_guess else fam_guess
+            return e.name
+
+        def _trim_packager(disp: str) -> str:
+            # Remove hf.co-<user>- prefix pattern if present
+            if disp.startswith("hf.co-"):
+                parts = disp.split("-")
+                if len(parts) > 2:  # hf.co user rest...
+                    return "-".join(parts[2:])
+            return disp
 
         if json_output:
-            import json
+            import json as _json
 
-            model_data = [model.to_dict() for model in models]
-            print(json.dumps(model_data, indent=2))
+            payload = []
+            for e in entries:
+                installed = bool(
+                    e.download_path and Path(e.download_path).expanduser().exists()
+                )
+                payload.append(
+                    {
+                        "name": e.name,
+                        "display_name": getattr(e, "display_name", None)
+                        or _derive_display_name(e),
+                        "backend": e.backend,
+                        "format": e.download_format,
+                        "quantization": e.quantization,
+                        "location": e.download_location,
+                        "installed": installed,
+                        "size_bytes": e.download_size_bytes,
+                        "roles": e.roles,
+                        "family": e.family,
+                        "logical_only": e.download_path is None,
+                        "served_model_id": e.served_model_id,
+                        "deprecated": getattr(e, "deprecated", False),
+                    }
+                )
+            if include_logical:
+                present = {p["name"] for p in payload}
+                discovered_path = Path("configs/model_registry.discovered.json")
+                logical_candidates = []
+                if discovered_path.exists():
+                    try:
+                        logical_candidates = json.loads(
+                            discovered_path.read_text(encoding="utf-8")
+                        )
+                    except Exception:  # noqa: BLE001
+                        logical_candidates = []
+                for obj in logical_candidates:
+                    name = obj.get("name")
+                    if not name or name in present:
+                        continue
+                    dp = obj.get("download_path")
+                    downloaded_at = obj.get("downloaded_at")
+                    synthetic = (
+                        isinstance(dp, str)
+                        and dp.startswith("ollama://")
+                        and not downloaded_at
+                    )
+                    is_logical = (dp is None) or synthetic
+                    if not is_logical:
+                        continue
+                    if (not show_deprecated) and obj.get("deprecated"):
+                        continue
+                    payload.append(
+                        {
+                            "name": name,
+                            "backend": obj.get("backend"),
+                            "format": obj.get("download_format"),
+                            "quantization": obj.get("quantization"),
+                            "location": obj.get("download_location"),
+                            "installed": False,
+                            "size_bytes": obj.get("download_size_bytes"),
+                            "roles": obj.get("roles") or [],
+                            "family": obj.get("family"),
+                            "logical_only": True,
+                            "served_model_id": obj.get("served_model_id"),
+                            "deprecated": obj.get("deprecated", False),
+                        }
+                    )
+                payload.sort(key=lambda x: x["name"])
+            # Use plain print to avoid Rich wrapping inserting newlines mid-token
+            print(_json.dumps(payload, indent=2))
             return
 
-        if not models:
+        if not entries:
             rprint("📭 [yellow]No models found matching criteria[/yellow]")
             return
 
-        # Create table
-        table = Table(title="Downloaded Models")
-        table.add_column("Model", style="cyan", no_wrap=True)
-        table.add_column("Format", style="magenta")
-        table.add_column("Location", style="green")
+        table = Table(title="Unified Downloaded Variants")
+        table.add_column("Model", style="cyan")  # display name only
+        if show_internal_names:
+            table.add_column("Internal", style="white dim")
+        table.add_column(
+            "Fmt", style="magenta"
+        )  # file format (GGUF, AWQ, SAFETENSORS, etc.)
+        table.add_column(
+            "Quant", style="magenta"
+        )  # precision/quantization (fp16, bf16, q4_k_m, awq if variant)
+        table.add_column("Backend", style="green")
+        table.add_column("Inst", style="yellow")
         table.add_column("Size", justify="right", style="blue")
-
         if show_details:
-            table.add_column("Downloaded", style="dim")
-            table.add_column("Files", justify="right", style="dim")
+            table.add_column("ServedID", style="white")
+        if show_details:
+            table.add_column("Roles", style="white")
+        # Helper classification sets
+        _CONTAINER_FORMATS = {"gguf", "safetensors"}
+        _PRECISION_TOKENS = {"fp16", "fp32", "bf16"}
+        _QUANT_SCHEMES = {"awq", "gptq", "exl2", "marlin"}
 
-        for model in models:
-            # Check if directory is missing (defensive check result)
-            is_missing = model.metadata and model.metadata.get(
-                "directory_missing", False
+        def _infer_container(e):
+            raw = (e.download_format or "").lower()
+            if raw in _CONTAINER_FORMATS:
+                return raw.upper()
+            # Infer from files if we can
+            files = getattr(e, "download_files", []) or []
+            for f in files:
+                lf = f.lower()
+                if lf.endswith(".gguf"):
+                    return "GGUF"
+            for f in files:
+                lf = f.lower()
+                if lf.endswith(".safetensors"):
+                    return "SAFETENSORS"
+            # Fallback: inspect on-disk directory if present (covers cases where download_files wasn't captured)
+            dp = getattr(e, "download_path", None)
+            if isinstance(dp, str):
+                from pathlib import Path as _P
+
+                p = _P(dp).expanduser()
+                if p.exists() and p.is_dir():
+                    # Shallow fast scan: first match wins. Limit to reasonable number of files to avoid cost.
+                    scanned = 0
+                    try:
+                        for child in p.rglob("*"):
+                            if scanned > 500:  # safety limit
+                                break
+                            scanned += 1
+                            if not child.is_file():
+                                continue
+                            name_lower = child.name.lower()
+                            if name_lower.endswith(".gguf"):
+                                return "GGUF"
+                            if name_lower.endswith(".safetensors"):
+                                return "SAFETENSORS"
+                    except Exception:  # noqa: BLE001
+                        pass
+            # Backend heuristic
+            if e.backend == "ollama":
+                return "GGUF"
+            return "-"
+
+        def _infer_quant_display(e):
+            raw = (e.download_format or "").lower()
+            qfield = e.quantization or ""
+            # Container formats: rely solely on quantization field
+            if raw in _CONTAINER_FORMATS:
+                return qfield or "-"
+            # Precision tokens: treat raw as quant if explicit quant absent
+            if raw in _PRECISION_TOKENS:
+                return qfield or raw
+            # Quantization schemes (awq/gptq/etc.) may also have a second token (e.g. w4g128)
+            if raw in _QUANT_SCHEMES:
+                if qfield and qfield.lower() != raw:
+                    return f"{raw}-{qfield}".lower()
+                return raw
+            # Fallback: if quantization present use it; else raw if meaningful
+            return qfield or (raw if raw else "-")
+
+        # Re-sort entries by trimmed display name (case-insensitive) as requested
+        entries = sorted(
+            entries,
+            key=lambda e: _trim_packager(
+                (getattr(e, "display_name", None) or _derive_display_name(e))
+            ).lower(),
+        )
+
+        for e in entries:
+            installed = bool(
+                e.download_path and Path(e.download_path).expanduser().exists()
             )
-
-            model_name = model.model_name
-            if is_missing:
-                model_name = f"[red]⚠ {model.model_name} (directory missing)[/red]"
-
-            row = [
-                model_name,
-                model.format_type,
-                model.location,
-                _format_size(model.size_bytes),
-            ]
-
+            if not installed and e.backend == "ollama":
+                installed = True
+            disp = getattr(e, "display_name", None) or _derive_display_name(e)
+            disp = _trim_packager(disp)
+            fmt_display = _infer_container(e)
+            quant_display = _infer_quant_display(e)
+            if quant_display and quant_display != "-":
+                quant_display = quant_display.lower()
+            row = [disp]
+            if show_internal_names:
+                row.append(e.name)
+            row.extend(
+                [
+                    fmt_display,
+                    quant_display,
+                    e.backend,
+                    "✓" if installed else "✗",
+                    _format_size(e.download_size_bytes or 0),
+                ]
+            )
             if show_details:
-                download_date = model.downloaded_at.split("T")[0]  # Just date part
-                row.extend([download_date, str(len(model.files))])
-
+                row.append(e.served_model_id or "-")
+            if show_details:
+                row.append(",".join(e.roles) or "-")
             table.add_row(*row)
-
         console.print(table)
-
-        # Summary
-        total_size = sum(model.size_bytes for model in models)
-        rprint(f"\n📊 Total: {len(models)} models, {_format_size(total_size)}")
-
-    except Exception as e:
-        rprint(f"❌ [red]Failed to list models:[/red] {str(e)}")
+        total_size = sum((e.download_size_bytes or 0) for e in entries)
+        rprint(f"\n📊 Total: {len(entries)} variants, {_format_size(total_size)}")
+    except Exception as e:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to list models:[/red] {e}")
         raise typer.Exit(code=1)
 
 
-@app.command("analyze")
-def analyze_url(
-    url: str = typer.Argument(..., help="URL to analyze"),
-    show_files: bool = typer.Option(
-        False, "--files", help="Show detailed file information"
+@app.command("prune-duplicates")
+def prune_duplicates(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be removed without writing"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed decisions"
+    ),
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Limit to backend (e.g. ollama)"
     ),
 ):
-    """Analyze a HuggingFace URL without downloading."""
+    """Remove stale duplicate variants keeping the richest metadata per (family, backend, format, quant).
 
+    Heuristic: among entries sharing (family, backend, format, quant) keep the one with highest score where
+      score = +3 if quantization present +2 if download_path present +1 if size_bytes present +len(metadata)
+    Other entries with the same key are removed from the registry (discovered layer only effect for dynamic entries).
+    """
     try:
-        analyzer = URLAnalyzer()
+        from imageworks.model_loader import registry as _reg
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            progress.add_task("Analyzing URL...", total=None)
-            analysis = analyzer.analyze_url(url)
+        reg = _reg.load_registry(force=True)
+        _KNOWN_BACKENDS = {"ollama", "vllm", "lmdeploy", "unassigned"}
+        _KNOWN_FORMATS = {"gguf", "safetensors", "awq", "gptq", "fp16", "bf16"}
 
-        repo = analysis.repository
+        def _parse_family(e):
+            if e.family:
+                return e.family
+            parts = e.name.split("-")
+            if len(parts) < 3:
+                return e.name
+            tail = parts[:]
+            # strip quant token if matches entry.quantization
+            if e.quantization and tail and tail[-1].lower() == e.quantization.lower():
+                tail = tail[:-1]
+            if tail and tail[-1].lower() in _KNOWN_FORMATS:
+                tail = tail[:-1]
+            if tail and tail[-1].lower() in _KNOWN_BACKENDS:
+                tail = tail[:-1]
+            return "-".join(tail) if tail else e.name
 
-        # Repository info
-        rprint(f"📍 [bold]Repository:[/bold] {repo.owner}/{repo.repo}")
-        if repo.model_type:
-            rprint(f"🏷️  Model Type: {repo.model_type}")
-        if repo.library_name:
-            rprint(f"📚 Library: {repo.library_name}")
+        def _key(e):
+            fam = _parse_family(e)
+            return (fam, e.backend, e.download_format, e.quantization)
 
-        # Detected formats
-        rprint("\n🔧 [bold]Detected Formats:[/bold]")
-        for format_info in analysis.formats:
-            confidence = f"{format_info.confidence:.0%}"
-            rprint(f"   • {format_info.format_type} ({confidence} confidence)")
-            for evidence in format_info.evidence[:2]:  # Show first 2 pieces of evidence
-                rprint(f"     - {evidence}")
+        def _score(e):
+            s = 0
+            if e.quantization:
+                s += 3
+            if e.download_path:
+                s += 2
+            if e.download_size_bytes:
+                s += 1
+            s += len(e.metadata or {})
+            return s
 
-        # File summary
-        rprint("\n📁 [bold]Files Summary:[/bold]")
-        for category, files in analysis.files.items():
-            if files:
-                total_size = sum(f.size for f in files)
+        groups = {}
+        for e in reg.values():
+            if backend and e.backend != backend:
+                continue
+            groups.setdefault(_key(e), []).append(e)
+        to_remove = []
+        kept = 0
+        for k, items in groups.items():
+            if len(items) <= 1:
+                kept += len(items)
+                continue
+            # Only prune if SAME parsed family string across all items (guard) and at least one has download_path
+            fams = {_parse_family(i) for i in items}
+            if len(fams) != 1:
+                kept += len(items)
+                continue
+            if not any(i.download_path for i in items):
+                kept += len(items)
+                continue
+            best = max(items, key=_score)
+            kept += 1
+            for other in items:
+                if other.name != best.name:
+                    to_remove.append(other.name)
+            if verbose:
+                fam, b, fmt, q = k
                 rprint(
-                    f"   • {category}: {len(files)} files ({_format_size(total_size)})"
+                    f"Group {fam}/{b}/{fmt or '-'}:{q or '-'} -> keep {best.name}; remove {[i.name for i in items if i.name != best.name]}"
                 )
+        if not to_remove:
+            rprint("🛈 [cyan]No duplicates detected for pruning[/cyan]")
+            return
+        if dry_run:
+            rprint(
+                f"Would remove {len(to_remove)} duplicate entries: {', '.join(sorted(to_remove))}"
+            )
+            return
+        from imageworks.model_loader.registry import remove_entry, save_registry
 
-        rprint(f"\n💾 [bold]Total Size:[/bold] {_format_size(analysis.total_size)}")
+        removed_ct = 0
+        for n in to_remove:
+            if remove_entry(n, save=False):
+                removed_ct += 1
+        save_registry()
+        rprint(
+            f"✅ [green]Pruned {removed_ct} duplicate entries (remaining kept groups: {kept})[/green]"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Prune failed:[/red] {exc}")
+        raise typer.Exit(code=1)
 
-        # Show detailed files if requested
-        if show_files:
-            for category, files in analysis.files.items():
-                if files and category in ["model_weights", "config", "tokenizer"]:
-                    rprint(f"\n📄 [bold]{category.title()}:[/bold]")
-                    for file in files[:5]:  # Show first 5 files
-                        rprint(f"   • {file.path} ({_format_size(file.size)})")
-                    if len(files) > 5:
-                        rprint(f"   ... and {len(files) - 5} more files")
 
-    except Exception as e:
+@app.command("restore-ollama")
+def restore_ollama(
+    backup_path: Optional[Path] = typer.Option(
+        None,
+        "--backup",
+        help="Specific backup file to restore from (model_registry*.bak.json)",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be restored"
+    ),
+    include_deprecated: bool = typer.Option(
+        False,
+        "--include-deprecated",
+        help="Also restore entries that were deprecated in backup",
+    ),
+):
+    """Restore missing Ollama entries from the latest backup (or specified file).
+
+    Strategy:
+      1. Load current registry (names -> entries).
+      2. Load backup JSON list.
+      3. For each backup entry with backend=ollama not present now, stage for restore.
+      4. Write into discovered layer (update_entries) unless dry-run.
+    """
+    try:
+        from imageworks.model_loader import registry as _reg
+        import glob as _glob
+
+        if not backup_path:
+            candidates = sorted(_glob.glob("configs/model_registry.*.bak.json"))
+            if not candidates:
+                rprint("❌ [red]No backup files found[/red]")
+                raise typer.Exit(code=1)
+            backup_path = Path(candidates[-1])
+        if not backup_path.exists():
+            rprint(f"❌ [red]Backup file not found:[/red] {backup_path}")
+            raise typer.Exit(code=1)
+        raw = []
+        try:
+            raw = json.loads(backup_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, list):
+                raise ValueError("backup not list")
+        except Exception as exc:  # noqa: BLE001
+            rprint(f"❌ [red]Failed to parse backup:[/red] {exc}")
+            raise typer.Exit(code=1)
+        reg = _reg.load_registry(force=True)
+        existing = set(reg.keys())
+        restore_objs = [
+            e
+            for e in raw
+            if isinstance(e, dict)
+            and e.get("backend") == "ollama"
+            and e.get("name") not in existing
+            and (include_deprecated or not e.get("deprecated"))
+        ]
+        if not restore_objs:
+            rprint("🛈 [cyan]No missing Ollama entries to restore[/cyan]")
+            return
+        if dry_run:
+            rprint(
+                f"Would restore {len(restore_objs)} entries: {', '.join(o.get('name') for o in restore_objs[:12])}{' ...' if len(restore_objs)>12 else ''}"
+            )
+            return
+        # Convert minimal fields into RegistryEntry objects via parsing utility
+        from imageworks.model_loader.registry import _parse_entry, update_entries, save_registry  # type: ignore
+
+        restored_entries = []
+        for obj in restore_objs:
+            try:
+                restored_entries.append(_parse_entry(obj))
+            except Exception:
+                rprint(
+                    f"⚠️  [yellow]Skip malformed backup entry {obj.get('name')}[/yellow]"
+                )
+        update_entries(restored_entries, save=True)
+        save_registry()
+        rprint(
+            f"✅ [green]Restored {len(restored_entries)} Ollama entries from backup {backup_path.name}[/green]"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Restore failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("reset-discovered")
+def reset_discovered(
+    backend: str = typer.Option(
+        ..., "--backend", help="Backend to reset (e.g. ollama, vllm, all)"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be removed"),
+    backup: bool = typer.Option(
+        True,
+        "--backup/--no-backup",
+        help="Create a timestamped backup before modifying",
+    ),
+):
+    """Remove discovered layer entries for a backend so they can be freshly re-imported.
+
+    This ONLY affects entries currently sourced from the discovered overlay (dynamic entries).
+    Curated entries are untouched. Use with caution.
+    Workflow after reset (ollama example):
+        1. imageworks-download reset-discovered --backend ollama
+        2. uv run python scripts/import_ollama_models.py
+        3. (optional) imageworks-download discover-all  (or discover-local-hf)
+    """
+    try:
+        from imageworks.model_loader import registry as _reg
+        import json as _json
+        import datetime as _dt
+
+        discovered_path = Path("configs/model_registry.discovered.json")
+        if not discovered_path.exists():
+            rprint("❌ [red]No discovered layer file present[/red]")
+            raise typer.Exit(code=1)
+        raw = _json.loads(discovered_path.read_text(encoding="utf-8"))
+        if backend.lower() == "all":
+            to_remove = [e for e in raw]
+        else:
+            to_remove = [e for e in raw if e.get("backend") == backend]
+        if not to_remove:
+            rprint("🛈 [cyan]No discovered entries matched[/cyan]")
+            return
+        remaining = [e for e in raw if e not in to_remove]
+        if dry_run:
+            rprint(
+                f"Would remove {len(to_remove)} discovered entries (backend={backend}): {', '.join(e.get('name') for e in to_remove[:10])}{' ...' if len(to_remove)>10 else ''}"
+            )
+            return
+        if backup:
+            ts = _dt.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            backup_path = discovered_path.with_name(
+                f"model_registry.discovered.{ts}.bak.json"
+            )
+            backup_path.write_text(
+                discovered_path.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            rprint(f"💾 Backup written: {backup_path.name}")
+        discovered_path.write_text(
+            _json.dumps(remaining, indent=2) + "\n", encoding="utf-8"
+        )
+        # Force reload / regenerate merged snapshot
+        _reg.load_registry(force=True)
+        rprint(
+            f"✅ [green]Removed {len(to_remove)} discovered entries (backend={backend})[/green]"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Reset failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("backfill-ollama-paths")
+def backfill_ollama_paths(
+    location: str = typer.Option(
+        "linux_wsl",
+        "--location",
+        help="Location label to set for backfilled Ollama entries",
+    ),
+    set_format: bool = typer.Option(
+        True,
+        "--set-format/--no-set-format",
+        help="Force download_format=gguf when missing",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would change without writing"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show per-entry changes"
+    ),
+):
+    """Populate download_* metadata for existing Ollama registry entries that lack it (Option A).
+
+    Rationale:
+      Earlier Strategy A imports may have created logical entries (family/backend/quant) without actual
+      download_path. The normal importer script (`scripts/import_ollama_models.py`) can be re-run to enrich
+      them, but this command works offline (no `ollama` binary required) and simply maps entries to the
+      Ollama model store directory so they appear in `list` output.
+
+    Behaviour:
+      - For each entry with backend==ollama AND download_path is null/empty:
+          * Sets download_path to <store>/<served_model_id or name>
+            (store autodetected via $OLLAMA_MODELS or ~/.ollama/models)
+            If store not found, uses synthetic scheme ollama://<served_model_id|name>
+          * Sets download_format to 'gguf' if missing and --set-format
+          * Leaves quantization untouched
+          * Sets download_location to provided --location if empty
+      - Treats path existence as optional (installed flag already special-cased for ollama)
+    """
+    try:
+        # Work at raw JSON layer to update every matching entry (even duplicates)
+        reg_path = Path("configs/model_registry.json")
+        if not reg_path.exists():
+            rprint("❌ [red]Registry file not found[/red]")
+            raise typer.Exit(code=1)
+        raw = json.loads(reg_path.read_text(encoding="utf-8"))
+        env_root = Path.home() / ".ollama" / "models"
+        store_root = env_root if env_root.exists() else None
+        changed = []
+        for entry in raw:
+            if entry.get("backend") != "ollama":
+                continue
+            if entry.get("download_path"):
+                continue
+            ident = entry.get("served_model_id") or entry.get("name")
+            if store_root is not None:
+                candidate = store_root / str(ident).replace(":", "/")
+                new_path = str(candidate)
+            else:
+                new_path = f"ollama://{ident}"
+            before = {
+                "download_path": entry.get("download_path"),
+                "download_format": entry.get("download_format"),
+                "download_location": entry.get("download_location"),
+            }
+            if set_format and not entry.get("download_format"):
+                entry["download_format"] = "gguf"
+            if not entry.get("download_location"):
+                entry["download_location"] = location
+            entry["download_path"] = new_path
+            after = {
+                "download_path": entry.get("download_path"),
+                "download_format": entry.get("download_format"),
+                "download_location": entry.get("download_location"),
+            }
+            changed.append(
+                {"entry": entry.get("name"), "before": before, "after": after}
+            )
+        if not changed:
+            rprint("🛈 [cyan]No Ollama entries required backfill[/cyan]")
+            return
+        if dry_run:
+            rprint(f"Would backfill {len(changed)} Ollama logical entries:")
+            if verbose:
+                for c in changed:
+                    rprint(
+                        f"  • {c['entry']} path: {c['before']['download_path']} -> {c['after']['download_path']}"
+                    )
+            else:
+                sample = ", ".join(c["entry"] for c in changed[:6])
+                if len(changed) > 6:
+                    sample += " ..."
+                rprint(f"  {sample}")
+            rprint("Dry run: not saving registry")
+            return
+        # Write updated registry
+        reg_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+        # Post-write safety pass: ensure no ollama entry remains without download_path
+        raw2 = json.loads(reg_path.read_text(encoding="utf-8"))
+        second_pass = False
+        for entry in raw2:
+            if entry.get("backend") == "ollama" and not entry.get("download_path"):
+                ident2 = entry.get("served_model_id") or entry.get("name")
+                entry["download_path"] = f"ollama://{ident2}"
+                if set_format and not entry.get("download_format"):
+                    entry["download_format"] = "gguf"
+                if not entry.get("download_location"):
+                    entry["download_location"] = location
+                second_pass = True
+        if second_pass:
+            reg_path.write_text(json.dumps(raw2, indent=2) + "\n", encoding="utf-8")
+        # Invalidate and reload cache (tolerant to duplicates)
+        import os as _os
+
+        _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
+        try:
+            unified_registry.load_registry(force=True)
+        except Exception as _exc:  # noqa: BLE001
+            rprint(
+                f"⚠️  [yellow]Reload warning after backfill (non-fatal): {_exc}[/yellow]"
+            )
+        rprint(f"✅ [green]Backfilled {len(changed)} Ollama entries[/green]")
+        if verbose:
+            for c in changed:
+                rprint(f"  • {c['entry']} path={c['after']['download_path']}")
+
+    except Exception as e:  # noqa: BLE001
         rprint(f"❌ [red]Analysis failed:[/red] {str(e)}")
         raise typer.Exit(code=1)
 
 
 @app.command("remove")
 def remove_model(
-    model_name: str = typer.Argument(..., help="Model name to remove"),
-    format_type: Optional[str] = typer.Option(
-        None, "--format", "-f", help="Specific format to remove"
-    ),
-    location: Optional[str] = typer.Option(
-        None, "--location", "-l", help="Specific location to remove from"
+    name: str = typer.Argument(
+        ..., help="Variant name in unified registry (e.g. family-backend-format-quant)"
     ),
     delete_files: bool = typer.Option(
         False, "--delete-files", help="Also delete the model files from disk"
     ),
+    purge: bool = typer.Option(
+        False,
+        "--purge",
+        help="Remove the entire entry instead of just clearing download metadata",
+    ),
     force: bool = typer.Option(False, "--force", help="Don't ask for confirmation"),
 ):
-    """Remove a model from registry and optionally delete files."""
+    """Remove a downloaded variant (clears download metadata by default).
 
+    By default keeps the logical entry (roles, capabilities, metadata) but clears the
+    download_* fields so it can be re-downloaded deterministically. Use --purge to
+    delete the entire entry.
+    """
     try:
-        registry = get_registry()
-        models = registry.find_model(model_name, format_type, location)
-
-        if not models:
-            rprint(f"❌ [red]Model not found:[/red] {model_name}")
+        reg_path = Path("configs/model_registry.json")
+        if reg_path.exists():
+            try:
+                _ = reg_path.read_text(
+                    encoding="utf-8"
+                )  # read for potential future use
+            except Exception:  # noqa: BLE001
+                _ = None
+        reg = unified_registry.load_registry(force=True)
+        entry = reg.get(name)
+        if not entry:
+            rprint(f"❌ [red]Variant not found:[/red] {name}")
             raise typer.Exit(code=1)
-
-        # Show what will be removed
+        installed = bool(
+            entry.download_path and Path(entry.download_path).expanduser().exists()
+        )
         rprint("🗑️  [yellow]Will remove:[/yellow]")
-        for model in models:
-            rprint(f"   • {model.model_name} ({model.format_type}, {model.location})")
-            if delete_files:
-                rprint(f"     📁 Files: {model.path}")
-
-        # Confirm unless forced
+        rprint(
+            f"   • {entry.name} (format={entry.download_format or '-'} loc={entry.download_location or '-'})"
+        )
+        if delete_files and installed:
+            rprint(f"     📁 Files: {entry.download_path}")
+        if purge:
+            rprint("     ⚠️  Entire entry will be deleted (purge)")
         if not force:
-            confirm = typer.confirm("Are you sure?")
-            if not confirm:
+            if not typer.confirm("Proceed?"):
                 rprint("❌ [yellow]Cancelled[/yellow]")
                 return
+        # Delete files if requested
+        if delete_files and installed and entry.download_path:
+            try:
+                import shutil
 
-        # Remove models
-        downloader = ModelDownloader()
-        success = downloader.remove_model(
-            model_name,
-            format_type=format_type,
-            location=location,
-            delete_files=delete_files,
-        )
-
-        if success:
-            rprint("✅ [green]Successfully removed[/green]")
+                shutil.rmtree(Path(entry.download_path).expanduser())
+            except OSError as exc:  # noqa: BLE001
+                rprint(f"⚠️  [yellow]Failed to delete files: {exc}[/yellow]")
+        ok = unified_remove_download(entry.name, keep_entry=not purge)
+        if ok:
+            if purge:
+                rprint("✅ [green]Entry purged[/green]")
+            else:
+                rprint("✅ [green]Download metadata cleared (entry retained)[/green]")
         else:
             rprint("❌ [red]Removal failed[/red]")
             raise typer.Exit(code=1)
+    except Exception as e:  # noqa: BLE001
+        rprint(f"❌ [red]Removal failed:[/red] {e}")
+        raise typer.Exit(code=1)
 
-    except Exception as e:
-        rprint(f"❌ [red]Removal failed:[/red] {str(e)}")
+
+@app.command("purge-deprecated")
+def purge_deprecated(
+    placeholders_only: bool = typer.Option(
+        False,
+        "--placeholders-only",
+        help="Only purge legacy placeholder entries (model-ollama-gguf*)",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be removed without writing"
+    ),
+):
+    """Permanently remove deprecated entries from the registry.
+
+    Use --placeholders-only to restrict to legacy placeholder imports (e.g. model-ollama-gguf*).
+    """
+    try:
+        reg = unified_registry.load_registry(force=True)
+        to_delete: list[str] = []
+        for name, entry in list(reg.items()):
+            if not getattr(entry, "deprecated", False):
+                continue
+            if placeholders_only and not name.startswith("model-ollama-gguf"):
+                continue
+            to_delete.append(name)
+        if not to_delete:
+            rprint("🛈 [cyan]No matching deprecated entries to purge[/cyan]")
+            return
+        rprint(
+            f"Will purge {len(to_delete)} deprecated entr{'y' if len(to_delete)==1 else 'ies'}:"
+        )
+        for n in to_delete:
+            rprint(f"  • {n}")
+        if dry_run:
+            rprint("Dry run: not modifying registry")
+            return
+        from imageworks.model_loader.registry import remove_entry
+
+        removed = 0
+        for n in to_delete:
+            if remove_entry(n, save=False):
+                removed += 1
+        unified_registry.save_registry()
+        rprint(f"✅ [green]Purged {removed} entries[/green]")
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to purge deprecated entries:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("purge-hf")
+def purge_hf(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be removed without writing"
+    ),
+    weights_root: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        "--weights-root",
+        help="Root path whose descendants are considered HF-sourced",
+    ),
+    backend_filter: Optional[str] = typer.Option(
+        None, "--backend", help="Optional backend filter (e.g. vllm)"
+    ),
+):
+    """Remove entries whose download_path is under the given weights root (default ~/ai-models/weights).
+
+    This treats physical location as authoritative indicator of an HF-style local clone rather than relying on
+    source_provider metadata, which may be absent or stale. Purges entries so they can be re-imported cleanly.
+    """
+    try:
+        root = weights_root.expanduser().resolve()
+        reg = unified_registry.load_registry(force=True)
+        targets: list[str] = []
+        for name, e in list(reg.items()):
+            dp = getattr(e, "download_path", None)
+            if not dp:
+                continue
+            try:
+                p = Path(dp).expanduser().resolve()
+            except Exception:
+                continue
+            if backend_filter and e.backend != backend_filter:
+                continue
+            try:
+                if root in p.parents or p == root:
+                    targets.append(name)
+            except Exception:
+                continue
+        if not targets:
+            rprint("🛈 [cyan]No HF (by path) entries to purge[/cyan]")
+            return
+        rprint(
+            f"Will purge {len(targets)} HF-path entr{'y' if len(targets)==1 else 'ies'} (root={root}):"
+        )
+        for n in targets:
+            rprint(f"  • {n}")
+        if dry_run:
+            rprint("Dry run: not modifying registry")
+            return
+        from imageworks.model_loader.registry import remove_entry
+
+        removed = 0
+        for n in targets:
+            if remove_entry(n, save=False):
+                removed += 1
+        unified_registry.save_registry()
+        rprint(f"✅ [green]Purged {removed} entries under {root}")
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to purge HF path entries:[/red] {exc}")
         raise typer.Exit(code=1)
 
 
@@ -307,192 +1096,98 @@ def show_stats():
     """Show download statistics."""
 
     try:
-        downloader = ModelDownloader()
-        stats = downloader.get_stats()
-
-        # Create stats table
-        table = Table(title="Model Statistics")
+        entries = unified_list_downloads(only_installed=False)
+        total_size = sum((e.download_size_bytes or 0) for e in entries)
+        by_format: Dict[str, int] = {}
+        by_location: Dict[str, int] = {}
+        for e in entries:
+            if e.download_format:
+                by_format[e.download_format] = by_format.get(e.download_format, 0) + 1
+            if e.download_location:
+                by_location[e.download_location] = (
+                    by_location.get(e.download_location, 0) + 1
+                )
+        table = Table(title="Unified Download Statistics")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="green")
-
-        table.add_row("Total Models", str(stats["total_models"]))
-        table.add_row("Total Size", _format_size(stats["total_size_bytes"]))
-
+        table.add_row("Total Variants", str(len(entries)))
+        table.add_row("Total Size", _format_size(total_size))
         console.print(table)
-
-        # Format breakdown
-        if stats["by_format"]:
-            format_table = Table(title="By Format")
-            format_table.add_column("Format", style="magenta")
-            format_table.add_column("Count", justify="right", style="blue")
-
-            for format_type, count in sorted(stats["by_format"].items()):
-                format_table.add_row(format_type, str(count))
-
-            console.print(format_table)
-
-        # Location breakdown
-        if stats["by_location"]:
-            location_table = Table(title="By Location")
-            location_table.add_column("Location", style="yellow")
-            location_table.add_column("Count", justify="right", style="blue")
-
-            for location, count in sorted(stats["by_location"].items()):
-                location_table.add_row(location, str(count))
-
-            console.print(location_table)
-
-    except Exception as e:
-        rprint(f"❌ [red]Failed to get stats:[/red] {str(e)}")
-        raise typer.Exit(code=1)
-
-
-@app.command("migrate")
-def migrate_registry(
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show what would be done without making changes"
-    ),
-    analyze_only: bool = typer.Option(
-        False, "--analyze-only", help="Only analyze and report issues"
-    ),
-    clean_empty: bool = typer.Option(
-        False, "--clean-empty", help="Also remove empty directories after migration"
-    ),
-):
-    """Fix registry inconsistencies from legacy directory structures."""
-
-    try:
-        from .migrate import (
-            analyze_registry_inconsistencies,
-            fix_registry_inconsistencies,
-            clean_empty_directories,
-        )
-        from .config import get_config
-
-        if analyze_only:
-            rprint("� [cyan]Analyzing registry inconsistencies...[/cyan]")
-            inconsistencies = analyze_registry_inconsistencies()
-
-            if not inconsistencies:
-                rprint("✅ [green]No registry inconsistencies found![/green]")
-                return
-
-            # Create analysis table
-            table = Table(
-                title=f"Registry Inconsistencies ({len(inconsistencies)} found)"
-            )
-            table.add_column("Model", style="cyan", no_wrap=True)
-            table.add_column("Registry Path", style="red", no_wrap=True)
-            table.add_column("Expected Path", style="green", no_wrap=True)
-            table.add_column("Can Migrate", style="yellow")
-
-            for issue in inconsistencies:
-                can_migrate = "✅ Yes" if issue["can_migrate"] else "⚠️  Needs attention"
-                table.add_row(
-                    issue["model_name"],
-                    str(Path(issue["registry_path"]).relative_to(Path.home())),
-                    str(Path(issue["expected_path"]).relative_to(Path.home())),
-                    can_migrate,
-                )
-
-            console.print(table)
-            return
-
-        mode_text = "[yellow][DRY RUN][/yellow] " if dry_run else ""
-        rprint(f"🔧 {mode_text}[cyan]Fixing registry inconsistencies...[/cyan]")
-
-        results = fix_registry_inconsistencies(dry_run=dry_run)
-
-        # Create results table
-        results_table = Table(title="Migration Results")
-        results_table.add_column("Metric", style="cyan")
-        results_table.add_column("Count", justify="right", style="green")
-
-        results_table.add_row("Total Issues", str(results["total"]))
-        results_table.add_row("Migrated", str(results["migrated"]))
-        results_table.add_row("Registry Updates", str(results["updated_registry"]))
-        results_table.add_row("Skipped", str(results["skipped"]))
-        results_table.add_row("Errors", str(results["errors"]))
-
-        if clean_empty:
-            config = get_config()
-            weights_dir = config.linux_wsl.root / "weights"
-            removed = clean_empty_directories(weights_dir, dry_run=dry_run)
-            results_table.add_row("Empty Directories Removed", str(removed))
-
-        console.print(results_table)
-
-        if results["errors"] == 0:
-            rprint("✅ [green]Migration completed successfully![/green]")
-        else:
-            rprint("⚠️  [yellow]Migration completed with errors.[/yellow]")
-
-    except Exception as e:
-        rprint(f"❌ [red]Migration failed:[/red] {str(e)}")
+        if by_format:
+            ft = Table(title="By Format")
+            ft.add_column("Format")
+            ft.add_column("Count", justify="right")
+            for k, v in sorted(by_format.items()):
+                ft.add_row(k, str(v))
+            console.print(ft)
+        if by_location:
+            lt = Table(title="By Location")
+            lt.add_column("Location")
+            lt.add_column("Count", justify="right")
+            for k, v in sorted(by_location.items()):
+                lt.add_row(k, str(v))
+            console.print(lt)
+    except Exception as e:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to get stats:[/red] {e}")
         raise typer.Exit(code=1)
 
 
 @app.command("verify")
 def verify_models(
-    model_name: Optional[str] = typer.Argument(
-        None, help="Specific model to verify (all models if not specified)"
+    name: Optional[str] = typer.Argument(
+        None,
+        help="Specific variant to verify (all downloaded variants if not specified)",
     ),
     fix_missing: bool = typer.Option(
-        False, "--fix-missing", help="Remove registry entries for missing models"
+        False, "--fix-missing", help="Clear download metadata for missing variants"
     ),
 ):
-    """Verify model integrity and registry consistency."""
+    """Verify downloaded variant integrity (directory existence & checksum change)."""
 
     try:
-        registry = get_registry()
-
-        if model_name:
-            models = registry.find_model(model_name)
-            if not models:
-                rprint(f"❌ [red]Model not found:[/red] {model_name}")
+        entries = unified_list_downloads(only_installed=False)
+        if name:
+            entries = [e for e in entries if e.name == name]
+            if not entries:
+                rprint(f"❌ [red]Variant not found:[/red] {name}")
                 raise typer.Exit(code=1)
-        else:
-            models = registry.get_all_models()
-
-        rprint(f"🔍 [bold]Verifying {len(models)} models...[/bold]\n")
-
-        valid_models = []
-        invalid_models = []
-
-        for model in models:
-            path_exists = Path(model.path).exists()
-
-            if path_exists:
-                integrity_ok = registry.verify_model_integrity(
-                    model.model_name, model.format_type, model.location
-                )
-                if integrity_ok:
-                    valid_models.append(model)
-                    rprint(f"✅ {model.model_name} ({model.format_type})")
-                else:
-                    invalid_models.append(model)
-                    rprint(
-                        f"⚠️  {model.model_name} ({model.format_type}) - integrity check failed"
-                    )
-            else:
-                invalid_models.append(model)
+        rprint(f"� [bold]Verifying {len(entries)} variants...[/bold]\n")
+        valid: List[str] = []
+        invalid: List[str] = []
+        for e in entries:
+            if not e.download_path:
+                invalid.append(e.name)
+                rprint(f"⚠️  {e.name} - no download path recorded")
+                continue
+            p = Path(e.download_path).expanduser()
+            if not p.exists():
+                invalid.append(e.name)
+                rprint(f"❌ {e.name} - path missing: {e.download_path}")
+                continue
+            current_checksum = compute_directory_checksum(p)
+            if (
+                e.download_directory_checksum
+                and current_checksum != e.download_directory_checksum
+            ):
+                invalid.append(e.name)
                 rprint(
-                    f"❌ {model.model_name} ({model.format_type}) - path not found: {model.path}"
+                    f"⚠️  {e.name} - checksum changed ({e.download_directory_checksum} -> {current_checksum})"
                 )
-
+            else:
+                valid.append(e.name)
+                rprint(f"✅ {e.name}")
         rprint("\n📊 [bold]Summary:[/bold]")
-        rprint(f"   ✅ Valid: {len(valid_models)}")
-        rprint(f"   ❌ Invalid: {len(invalid_models)}")
-
-        if invalid_models and fix_missing:
+        rprint(f"   ✅ Valid: {len(valid)}")
+        rprint(f"   ❌ Invalid: {len(invalid)}")
+        if invalid and fix_missing:
             rprint(
-                f"\n🔧 [yellow]Cleaning up {len(invalid_models)} invalid entries...[/yellow]"
+                f"\n🔧 [yellow]Clearing download metadata for {len(invalid)} variants...[/yellow]"
             )
-            removed_keys = registry.cleanup_missing_models()
-            rprint(f"✅ Removed {len(removed_keys)} entries from registry")
-
-    except Exception as e:
-        rprint(f"❌ [red]Verification failed:[/red] {str(e)}")
+            for n in invalid:
+                unified_remove_download(n, keep_entry=True)
+            rprint("✅ Cleared")
+    except Exception as e:  # noqa: BLE001
+        rprint(f"❌ [red]Verification failed:[/red] {e}")
         raise typer.Exit(code=1)
 
 
@@ -529,6 +1224,69 @@ def show_config():
         raise typer.Exit(code=1)
 
 
+@app.command("list-roles")
+def list_roles(
+    registry_path: Path = typer.Option(
+        Path("configs/model_registry.json"), help="Path to unified registry JSON"
+    ),
+    show_capabilities: bool = typer.Option(
+        False, help="Show capability flags (text,vision,embedding,etc.)"
+    ),
+    json_output: bool = typer.Option(False, help="Emit JSON array instead of table"),
+):
+    """List role-capable models from the unified deterministic registry.
+
+    A model with multiple roles is displayed once per role.
+    """
+    try:
+        reg = _load_unified_registry(registry_path, force=True)
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to load unified registry:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    rows: List[Dict[str, Any]] = []
+    for entry in reg.values():
+        if not entry.roles:
+            continue
+        for role in entry.roles:
+            rows.append(
+                {
+                    "role": role,
+                    "name": entry.name,
+                    "backend": entry.backend,
+                    "display_name": entry.display_name or entry.name,
+                    "capabilities": entry.capabilities,
+                }
+            )
+
+    rows.sort(key=lambda r: (r["role"], r["name"]))
+
+    if json_output:
+        rprint(json.dumps(rows, indent=2))
+        return
+
+    if not rows:
+        rprint("📭 [yellow]No role-capable models found[/yellow]")
+        return
+
+    from rich.table import Table as _Table
+
+    table = _Table(title="Role-capable Models")
+    table.add_column("Role", style="magenta")
+    table.add_column("Name", style="cyan")
+    table.add_column("Backend", style="green")
+    table.add_column("Display Name", style="white")
+    if show_capabilities:
+        table.add_column("Capabilities", style="blue")
+    for r in rows:
+        caps = ",".join(k for k, v in r["capabilities"].items() if v)
+        row = [r["role"], r["name"], r["backend"], r["display_name"]]
+        if show_capabilities:
+            row.append(caps)
+        table.add_row(*row)
+    console.print(table)
+
+
 def _format_size(size_bytes: int) -> str:
     """Format size in human-readable format."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
@@ -536,6 +1294,363 @@ def _format_size(size_bytes: int) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} PB"
+
+
+@app.command("scan")
+def scan_existing(
+    base: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        help="Base directory to scan recursively for HF-style repos",
+    ),
+    backend: str = typer.Option(
+        "unassigned", help="Backend to assign for imported entries (can edit later)"
+    ),
+    location: str = typer.Option(
+        "linux_wsl", help="Location label to record (linux_wsl/windows_lmstudio/custom)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Report what would be imported without writing"
+    ),
+    format_hint: Optional[str] = typer.Option(
+        None,
+        "--format",
+        "-f",
+        help="Fallback default format ONLY when auto-detection fails (e.g. awq, gguf, fp16)",
+    ),
+    update_existing: bool = typer.Option(
+        False,
+        "--update-existing",
+        help="If variant already exists, update its format/quant & path instead of skipping",
+    ),
+):
+    """Scan an existing weights directory and import discovered model folders into the unified registry.
+
+    Heuristics:
+      - Assumes layout: <base>/<owner>/<repo>(@branch)?
+      - Derives huggingface id from directory names.
+      - Infers format from existing files if possible (gguf, awq, fp16 via safetensors), otherwise uses --format or leaves blank.
+      - Computes size and directory checksum.
+    """
+    try:
+        if not base.exists():
+            rprint(f"❌ [red]Base path does not exist:[/red] {base}")
+            raise typer.Exit(code=1)
+        owners = [d for d in base.iterdir() if d.is_dir()]
+        planned = []
+        for owner_dir in owners:
+            for repo_dir in owner_dir.iterdir():
+                if not repo_dir.is_dir():
+                    continue
+                # quick skip if empty
+                if not any(repo_dir.iterdir()):
+                    continue
+                owner = owner_dir.name
+                repo = repo_dir.name
+                hf_id = f"{owner}/{repo.split('@')[0]}"  # branch simplified
+                # Collect files & names once
+                files = list(repo_dir.rglob("*"))
+                # Use shared detection
+                fmt, quant = detect_format_and_quant(repo_dir)
+                if fmt is None and format_hint:
+                    fmt = format_hint  # fallback semantics
+                size_bytes = sum(p.stat().st_size for p in files if p.is_file())
+                planned.append(
+                    {
+                        "hf_id": hf_id,
+                        "path": str(repo_dir),
+                        "format": fmt,
+                        "size": size_bytes,
+                        "quant": quant,
+                    }
+                )
+        if not planned:
+            rprint("📭 [yellow]No candidate repositories found[/yellow]")
+            return
+
+        # Display summary table
+        # Reuse same semantics as list: Fmt = container (GGUF / SAFETENSORS / '-') ; Quant = precision/quant scheme
+        def _infer_container_from_planned(pr):
+            raw_fmt = (pr["format"] or "").lower() if pr.get("format") else ""
+            if raw_fmt == "gguf":
+                return "GGUF"
+            # If format detection returned fp16/awq/gptq treat as quantization/precision, not container.
+            # Infer safetensors container by scanning files.
+            p = Path(pr["path"]).expanduser()
+            try:
+                for f in p.rglob("*"):
+                    if f.is_file():
+                        n = f.name.lower()
+                        if n.endswith(".gguf"):
+                            return "GGUF"
+                        if n.endswith(".safetensors"):
+                            return "SAFETENSORS"
+            except Exception:  # noqa: BLE001
+                pass
+            return "-"
+
+        def _infer_quant_from_planned(pr):
+            raw_fmt = (pr["format"] or "").lower() if pr.get("format") else ""
+            quant = pr.get("quant")
+            if raw_fmt in {"fp16", "fp32", "bf16"} and not quant:
+                return raw_fmt
+            if raw_fmt in {"awq", "gptq"} and not quant:
+                return raw_fmt
+            return quant or "-"
+
+        t = Table(title="Scan Results (Planned Imports)")
+        t.add_column("HF ID", style="cyan")
+        t.add_column("Fmt", style="magenta")
+        t.add_column("Quant", style="yellow")
+        t.add_column("Size", justify="right")
+        t.add_column("Path", style="green")
+        for pr in planned:
+            container = _infer_container_from_planned(pr)
+            quant_disp = _infer_quant_from_planned(pr)
+            if quant_disp and quant_disp != "-":
+                quant_disp = quant_disp.lower()
+            t.add_row(
+                pr["hf_id"], container, quant_disp, _format_size(pr["size"]), pr["path"]
+            )
+        console.print(t)
+        if dry_run:
+            rprint("🛈 [cyan]Dry run: no changes written[/cyan]")
+            return
+        imported = 0
+        # Load registry for update-existing logic (side effect ensures cache ready)
+        unified_registry.load_registry(force=True)
+        for r in planned:
+            # Derive existing variant name (approx) the same way record_download will
+            # by family + backend + format + quant — we can't know family normalization exactly without adapter
+            # so rely on record_download to unify; if update_existing is False we just call it.
+            if update_existing:
+                # If an entry with same family-backend-format-quant already exists we still call record_download (it updates)
+                pass
+            record_download(
+                hf_id=r["hf_id"],
+                backend=backend,
+                format_type=r["format"],
+                quantization=r.get("quant"),
+                path=r["path"],
+                location=location,
+                files=None,
+                size_bytes=r["size"],
+                source_provider="hf",
+                roles=None,
+                role_priority=None,
+            )
+            imported += 1
+        rprint(f"✅ [green]Imported {imported} repositories into registry[/green]")
+    except Exception as e:  # noqa: BLE001
+        rprint(f"❌ [red]Scan failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command("normalize-formats")
+def normalize_formats(
+    base: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        help="Base directory to scan for confirmation / rebuild",
+    ),
+    dry_run: bool = typer.Option(
+        True, "--dry-run", help="Show proposed changes without writing"
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Apply detected changes (implies not dry-run)"
+    ),
+    rebuild: bool = typer.Option(
+        False,
+        "--rebuild",
+        help="Also regenerate dynamic download_* fields (size, files, checksum)",
+    ),
+    prune_missing: bool = typer.Option(
+        False,
+        "--prune-missing",
+        help="Remove entries whose download_path no longer exists (else mark deprecated)",
+    ),
+    backup: bool = typer.Option(
+        True,
+        "--backup/--no-backup",
+        help="Write timestamped backup before modifying registry",
+    ),
+):
+    """Re-detect format & quantization, optionally rebuild dynamic fields, to keep registry consistent.
+
+    Steps:
+      1. Load registry
+      2. For each entry with download_path, if path exists re-detect (format, quant)
+      3. If --rebuild: also recompute download_files, download_size_bytes, directory checksum
+      4. Produce diff table
+      5. Apply if requested
+    """
+    try:
+        reg_path = Path("configs/model_registry.json")
+        original_registry_text = None
+        if reg_path.exists():
+            try:
+                original_registry_text = reg_path.read_text(encoding="utf-8")
+            except Exception:  # noqa: BLE001
+                original_registry_text = None
+        reg = unified_registry.load_registry(force=True)
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Failed to load registry:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    changes = []
+    # deprecated list removed (policy: only curated may deprecate)
+    from datetime import datetime
+
+    for entry in reg.values():
+        path_val = entry.download_path
+        if not path_val:
+            continue
+        p = Path(path_val).expanduser()
+        if not p.exists():
+            if prune_missing:
+                changes.append({"name": entry.name, "action": "prune-missing"})
+            # else: leave untouched (no auto deprecate)
+            continue
+        det_fmt, det_quant = detect_format_and_quant(p)
+        fmt_old = entry.download_format
+        quant_old = entry.quantization
+        # gather rebuild info if requested
+        rebuilt_meta = {}
+        if rebuild:
+            files = [f for f in p.rglob("*") if f.is_file()]
+            file_names = [f.name for f in files]
+            size = sum(f.stat().st_size for f in files)
+            # simple checksum reuse of existing helper
+            checksum = compute_directory_checksum(p)
+            rebuilt_meta = {
+                "download_files": file_names,
+                "download_size_bytes": size,
+                "download_directory_checksum": checksum,
+            }
+        diffs = {}
+        if det_fmt and det_fmt != fmt_old:
+            diffs["download_format"] = {"old": fmt_old, "new": det_fmt}
+        if det_quant and det_quant != quant_old:
+            diffs["quantization"] = {"old": quant_old, "new": det_quant}
+        if rebuild and rebuilt_meta:
+            # Compare size & checksum only for change reporting
+            if entry.download_size_bytes != rebuilt_meta["download_size_bytes"]:
+                diffs["download_size_bytes"] = {
+                    "old": entry.download_size_bytes,
+                    "new": rebuilt_meta["download_size_bytes"],
+                }
+            if (
+                entry.download_directory_checksum
+                != rebuilt_meta["download_directory_checksum"]
+            ):
+                diffs["download_directory_checksum"] = {
+                    "old": entry.download_directory_checksum,
+                    "new": rebuilt_meta["download_directory_checksum"],
+                }
+            # Always refresh file list length diff if changed
+            if entry.download_files != rebuilt_meta["download_files"]:
+                diffs["download_files_count"] = {
+                    "old": len(entry.download_files or []),
+                    "new": len(rebuilt_meta["download_files"]),
+                }
+        if diffs:
+            changes.append(
+                {
+                    "name": entry.name,
+                    "path": path_val,
+                    "diffs": diffs,
+                    "rebuild_meta": rebuilt_meta,
+                    "det_fmt": det_fmt,
+                    "det_quant": det_quant,
+                }
+            )
+    # No automatic deprecation injection
+
+    if not changes:
+        rprint("✅ [green]No changes detected[/green]")
+        return
+
+    # Present summary
+    table = Table(title="Normalization / Rebuild Preview")
+    table.add_column("Name", style="cyan")
+    table.add_column("Action", style="magenta")
+    table.add_column("Changes", style="yellow")
+    for c in changes:
+        action = c.get("action", "update")
+        if action != "update":
+            table.add_row(c["name"], action, "-")
+            continue
+        diff_parts = []
+        for k, d in c["diffs"].items():
+            diff_parts.append(f"{k}:{d['old']}→{d['new']}")
+        table.add_row(c["name"], action, ", ".join(diff_parts))
+    console.print(table)
+
+    if dry_run and not apply:
+        # Dry-run: discard any in-memory mutations by reloading registry cache from disk snapshot
+        try:
+            from imageworks.model_loader import registry as _regmod
+
+            # If any entries were marked deprecated in memory, revert by clearing cache
+            _regmod._REGISTRY_CACHE = None  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # Restore file content precisely (defensive) if changed
+        if original_registry_text is not None:
+            try:
+                current_text = (
+                    reg_path.read_text(encoding="utf-8") if reg_path.exists() else None
+                )
+                if current_text != original_registry_text:
+                    reg_path.write_text(original_registry_text, encoding="utf-8")
+            except Exception as exc:  # noqa: BLE001
+                rprint(f"⚠️  [yellow]Dry-run restore failed (non-fatal): {exc}[/yellow]")
+        rprint("🛈 [cyan]Dry run (no changes written). Use --apply to persist.[/cyan]")
+        return
+
+    # Apply changes
+    if backup:
+        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        reg_path = Path("configs/model_registry.json")
+        backup_path = reg_path.with_name(f"model_registry.{ts}.bak.json")
+        try:
+            backup_path.write_text(
+                reg_path.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            rprint(f"💾 Backup written: {backup_path}")
+        except Exception as exc:  # noqa: BLE001
+            rprint(f"⚠️  [yellow]Backup failed (continuing): {exc}[/yellow]")
+
+    # Mutate entries in memory
+    # We mutate the global registry cache directly (reg is the dict returned by load_registry)
+    # For pruning we need to delete keys from that dict; for updates we edit entry objects in place.
+    for c in changes:
+        action = c.get("action", "update")
+        name = c["name"]
+        if action == "prune-missing":
+            if name in reg:
+                del reg[name]
+            continue
+        e = reg.get(name)
+        if not e:
+            continue
+        if action == "mark-deprecated":
+            e.deprecated = True
+            continue
+        diffs = c["diffs"]
+        if "download_format" in diffs:
+            e.download_format = diffs["download_format"]["new"]
+        if "quantization" in diffs:
+            e.quantization = diffs["quantization"]["new"]
+        rebuilt_meta = c.get("rebuild_meta") or {}
+        for k in (
+            "download_files",
+            "download_size_bytes",
+            "download_directory_checksum",
+        ):
+            if k in rebuilt_meta:
+                setattr(e, k, rebuilt_meta[k])
+    # Persist via registry utility (uses internal cache)
+    unified_registry.save_registry()
+    rprint(f"✅ [green]Applied {len(changes)} changes to registry[/green]")
 
 
 def main():

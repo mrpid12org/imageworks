@@ -76,6 +76,7 @@ def test_runner_produces_outputs(tmp_path):
         output_jsonl=tmp_path / "results.jsonl",
         summary_path=tmp_path / "summary.md",
         dry_run=True,
+        preflight=False,  # disable network preflight for isolated test
     )
 
     inference = FakeInferenceEngine(config)

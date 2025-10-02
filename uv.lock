@@ -1237,6 +1237,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "exifread" },
+    { name = "fastapi" },
     { name = "lmdeploy" },
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -1257,6 +1258,7 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uvicorn" },
     { name = "vllm" },
 ]
 
@@ -1270,6 +1272,7 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "exifread" },
+    { name = "fastapi", specifier = ">=0.111.0" },
     { name = "lmdeploy", specifier = ">=0.10.1" },
     { name = "numpy" },
     { name = "nvidia-ml-py", specifier = ">=13.580.82" },
@@ -1287,6 +1290,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.3.0" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uvicorn", specifier = ">=0.30.0" },
     { name = "vllm", extras = ["vision"], specifier = ">=0.10.2" },
 ]
 
