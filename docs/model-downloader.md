@@ -470,6 +470,28 @@ Options:
   --non-interactive, -y      Non-interactive mode (use defaults)
 ```
 
+**What to expect:**
+
+Successful runs echo a concise summary so you can immediately confirm where the
+assets landed and how they were classified. The CLI highlights:
+
+- ✅ success banner with the resolved display name
+- 📁 download directory and 🗂️ logical location label (when available)
+- 🔧 detected format/quantisation pair and 💾 aggregate size
+- 📄 file-count metadata, 🧩 model-type/library hints, and 💬 chat template status
+
+Example output:
+
+```text
+✅ Successfully downloaded: DialoGPT-medium
+   📁 Files stored at: /home/user/ai-models/weights/microsoft/DialoGPT-medium
+   🗂️  Location label: linux_wsl
+   🔧 Format: safetensors
+   💾 Size: 1.47 GiB
+   📄 Files downloaded: 17
+   💬 Chat template detected: external file (chat_template.json)
+```
+
 **Examples:**
 ```bash
 # Basic download
@@ -675,6 +697,9 @@ entry = record_download(
   location="linux_wsl",
 )
 ```
+
+`record_download` persists updates internally via `update_entries(..., save=True)`,
+so additional `save_registry()` calls are unnecessary.
 
 Listing programmatically:
 ```python

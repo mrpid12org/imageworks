@@ -149,7 +149,6 @@ def record_download(
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
         update_entries([e], save=True)
-        save_registry()
         return e
 
     capabilities = _infer_capabilities(variant_name)
@@ -195,7 +194,6 @@ def record_download(
     )
     entry = compute_artifact_hashes(entry)
     update_entries([entry], save=True)
-    save_registry()
     return entry
 
 
