@@ -72,6 +72,7 @@ JSON schema follows dataclass field names; missing optional fields default grace
   3. Populate file list, size, directory checksum if path exists.
   4. Compute artifact hashes if absent (delegates to `compute_artifact_hashes`).
   5. Merge roles / role_priority if provided.
+  6. Persist changes by delegating to `update_entries(..., save=True)` (no extra `save_registry()` call required).
 - `list_downloads(only_installed=False)` – enumerates entries with a *non-null* `download_path`. `only_installed=True` filters by path existence.
 - `remove_download(name, keep_entry=True)` – clears download_* fields (retains logical shell) or purges entire entry on demand.
 
