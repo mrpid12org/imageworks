@@ -35,8 +35,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
-from typing import Dict, List, Iterable, Set
+from typing import Dict, Iterable, List, Set
 
 from .models import (
     ArtifactFile,
@@ -112,6 +113,133 @@ class RegistryLoadError(RuntimeError):
     pass
 
 
+def _load_json_list(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        raise RegistryLoadError(f"Failed to parse {path.name}: {exc}") from exc
+    if not isinstance(data, list):
+        raise RegistryLoadError(f"Registry fragment {path.name} must be a list")
+    return data
+
+
+def _load_explicit_registry(file_path: Path) -> Dict[str, RegistryEntry]:
+    if not file_path.exists():
+        raise RegistryLoadError(f"Registry file not found: {file_path}")
+    entries: Dict[str, RegistryEntry] = {}
+    tolerate = bool(int(os.environ.get("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "0")))
+    for raw in _load_json_list(file_path):
+        entry = _parse_entry(raw)
+        if entry.name in entries and not tolerate:
+            raise RegistryLoadError(f"Duplicate entry: {entry.name}")
+        entries[entry.name] = entry
+    return entries
+
+
+def _migrate_legacy_snapshot(
+    curated_file: Path, discovered_file: Path, merged_snapshot: Path
+) -> bool:
+    if (not curated_file.exists() and not discovered_file.exists()) and merged_snapshot.exists():
+        try:
+            legacy_data = json.loads(merged_snapshot.read_text())
+            if not isinstance(legacy_data, list):
+                raise ValueError("Legacy registry not a list")
+        except Exception as exc:  # noqa: BLE001
+            raise RegistryLoadError(
+                f"Failed to parse legacy registry during migration: {exc}"
+            ) from exc
+        curated_raw, discovered_raw = _classify_legacy(legacy_data)
+        backup_path = merged_snapshot.with_suffix(".backup.pre_split.json")
+        if not backup_path.exists():
+            merged_snapshot.rename(backup_path)
+        curated_file.write_text(json.dumps(curated_raw, indent=2) + "\n")
+        discovered_file.write_text(json.dumps(discovered_raw, indent=2) + "\n")
+        return True
+    return False
+
+
+def _adopt_snapshot_additions(
+    merged_snapshot: Path, curated_raw: list[dict], discovered_raw: list[dict]
+) -> None:
+    if not merged_snapshot.exists():
+        return
+    try:
+        merged_content = json.loads(merged_snapshot.read_text())
+    except Exception:  # noqa: BLE001
+        return
+    if not isinstance(merged_content, list):
+        return
+    known = {e.get("name") for e in curated_raw} | {e.get("name") for e in discovered_raw}
+    for raw in merged_content:
+        name = raw.get("name") if isinstance(raw, dict) else None
+        if name and name not in known:
+            discovered_raw.append(raw)
+            known.add(name)
+
+
+def _merge_layered_fragments(
+    curated_raw: list[dict], discovered_raw: list[dict]
+) -> tuple[list[dict], Set[str]]:
+    name_index: dict[str, dict] = {}
+    curated_names: Set[str] = set()
+    for raw in curated_raw:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        name_index[name] = raw
+        curated_names.add(name)
+    for raw in discovered_raw:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        name_index[name] = raw
+    return list(name_index.values()), curated_names
+
+
+def _parse_merged_entries(merged_raw: list[dict]) -> tuple[Dict[str, RegistryEntry], dict[str, int]]:
+    entries: Dict[str, RegistryEntry] = {}
+    duplicate_names: dict[str, int] = {}
+    tolerate_dupes = bool(int(os.environ.get("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "0")))
+    for raw in merged_raw:
+        try:
+            entry = _parse_entry(raw)
+        except Exception as exc:  # noqa: BLE001
+            raise RegistryLoadError(f"Invalid entry: {exc}") from exc
+        existing = entries.get(entry.name)
+        if existing is None:
+            entries[entry.name] = entry
+            continue
+        if not tolerate_dupes:
+            raise RegistryLoadError(f"Duplicate entry after merge: {entry.name}")
+        entries[entry.name] = entry
+        duplicate_names[entry.name] = duplicate_names.get(entry.name, 0) + 1
+    return entries, duplicate_names
+
+
+def _warn_on_duplicates(duplicate_names: dict[str, int]) -> None:
+    if not duplicate_names:
+        return
+    summary = ", ".join(f"{name} x{count + 1}" for name, count in sorted(duplicate_names.items()))
+    print(
+        f"[imageworks.registry] Warning: duplicates after layering: {summary}",
+        file=sys.stderr,
+    )
+
+
+def _materialize_snapshot(
+    merged_snapshot: Path, merged_raw: list[dict], *, migrated: bool
+) -> None:
+    try:
+        current_content = merged_snapshot.read_text() if merged_snapshot.exists() else None
+        new_content = json.dumps(merged_raw, indent=2) + "\n"
+        if migrated or current_content != new_content:
+            merged_snapshot.write_text(new_content)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def load_registry(
     path: Path | None = None, *, force: bool = False
 ) -> Dict[str, RegistryEntry]:
@@ -127,155 +255,43 @@ def load_registry(
     if _REGISTRY_CACHE is not None and not force:
         return _REGISTRY_CACHE
 
-    base_dir = _registry_dir()
     merged_snapshot = _merged_snapshot_path()
     # Determine if caller requested explicit standalone path different from default merged snapshot.
     explicit_path = path is not None and path != merged_snapshot
     no_layering = os.environ.get("IMAGEWORKS_REGISTRY_NO_LAYERING") == "1"
     if explicit_path or (no_layering and path is not None):
-        # Standalone legacy/simple registry load (used heavily in tests). No layering, no migration.
-        file_path = Path(path)  # type: ignore[arg-type]
-        if not file_path.exists():
-            raise RegistryLoadError(f"Registry file not found: {file_path}")
-        try:
-            data = json.loads(file_path.read_text())
-        except Exception as exc:  # noqa: BLE001
-            raise RegistryLoadError(f"Failed to parse registry: {exc}") from exc
-        if not isinstance(data, list):
-            raise RegistryLoadError("Registry root must be a list of entries")
-        entries: Dict[str, RegistryEntry] = {}
-        seen: dict[str, int] = {}
-        for raw in data:
-            entry = _parse_entry(raw)
-            if entry.name in entries:
-                # In explicit mode duplicates are errors unless tolerance env set
-                tolerate = bool(
-                    int(os.environ.get("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "0"))
-                )
-                if not tolerate:
-                    raise RegistryLoadError(f"Duplicate entry: {entry.name}")
-                seen[entry.name] = seen.get(entry.name, 0) + 1
-            entries[entry.name] = entry
+        entries = _load_explicit_registry(Path(path))  # type: ignore[arg-type]
         _REGISTRY_CACHE = entries
-        _REGISTRY_PATH = file_path
+        _REGISTRY_PATH = Path(path)  # type: ignore[arg-type]
+        _CURATED_NAMES = set()
         _SINGLE_FILE_MODE = True
         return entries
 
     # If no_layering requested but no explicit path provided, fall back to layered default
     # Layered mode (default path)
+    base_dir = _registry_dir()
     base_dir.mkdir(parents=True, exist_ok=True)
     _SINGLE_FILE_MODE = False
     curated_file = _curated_path()
     discovered_file = _discovered_path()
 
-    migrated = False
-    if (
-        not curated_file.exists() and not discovered_file.exists()
-    ) and merged_snapshot.exists():
-        try:
-            legacy_data = json.loads(merged_snapshot.read_text())
-            if not isinstance(legacy_data, list):
-                raise ValueError("Legacy registry not a list")
-        except Exception as exc:  # noqa: BLE001
-            raise RegistryLoadError(
-                f"Failed to parse legacy registry during migration: {exc}"
-            ) from exc
-        curated_raw, discovered_raw = _classify_legacy(legacy_data)
-        backup_path = merged_snapshot.with_suffix(".backup.pre_split.json")
-        if not backup_path.exists():
-            merged_snapshot.rename(backup_path)
-        curated_file.write_text(json.dumps(curated_raw, indent=2) + "\n")
-        discovered_file.write_text(json.dumps(discovered_raw, indent=2) + "\n")
-        migrated = True
+    migrated = _migrate_legacy_snapshot(curated_file, discovered_file, merged_snapshot)
 
     if not curated_file.exists() and not discovered_file.exists():
         raise RegistryLoadError(
             f"No registry files found in {base_dir} (expected curated or discovered layer)."
         )
 
-    def _load_list(p: Path) -> list[dict]:
-        if not p.exists():
-            return []
-        try:
-            data = json.loads(p.read_text())
-        except Exception as exc:  # noqa: BLE001
-            raise RegistryLoadError(f"Failed to parse {p.name}: {exc}") from exc
-        if not isinstance(data, list):
-            raise RegistryLoadError(f"Registry fragment {p.name} must be a list")
-        return data
+    curated_raw = _load_json_list(curated_file)
+    discovered_raw = _load_json_list(discovered_file)
+    _adopt_snapshot_additions(merged_snapshot, curated_raw, discovered_raw)
+    merged_raw, curated_names = _merge_layered_fragments(curated_raw, discovered_raw)
+    entries, duplicate_names = _parse_merged_entries(merged_raw)
+    if duplicate_names:
+        _warn_on_duplicates(duplicate_names)
+    _materialize_snapshot(merged_snapshot, merged_raw, migrated=migrated)
 
-    curated_raw = _load_list(curated_file)
-    discovered_raw = _load_list(discovered_file)
-
-    # Adopt any externally injected entries added directly to merged snapshot file (legacy tests/scripts)
-    if merged_snapshot.exists():
-        try:
-            merged_content = json.loads(merged_snapshot.read_text())
-            if isinstance(merged_content, list):
-                known = {e.get("name") for e in curated_raw} | {
-                    e.get("name") for e in discovered_raw
-                }
-                for raw in merged_content:
-                    n = raw.get("name") if isinstance(raw, dict) else None
-                    if n and n not in known:
-                        # treat as discovered addition
-                        discovered_raw.append(raw)
-                        known.add(n)
-        except Exception:  # noqa: BLE001
-            pass
-    name_index: dict[str, dict] = {}
-    _CURATED_NAMES = set()
-    for raw in curated_raw:
-        name = str(raw.get("name") or "").strip()
-        if not name:
-            continue
-        name_index[name] = raw
-        _CURATED_NAMES.add(name)
-    for raw in discovered_raw:
-        name = str(raw.get("name") or "").strip()
-        if not name:
-            continue
-        name_index[name] = raw
-    merged_raw: list[dict] = list(name_index.values())
-
-    entries: Dict[str, RegistryEntry] = {}
-    duplicate_names: dict[str, int] = {}
-    tolerate_dupes = bool(int(os.environ.get("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "0")))
-    for raw in merged_raw:
-        try:
-            entry = _parse_entry(raw)
-        except Exception as exc:  # noqa: BLE001
-            raise RegistryLoadError(f"Invalid entry: {exc}") from exc
-        existing = entries.get(entry.name)
-        if existing is None:
-            entries[entry.name] = entry
-            continue
-        if not tolerate_dupes:
-            raise RegistryLoadError(f"Duplicate entry after merge: {entry.name}")
-        # Tolerant duplicate strategy (should be rare with layering)
-        entries[entry.name] = entry
-        duplicate_names[entry.name] = duplicate_names.get(entry.name, 0) + 1
-
-    if duplicate_names and tolerate_dupes:
-        import sys  # noqa: WPS433
-
-        summary = ", ".join(f"{n} x{c+1}" for n, c in sorted(duplicate_names.items()))
-        print(
-            f"[imageworks.registry] Warning: duplicates after layering: {summary}",
-            file=sys.stderr,
-        )
-
-    # Materialize merged snapshot only if migrated or content differs to avoid spurious file churn.
-    try:
-        current_content = None
-        if merged_snapshot.exists():
-            current_content = merged_snapshot.read_text()
-        new_content = json.dumps(merged_raw, indent=2) + "\n"
-        if migrated or current_content != new_content:
-            merged_snapshot.write_text(new_content)
-    except Exception:  # noqa: BLE001
-        pass
-
+    _CURATED_NAMES = curated_names
     _REGISTRY_CACHE = entries
     _REGISTRY_PATH = merged_snapshot
     return entries

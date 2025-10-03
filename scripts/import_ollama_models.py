@@ -18,14 +18,15 @@ with explicit artifact hashes once exported.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
-import subprocess
-from pathlib import Path
-from typing import Optional, List, Dict
-import argparse
 import re
+import subprocess
 import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from imageworks.model_loader.download_adapter import record_download
 from imageworks.model_loader import registry as unified_registry
@@ -34,6 +35,23 @@ from imageworks.tools.model_downloader.quant_utils import is_quant_token
 DEFAULT_BACKEND = "ollama"
 
 _TAGS_CACHE: Dict[str, Dict] | None = None
+
+
+@dataclass
+class OllamaModelData:
+    name: str
+    family: str
+    quant: Optional[str]
+    size_bytes: int
+    path: Path
+    display_name: str
+    extra_metadata: Dict[str, Any]
+    architecture: Optional[str]
+    parameters: Optional[str]
+    context_length: Optional[str]
+    embedding_length: Optional[str]
+    capabilities: Optional[List[str]]
+    license_text: Optional[str]
 
 
 def _fetch_tags() -> Dict[str, Dict]:
@@ -164,9 +182,6 @@ def list_ollama_models() -> list[dict]:
     return models
 
 
-QUANT_PAT = re.compile(r".*")  # deprecated local; using is_quant_token instead
-
-
 def _normalize_segment(seg: str, *, preserve_underscores: bool = False) -> str:
     """Normalize a name/tag segment into a deterministic, hyphenated token.
 
@@ -213,48 +228,164 @@ def _derive_family_and_quant(full_name: str) -> tuple[str, Optional[str]]:
     return family, None
 
 
-def _ollama_show(name: str) -> dict | None:
-    """Return detailed metadata for a model using layered fallbacks.
+def _canonical_display_name(family: str, quant: Optional[str]) -> str:
+    base_display = family
+    if quant:
+        base_display = f"{base_display}-{quant}"
+    if base_display.startswith("hf.co-"):
+        parts = base_display.split("-")
+        if len(parts) > 2:
+            base_display = "-".join(parts[2:])
+    return base_display
 
-    Order:
-      1. Local HTTP API (GET /api/show) if server running
-      2. Python library (ollama.show) if installed
-      3. CLI `ollama show <name> --format json`
-      4. CLI plain text parsing (extract quantization/architecture heuristically)
-    """
-    # 1. HTTP API
+
+def _variant_name(family: str, backend: str, quant: Optional[str]) -> str:
+    base = f"{family}-{backend}-gguf"
+    if quant:
+        return f"{base}-{quant}"
+    return base
+
+
+def _collect_model_data(
+    model: dict, tags_index: Dict[str, Dict]
+) -> OllamaModelData | None:
+    name = model.get("name") or model.get("model")
+    size_bytes = model.get("size") or 0
+    if not name:
+        return None
+
+    detail = _ollama_show(name) or {}
+    detail_size = 0
+    layers = detail.get("layers") or []
+    if isinstance(layers, list):
+        for layer in layers:
+            if isinstance(layer, dict) and isinstance(layer.get("size"), int):
+                detail_size += layer["size"]
+    if detail_size:
+        size_bytes = detail_size
+
+    details_obj = detail.get("details") if isinstance(detail.get("details"), dict) else {}
+    quant_detail = None
+    if isinstance(details_obj, dict):
+        quant_detail = details_obj.get("quantization") or details_obj.get("quant")
+
+    architecture = details_obj.get("architecture") if isinstance(details_obj, dict) else None
+    parameters = details_obj.get("parameters") if isinstance(details_obj, dict) else None
+    context_length = None
+    if isinstance(details_obj, dict):
+        context_length = details_obj.get("context_length") or details_obj.get(
+            "context_length_tokens"
+        )
+    embedding_length = details_obj.get("embedding_length") if isinstance(details_obj, dict) else None
+
+    capabilities = None
+    modelfile = detail.get("modelfile")
+    if isinstance(modelfile, dict):
+        params = modelfile.get("parameters")
+        if isinstance(params, list):
+            capabilities = params
+    if not capabilities and isinstance(detail.get("capabilities"), list):
+        capabilities = detail.get("capabilities")
+
+    license_text = None
+    license_info = detail.get("license")
+    if isinstance(license_info, str):
+        license_text = license_info
+    elif isinstance(license_info, dict):
+        license_text = license_info.get("name") or license_info.get("text")
+
+    family, quant_inferred = _derive_family_and_quant(name)
+    quant = quant_detail or quant_inferred
+    if isinstance(quant, str):
+        quant = quant.lower()
+
+    extra_meta: Dict[str, Any] = {
+        "ollama_architecture": architecture,
+        "ollama_parameters": parameters,
+        "ollama_context_length": context_length,
+        "ollama_embedding_length": embedding_length,
+        "ollama_capabilities": capabilities,
+        "ollama_license": license_text,
+    }
+
+    if not quant and name in tags_index:
+        tag_details = tags_index[name].get("details") or {}
+        if isinstance(tag_details, dict):
+            quant_candidate = tag_details.get("quantization_level")
+            if isinstance(quant_candidate, str):
+                quant = quant_candidate.lower()
+            if extra_meta.get("ollama_parameters") is None:
+                extra_meta["ollama_parameters"] = tag_details.get("parameter_size")
+
+    path = Path(f"ollama://{name}")
+    display_name = _canonical_display_name(family, quant)
+
+    return OllamaModelData(
+        name=name,
+        family=family,
+        quant=quant,
+        size_bytes=size_bytes,
+        path=path,
+        display_name=display_name,
+        extra_metadata=extra_meta,
+        architecture=architecture,
+        parameters=parameters,
+        context_length=context_length,
+        embedding_length=embedding_length,
+        capabilities=capabilities,
+        license_text=license_text,
+    )
+
+
+def _print_dry_run(data: OllamaModelData) -> None:
+    quant_display = data.quant or "-"
+    print(
+        "DRY RUN: would import"
+        f" {data.name} -> variant_family={data.family} quant={quant_display} size={data.size_bytes}"
+    )
+    if data.architecture or data.parameters or data.context_length:
+        print(
+            "         arch="
+            f"{data.architecture or '-'} params={data.parameters or '-'} ctx={data.context_length or '-'}"
+        )
+
+
+def _show_via_http(name: str) -> dict | None:
     base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    import urllib.request as _u
-
     try:
-        req = _u.Request(
+        req = urllib.request.Request(
             f"{base_url}/api/show",
             data=json.dumps({"model": name}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with _u.urlopen(req, timeout=1.5) as resp:  # nosec B310
+        with urllib.request.urlopen(req, timeout=1.5) as resp:  # nosec B310
             body = resp.read().decode()
             data = json.loads(body)
             if isinstance(data, dict):
                 return data
     except Exception:  # noqa: BLE001
-        pass
-    # 2. Python library
+        return None
+    return None
+
+
+def _show_via_python(name: str) -> dict | None:
     try:
         import importlib
 
-        if importlib.util.find_spec("ollama") is not None:  # type: ignore[attr-defined]
-            from ollama import show as _py_show  # type: ignore
+        spec = importlib.util.find_spec("ollama")  # type: ignore[attr-defined]
+        if spec is None:
+            return None
+        from ollama import show as _py_show  # type: ignore
 
-            try:
-                data = _py_show(name)
-                if isinstance(data, dict):
-                    return data
-            except Exception:
-                pass
-    except Exception:
-        pass
-    # 3. CLI JSON
+        data = _py_show(name)
+        if isinstance(data, dict):
+            return data
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _show_via_cli_json(name: str) -> dict | None:
     try:
         proc = subprocess.run(
             ["ollama", "show", name, "--format", "json"],
@@ -262,48 +393,68 @@ def _ollama_show(name: str) -> dict | None:
             text=True,
             check=True,
         )
-        data = json.loads(proc.stdout or "{}")
-        if isinstance(data, dict):
-            return data
     except Exception:  # noqa: BLE001
-        pass
-    # 4. Plain text parsing (very limited)
+        return None
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def _show_via_cli_text(name: str) -> dict | None:
     try:
         proc_txt = subprocess.run(
             ["ollama", "show", name], capture_output=True, text=True, check=True
         )
-        lines = proc_txt.stdout.splitlines()
-        quant = None
-        arch = None
-        params = None
-        ctx = None
-        for line in lines:
-            lower = line.strip().lower()
-            if lower.startswith("quantization"):
-                parts = line.split()
-                if len(parts) >= 2:
-                    quant = parts[-1]
-            elif lower.startswith("architecture"):
-                arch = line.split()[-1]
-            elif lower.startswith("parameters"):
-                # Often like "parameters          8.3B"
-                tokens = line.split()
-                if tokens:
-                    params = tokens[-1]
-            elif lower.startswith("context length"):
-                tokens = line.split()
-                if tokens:
-                    ctx = tokens[-1]
-        return {
-            "details": {
-                "architecture": arch,
-                "parameters": params,
-                "context_length": ctx,
-                "quantization": quant,
-            }
-        }
     except Exception:  # noqa: BLE001
         return None
+    lines = proc_txt.stdout.splitlines()
+    quant = None
+    arch = None
+    params = None
+    ctx = None
+    for line in lines:
+        lower = line.strip().lower()
+        if lower.startswith("quantization"):
+            parts = line.split()
+            if len(parts) >= 2:
+                quant = parts[-1]
+        elif lower.startswith("architecture"):
+            arch = line.split()[-1]
+        elif lower.startswith("parameters"):
+            tokens = line.split()
+            if tokens:
+                params = tokens[-1]
+        elif lower.startswith("context length"):
+            tokens = line.split()
+            if tokens:
+                ctx = tokens[-1]
+    return {
+        "details": {
+            "architecture": arch,
+            "parameters": params,
+            "context_length": ctx,
+            "quantization": quant,
+        }
+    }
+
+
+def _ollama_show(name: str) -> dict | None:
+    """Return detailed metadata for a model using layered fallbacks."""
+
+    for resolver in (
+        _show_via_http,
+        _show_via_python,
+        _show_via_cli_json,
+        _show_via_cli_text,
+    ):
+        data = resolver(name)
+        if isinstance(data, dict):
+            return data
+    return None
 
 
 def _purge_existing_ollama_entries(backend: str) -> int:
@@ -332,6 +483,96 @@ def _purge_existing_ollama_entries(backend: str) -> int:
     return removed
 
 
+def _prepare_registry_for_import(
+    backend: str, *, purge: bool, dry_run: bool
+) -> Dict[str, Any]:
+    if purge and not dry_run:
+        removed = _purge_existing_ollama_entries(backend)
+        if removed:
+            print(f"Purged {removed} existing ollama entries before re-import.")
+    return unified_registry.load_registry(force=True)
+
+
+def _persist_existing_entry(
+    existing, data: OllamaModelData, *, location: str
+) -> None:
+    existing.quantization = data.quant or existing.quantization
+    existing.download_path = str(data.path)
+    existing.download_format = "gguf"
+    existing.download_location = location
+    if data.size_bytes:
+        existing.download_size_bytes = data.size_bytes
+    existing.served_model_id = data.name
+    existing.display_name = data.display_name
+    if data.extra_metadata:
+        existing.metadata = existing.metadata or {}
+        for key, value in data.extra_metadata.items():
+            if value is not None and key not in existing.metadata:
+                existing.metadata[key] = value
+    unified_registry.update_entries([existing], save=True)
+
+
+def _persist_new_entry(
+    data: OllamaModelData, *, backend: str, location: str
+):
+    entry = record_download(
+        hf_id=None,
+        backend=backend,
+        format_type="gguf",
+        quantization=data.quant,
+        path=str(data.path),
+        location=location,
+        files=None,
+        size_bytes=data.size_bytes,
+        source_provider="ollama",
+        roles=None,
+        role_priority=None,
+        family_override=data.family,
+        served_model_id=data.name,
+        extra_metadata=data.extra_metadata,
+        display_name=data.display_name,
+    )
+    return entry
+
+
+def _persist_model(
+    data: OllamaModelData,
+    *,
+    backend: str,
+    location: str,
+    registry: Dict[str, Any],
+) -> None:
+    variant_name = _variant_name(data.family, backend, data.quant)
+    existing = registry.get(variant_name)
+    if not existing and data.quant:
+        legacy_name = _variant_name(data.family, backend, None)
+        legacy_entry = registry.get(legacy_name)
+        if legacy_entry:
+            legacy_entry.name = variant_name
+            if legacy_name in registry:
+                del registry[legacy_name]
+            existing = legacy_entry
+    if existing:
+        _persist_existing_entry(existing, data, location=location)
+        registry[existing.name] = existing
+        return
+    entry = _persist_new_entry(data, backend=backend, location=location)
+    registry[entry.name] = entry
+
+
+def _deprecate_placeholder_entries(backend: str) -> None:
+    reg = unified_registry.load_registry(force=True)
+    changed = 0
+    for entry in reg.values():
+        if entry.backend == backend and entry.name.startswith("model-ollama-gguf"):
+            if not entry.deprecated:
+                entry.deprecated = True
+                changed += 1
+    if changed:
+        unified_registry.save_registry()
+        print(f"Deprecated {changed} placeholder entries.")
+
+
 def import_models(
     models: list[dict],
     *,
@@ -343,196 +584,24 @@ def import_models(
 ) -> int:
     imported = 0
     tags_index = _fetch_tags()
-    # Load registry (merged) for updates
-    from imageworks.model_loader import registry as _reg
-
-    if purge and not dry_run:
-        removed = _purge_existing_ollama_entries(backend)
-        if removed:
-            print(f"Purged {removed} existing ollama entries before re-import.")
-    reg_map = _reg.load_registry(force=True)
-    for m in models:
-        name = m.get("name") or m.get("model")  # fields differ across versions
-        size_bytes = m.get("size") or 0
-        if not name:
+    registry = _prepare_registry_for_import(backend, purge=purge, dry_run=dry_run)
+    for model in models:
+        data = _collect_model_data(model, tags_index)
+        if data is None:
             continue
-        detail = _ollama_show(name) or {}
-        # Attempt to refine size and quantization from detail if present
-        detail_size = 0
-        # Some versions include digest layers with sizes; sum them
-        layers = detail.get("layers") or []
-        if isinstance(layers, list):
-            for layer in layers:
-                if isinstance(layer, dict) and isinstance(layer.get("size"), int):
-                    detail_size += layer["size"]
-        if detail_size:
-            size_bytes = detail_size
-        # Attempt quant extraction directly from detail (e.g., model["details"]["quantization"])
-        quant_detail = None
-        details_obj = (
-            detail.get("details") if isinstance(detail.get("details"), dict) else {}
-        )
-        if isinstance(details_obj, dict):
-            quant_detail = details_obj.get("quantization") or details_obj.get("quant")
-        # Additional metadata extraction
-        architecture = (
-            details_obj.get("architecture") if isinstance(details_obj, dict) else None
-        )
-        parameters = (
-            details_obj.get("parameters") if isinstance(details_obj, dict) else None
-        )
-        context_length = (
-            details_obj.get("context_length")
-            or details_obj.get("context_length_tokens")
-            if isinstance(details_obj, dict)
-            else None
-        )
-        embedding_length = (
-            details_obj.get("embedding_length")
-            if isinstance(details_obj, dict)
-            else None
-        )
-        capabilities = (
-            detail.get("modelfile", {}).get("parameters", [])
-            if isinstance(detail.get("modelfile"), dict)
-            else None
-        )
-        # Some versions expose a top-level capabilities list
-        if not capabilities and isinstance(detail.get("capabilities"), list):
-            capabilities = detail.get("capabilities")
-        license_text = None
-        if isinstance(detail.get("license"), str):
-            license_text = detail.get("license")
-        elif isinstance(detail.get("license"), dict):
-            # Some builds may structure license
-            license_text = detail.get("license").get("name") or detail.get(
-                "license"
-            ).get("text")
-        family, quant_inferred = _derive_family_and_quant(name)
-        quant = quant_detail or quant_inferred
-        if isinstance(quant, str):
-            quant = quant.lower()
-        # Prepare extra metadata container early so tag enrichment can modify it
-        extra_meta = {
-            "ollama_architecture": architecture,
-            "ollama_parameters": parameters,
-            "ollama_context_length": context_length,
-            "ollama_embedding_length": embedding_length,
-            "ollama_capabilities": capabilities,
-            "ollama_license": license_text,
-        }
-        # If still missing quant, consult /api/tags index
-        if not quant and name in tags_index:
-            det = tags_index[name].get("details") or {}
-            if isinstance(det, dict):
-                quant = det.get("quantization_level") or quant
-                # Parameter size (human form) if original parameters missing
-                if extra_meta.get("ollama_parameters") is None:
-                    extra_meta["ollama_parameters"] = det.get("parameter_size")
-        path = Path(f"ollama://{name}")
         if dry_run:
-            print(
-                f"DRY RUN: would import {name} -> variant_family={family} quant={quant or '-'} size={size_bytes}"
-            )
-            # Show architecture/parameters in dry run if available
-            if architecture or parameters:
-                print(
-                    f"         arch={architecture or '-'} params={parameters or '-'} ctx={context_length or '-'}"
-                )
+            _print_dry_run(data)
             imported += 1
             continue
-        # Canonical naming rule (per user directive): variant name does NOT include quant.
-        # We always use family-backend-format (no quant token) and store quant in quantization field.
-        # display_name should be base family (without backend/format suffix) plus quant if present.
-        base_variant_name = f"{family}-{backend}-gguf"
-        existing = reg_map.get(base_variant_name)
-        # The download adapter builds names including quant, so we bypass it and manually enrich existing entry if present,
-        # otherwise we call record_download once (with quant) knowing it will create family-backend-format-quant; we then
-        # immediately normalize its name by removing the quant segment. This keeps a single entry canonical.
-        if existing:
-            # Enrich existing entry
-            existing.quantization = quant or existing.quantization
-            existing.download_path = str(path)
-            existing.download_format = "gguf"
-            existing.download_location = location
-            existing.download_size_bytes = size_bytes or existing.download_size_bytes
-            existing.served_model_id = name
-            # Merge metadata without overwriting existing keys
-            if extra_meta:
-                existing.metadata = existing.metadata or {}
-                for k, v in extra_meta.items():
-                    if v is not None and k not in existing.metadata:
-                        existing.metadata[k] = v
-            # Update display name pattern
-            base_display = family
-            if quant:
-                base_display = f"{base_display}-{quant}"  # user wants quant shown
-            # Trim packager prefix heuristics for hf.co style imports (hf.co-<user>-rest...)
-            # We'll remove leading 'hf.co-' and first user token if base_display starts with that pattern.
-            if base_display.startswith("hf.co-"):
-                parts = base_display.split("-")
-                if len(parts) > 2:  # hf.co, user, rest...
-                    base_display = "-".join(parts[2:])
-            existing.display_name = base_display
-            from imageworks.model_loader.registry import update_entries, save_registry
-
-            update_entries([existing], save=True)
-            save_registry()
-        else:
-            # Create via record_download (will create with quant in name); then rename if necessary.
-            entry = record_download(
-                hf_id=None,
-                backend=backend,
-                format_type="gguf",
-                quantization=quant,
-                path=str(path),
-                location=location,
-                files=None,
-                size_bytes=size_bytes,
-                source_provider="ollama",
-                roles=None,
-                role_priority=None,
-                family_override=family,
-                served_model_id=name,
-                extra_metadata=extra_meta,
-            )
-            # If record_download added quant to name, normalize it by collapsing back to base_variant_name.
-            if entry.name != base_variant_name:
-                from imageworks.model_loader.registry import (
-                    update_entries,
-                    remove_entry,
-                    save_registry,
-                )
-
-                original_key = entry.name
-                # Rename in-place by changing entry.name and re-registering
-                entry.name = base_variant_name  # type: ignore[attr-defined]
-                base_display = family
-                if quant:
-                    base_display = f"{base_display}-{quant}"
-                if base_display.startswith("hf.co-"):
-                    parts = base_display.split("-")
-                    if len(parts) > 2:
-                        base_display = "-".join(parts[2:])
-                entry.display_name = base_display
-                update_entries([entry], save=True)
-                # Remove the old quant-suffixed key
-                if original_key != base_variant_name:
-                    remove_entry(original_key, save=False)
-                save_registry()
+        _persist_model(
+            data,
+            backend=backend,
+            location=location,
+            registry=registry,
+        )
         imported += 1
     if not dry_run and deprecate_placeholders:
-        # Mark legacy placeholder entries deprecated
-        reg = unified_registry.load_registry(force=True)
-        changed = 0
-        for e in reg.values():
-            if e.backend == backend and e.name.startswith("model-ollama-gguf"):
-                if not e.deprecated:
-                    e.deprecated = True
-                    changed += 1
-        if changed:
-            unified_registry.save_registry()
-            print(f"Deprecated {changed} placeholder entries.")
+        _deprecate_placeholder_entries(backend)
     return imported
 
 
