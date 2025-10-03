@@ -25,6 +25,18 @@ from .format_utils import detect_format_and_quant
 
 
 @dataclass
+class RepositoryMetadata:
+    """Normalized repository metadata for download routing."""
+
+    owner: str
+    repo_name: str
+    branch: str
+    repository_id: str
+    storage_repo_name: str
+    registry_model_name: str
+
+
+@dataclass
 class DownloadProgress:
     """Progress information for a download."""
 
@@ -214,14 +226,55 @@ class ModelDownloader:
     ) -> RegistryEntry:
         """Download a model from a URL or HuggingFace identifier."""
 
-        # Step 1: Analyze the URL/identifier
         analysis = self.url_analyzer.analyze_url(model_identifier)
+        repo_meta = self._build_repository_metadata(analysis)
+        preferred_formats = self._normalise_format_preferences(format_preference)
 
-        # Normalise repository metadata for downstream routing
+        existing_entry = self._handle_existing_download(
+            repo_meta.registry_model_name,
+            force_redownload=force_redownload,
+            interactive=interactive,
+        )
+        if existing_entry is not None:
+            return existing_entry
+
+        primary_format = self._detect_primary_format(analysis, preferred_formats)
+        target_dir = self._resolve_target_dir(
+            primary_format,
+            location_override,
+            repo_meta.owner,
+            repo_meta.storage_repo_name,
+        )
+
+        required_files, optional_files = self._partition_files(analysis)
+        all_files = self._download_selected_files(
+            required_files,
+            optional_files,
+            include_optional,
+            repo_meta,
+            target_dir,
+        )
+
+        self._ensure_verified(all_files, target_dir)
+        chat_template_info = self._inspect_chat_templates(target_dir)
+        total_size = self._calculate_total_size(all_files, target_dir)
+
+        entry = self._register_download(
+            repo_meta,
+            primary_format,
+            total_size,
+            all_files,
+            target_dir,
+            analysis,
+            chat_template_info,
+        )
+
+        return entry
+
+    def _build_repository_metadata(self, analysis: Any) -> RepositoryMetadata:
         owner = analysis.repository.owner
         repo_name = analysis.repository.repo
         repository_id = f"{owner}/{repo_name}"
-
         branch = analysis.repository.branch or "main"
         storage_repo_name = (
             repo_name if branch == "main" else f"{repo_name}@{branch.replace('/', '_')}"
@@ -230,85 +283,98 @@ class ModelDownloader:
             repository_id if branch == "main" else f"{repository_id}@{branch}"
         )
 
-        # Normalise format preferences – accept single strings from callers
-        preferred_formats: Optional[List[str]]
+        return RepositoryMetadata(
+            owner=owner,
+            repo_name=repo_name,
+            branch=branch,
+            repository_id=repository_id,
+            storage_repo_name=storage_repo_name,
+            registry_model_name=registry_model_name,
+        )
+
+    def _normalise_format_preferences(
+        self, format_preference: Optional[Union[Sequence[str], str]]
+    ) -> Optional[List[str]]:
         if isinstance(format_preference, str):
-            preferred_formats = [format_preference]
-        elif format_preference is None:
-            preferred_formats = None
-        else:
-            preferred_formats = [str(fmt) for fmt in format_preference]
+            return [format_preference]
+        if format_preference is None:
+            return None
+        return [str(fmt) for fmt in format_preference]
 
-        # Step 2: Check if already downloaded
-        if not force_redownload:
-            existing = self._registry_cache.get(registry_model_name)
-            if existing and existing.download_path:
-                existing_path = Path(existing.download_path).expanduser()
-                if existing_path.exists():
-                    self._log(f"✅ Model already downloaded: {existing.name}")
-                    return existing
-                else:
-                    self._log(
-                        f"⚠️  Model '{existing.name}' found in registry but directory missing: {existing.download_path}",
-                        level=logging.WARNING,
-                    )
-                    if interactive:
-                        try:
-                            response = (
-                                input(
-                                    "Directory not found. Re-download the model? (y/N): "
-                                )
-                                .strip()
-                                .lower()
-                            )
-                            if response not in ["y", "yes"]:
-                                self._log(
-                                    "❌ Download cancelled by user",
-                                    level=logging.WARNING,
-                                )
-                                return existing
-                            self._log("🔄 Proceeding with re-download...")
-                        except (KeyboardInterrupt, EOFError):
-                            self._log(
-                                "\n❌ Download cancelled by user", level=logging.WARNING
-                            )
-                            return existing
-                        # allow overwrite by continuing; we will update fields after download
-                    else:
-                        self._log(
-                            "🔄 Non-interactive mode: proceeding with re-download..."
-                        )
+    def _handle_existing_download(
+        self,
+        registry_model_name: str,
+        *,
+        force_redownload: bool,
+        interactive: bool,
+    ) -> Optional[RegistryEntry]:
+        if force_redownload:
+            return None
 
-        # Step 3: Detect format from file list
-        all_files = []
+        existing = self._registry_cache.get(registry_model_name)
+        if not existing or not existing.download_path:
+            return None
+
+        existing_path = Path(existing.download_path).expanduser()
+        if existing_path.exists():
+            self._log(f"✅ Model already downloaded: {existing.name}")
+            return existing
+
+        self._log(
+            f"⚠️  Model '{existing.name}' found in registry but directory missing: {existing.download_path}",
+            level=logging.WARNING,
+        )
+
+        if not interactive:
+            self._log("🔄 Non-interactive mode: proceeding with re-download...")
+            return None
+
+        try:
+            response = input("Directory not found. Re-download the model? (y/N): ")
+        except (KeyboardInterrupt, EOFError):
+            self._log("\n❌ Download cancelled by user", level=logging.WARNING)
+            return existing
+
+        if response.strip().lower() not in {"y", "yes"}:
+            self._log("❌ Download cancelled by user", level=logging.WARNING)
+            return existing
+
+        self._log("🔄 Proceeding with re-download...")
+        return None
+
+    def _detect_primary_format(
+        self, analysis: Any, preferred_formats: Optional[List[str]]
+    ) -> str:
+        files: List[Any] = []
         for file_list in analysis.files.values():
-            all_files.extend(file_list)
-        formats = self.format_detector.detect_from_filelist([f.path for f in all_files])
+            files.extend(file_list)
+
+        formats = self.format_detector.detect_from_filelist([f.path for f in files])
         if not formats:
             self._log(
                 "⚠️  Could not detect model format, using default routing",
                 level=logging.WARNING,
             )
-            primary_format = "unknown"
-        else:
-            # Use format preference or first detected
-            if preferred_formats:
-                for pref in preferred_formats:
-                    for fmt in formats:
-                        if fmt.format_type == pref:
-                            primary_format = pref
-                            break
-                    else:
-                        continue
-                    break
-                else:
-                    primary_format = formats[0].format_type
-            else:
-                primary_format = formats[0].format_type
+            return "unknown"
 
+        if preferred_formats:
+            for pref in preferred_formats:
+                for fmt in formats:
+                    if fmt.format_type == pref:
+                        self._log(f"🔧 Detected format: {pref}")
+                        return pref
+
+        primary_format = formats[0].format_type
         self._log(f"🔧 Detected format: {primary_format}")
+        return primary_format
 
-        # Step 4: Determine target directory
+    def _resolve_target_dir(
+        self,
+        primary_format: str,
+        location_override: Optional[str],
+        owner: str,
+        storage_repo_name: str,
+    ) -> Path:
         if location_override:
             normalized_override = location_override.strip()
             if normalized_override in {"linux_wsl", "windows_lmstudio"}:
@@ -316,7 +382,6 @@ class ModelDownloader:
                     base_dir = self.config.linux_wsl.root / "weights"
                 else:
                     base_dir = self.config.windows_lmstudio.root
-
                 target_dir = base_dir / owner / storage_repo_name
             else:
                 target_dir = (
@@ -331,10 +396,11 @@ class ModelDownloader:
 
         target_dir.mkdir(parents=True, exist_ok=True)
         self._log(f"📁 Target directory: {target_dir}")
+        return target_dir
 
-        # Step 5: Filter files based on preferences
-        required_files = []
-        optional_files = []
+    def _partition_files(self, analysis: Any) -> tuple[List[Any], List[Any]]:
+        required_files: List[Any] = []
+        optional_files: List[Any] = []
         for category, file_list in analysis.files.items():
             if category in ["model_weights", "config", "tokenizer"]:
                 required_files.extend(file_list)
@@ -344,10 +410,20 @@ class ModelDownloader:
         if not required_files:
             raise RuntimeError("No essential model files found")
 
-        # Step 6: Download files
-        base_url = f"https://huggingface.co/{repository_id}/resolve/{branch}"
+        return required_files, optional_files
 
-        # Prepare aria2c download
+    def _download_selected_files(
+        self,
+        required_files: List[Any],
+        optional_files: List[Any],
+        include_optional: bool,
+        repo_meta: RepositoryMetadata,
+        target_dir: Path,
+    ) -> List[Any]:
+        base_url = (
+            f"https://huggingface.co/{repo_meta.repository_id}/resolve/{repo_meta.branch}"
+        )
+
         self._log(f"📥 Downloading {len(required_files)} required files...")
         if required_files:
             self._download_files_with_aria2c(required_files, base_url, target_dir)
@@ -356,21 +432,21 @@ class ModelDownloader:
             self._log(f"📥 Downloading {len(optional_files)} optional files...")
             self._download_files_with_aria2c(optional_files, base_url, target_dir)
 
-        # Step 7: Verify download completion before registry registration
-        all_files = required_files + (optional_files if include_optional else [])
-        if not self._verify_download_complete(all_files, target_dir):
+        return required_files + (optional_files if include_optional else [])
+
+    def _ensure_verified(self, files: List[Any], target_dir: Path) -> None:
+        if not self._verify_download_complete(files, target_dir):
             raise RuntimeError(
                 "Download verification failed - some files are missing, incomplete, or corrupted. "
                 "Please try the download again."
             )
-
         self._log("✅ Download verification passed - all files complete")
 
-        # Chat template detection & root file harvesting
-        # 1. Embedded template inside tokenizer_config.json
+    def _inspect_chat_templates(self, target_dir: Path) -> Dict[str, Any]:
         tokenizer_cfg_path = target_dir / "tokenizer_config.json"
         has_embedded_template = False
         embedded_template_snippet = None
+
         if tokenizer_cfg_path.exists():
             try:
                 import json
@@ -390,30 +466,26 @@ class ModelDownloader:
                 level=logging.INFO,
             )
 
-        # 2. External template files placed at repo root (common patterns: *.jinja, chat_template*.json, *_chat_template*, *template*vicuna*)
         template_files: List[str] = []
         candidate_patterns = [
             ".jinja",
             "chat_template.json",
-            "chat_template",  # generic prefix
-            "template",  # broad safety net
+            "chat_template",
+            "template",
         ]
+
         try:
-            for p in target_dir.iterdir():
-                if not p.is_file():
+            for path in target_dir.iterdir():
+                if not path.is_file():
                     continue
-                name_lower = p.name.lower()
+                name_lower = path.name.lower()
                 if any(pattern in name_lower for pattern in candidate_patterns):
-                    # Ignore extremely large non-text files (heuristic)
-                    if (
-                        p.stat().st_size < 2_000_000
-                    ):  # 2MB safety limit for template-like files
-                        # simple text sniff
+                    if path.stat().st_size < 2_000_000:
                         try:
-                            head = p.read_text(encoding="utf-8", errors="ignore")[:400]
+                            head = path.read_text(encoding="utf-8", errors="ignore")[:400]
                             if "{{" in head and "}}" in head:
-                                template_files.append(p.name)
-                        except Exception:
+                                template_files.append(path.name)
+                        except Exception:  # noqa: BLE001
                             pass
         except Exception:  # noqa: BLE001
             pass
@@ -432,35 +504,48 @@ class ModelDownloader:
                 level=logging.INFO,
             )
 
-        # Step 8: Calculate total size (now guaranteed to be accurate)
-        total_size = sum((target_dir / f.path).stat().st_size for f in all_files)
+        return {
+            "has_chat_template": has_chat_template,
+            "has_embedded_chat_template": has_embedded_template,
+            "embedded_chat_template_preview": embedded_template_snippet,
+            "external_chat_template_files": template_files,
+        }
 
-        # Step 9: Register in registry (now guaranteed to be accurate)
-        # Get list of downloaded files
-        downloaded_files = []
-        for f in all_files:
-            downloaded_files.append(f.path)
+    def _calculate_total_size(self, files: List[Any], target_dir: Path) -> int:
+        return sum((target_dir / f.path).stat().st_size for f in files)
 
+    def _determine_location_label(self, target_dir: Path) -> str:
         if (
             self.config.linux_wsl.root in target_dir.parents
             or self.config.linux_wsl.root == target_dir
         ):
-            location_label = "linux_wsl"
-        elif (
+            return "linux_wsl"
+        if (
             self.config.windows_lmstudio.root in target_dir.parents
             or self.config.windows_lmstudio.root == target_dir
         ):
-            location_label = "windows_lmstudio"
-        else:
-            location_label = "custom"
+            return "windows_lmstudio"
+        return "custom"
 
-        # Use unified adapter to record / update download entry
-        # Local detection refinement (format/quant) after files are present
+    def _register_download(
+        self,
+        repo_meta: RepositoryMetadata,
+        primary_format: str,
+        total_size: int,
+        files: List[Any],
+        target_dir: Path,
+        analysis: Any,
+        chat_template_info: Dict[str, Any],
+    ) -> RegistryEntry:
+        location_label = self._determine_location_label(target_dir)
+        downloaded_files = [f.path for f in files]
+
         det_fmt, det_quant = detect_format_and_quant(target_dir)
         final_format = det_fmt or primary_format
+
         try:
             entry = record_download(
-                hf_id=repository_id,
+                hf_id=repo_meta.repository_id,
                 backend="unassigned",
                 format_type=final_format,
                 quantization=det_quant,
@@ -472,27 +557,34 @@ class ModelDownloader:
                 roles=[],
                 role_priority=None,
             )
-            # enrich metadata post-record (non-core fields)
+
             entry.metadata.update(
                 {
                     "model_type": analysis.repository.model_type,
                     "library": analysis.repository.library_name,
-                    "files_downloaded": len(all_files),
+                    "files_downloaded": len(files),
                     "verified_complete": True,
-                    "has_chat_template": has_chat_template,
-                    "has_embedded_chat_template": has_embedded_template,
-                    "external_chat_template_files": template_files,
-                    "embedded_chat_template_preview": embedded_template_snippet,
-                    "branch": branch,
+                    "has_chat_template": chat_template_info["has_chat_template"],
+                    "has_embedded_chat_template": chat_template_info[
+                        "has_embedded_chat_template"
+                    ],
+                    "external_chat_template_files": chat_template_info[
+                        "external_chat_template_files"
+                    ],
+                    "embedded_chat_template_preview": chat_template_info[
+                        "embedded_chat_template_preview"
+                    ],
+                    "branch": repo_meta.branch,
                 }
             )
+
             update_entries([entry], save=True)
             self._registry_cache = load_registry(force=True)  # type: ignore[arg-type]
             self._log(f"✅ Registry updated for {entry.name}")
             return entry
-        except Exception as e:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self._log(
-                f"⚠️  Warning: Could not update unified registry via adapter: {e}",
+                f"⚠️  Warning: Could not update unified registry via adapter: {exc}",
                 level=logging.WARNING,
             )
             raise

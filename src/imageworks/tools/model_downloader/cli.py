@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich import print as rprint
+from rich.progress import Progress, SpinnerColumn, TextColumn
 import json
 
 from imageworks.logging_utils import configure_logging
@@ -18,6 +19,8 @@ from types import SimpleNamespace
 from imageworks.model_loader.registry import load_registry as _load_unified_registry
 
 from .format_utils import detect_format_and_quant
+from .downloader import ModelDownloader
+from .url_analyzer import URLAnalyzer
 from imageworks.model_loader import registry as unified_registry
 from imageworks.model_loader.download_adapter import (
     record_download,
@@ -26,8 +29,6 @@ from imageworks.model_loader.download_adapter import (
     compute_directory_checksum,
 )
 from .config import get_config
-
-# URLAnalyzer and ModelDownloader imports removed (unused)
 
 
 app = typer.Typer(
@@ -48,6 +49,115 @@ def _enable_dupe_tolerance():
     import os as _os
 
     _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
+
+
+@app.command("download")
+def download_model(
+    model: str = typer.Argument(
+        ..., help="Model name (owner/repo) or HuggingFace URL to download"
+    ),
+    format_preference: Optional[str] = typer.Option(
+        None,
+        "--format",
+        "-f",
+        help="Preferred format(s) (comma separated: gguf, awq, gptq, safetensors, etc.)",
+    ),
+    location: Optional[str] = typer.Option(
+        None,
+        "--location",
+        "-l",
+        help="Target location (linux_wsl, windows_lmstudio, or custom path)",
+    ),
+    include_optional: bool = typer.Option(
+        False,
+        "--include-optional",
+        "-o",
+        help="Include optional files (documentation, examples, etc.)",
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Force re-download even if model exists"
+    ),
+    non_interactive: bool = typer.Option(
+        False, "--non-interactive", "-y", help="Non-interactive mode (use defaults)"
+    ),
+):
+    """Download a model from HuggingFace or direct repository URL."""
+
+    try:
+        _enable_dupe_tolerance()
+        downloader = ModelDownloader()
+
+        preferred_formats = None
+        if format_preference:
+            preferred_formats = [
+                fmt.strip() for fmt in format_preference.split(",") if fmt.strip()
+            ]
+
+        entry = downloader.download(
+            model_identifier=model,
+            format_preference=preferred_formats,
+            location_override=location,
+            include_optional=include_optional,
+            force_redownload=force,
+            interactive=not non_interactive,
+        )
+
+        display_name = entry.display_name or entry.name
+        rprint(f"✅ [green]Successfully downloaded:[/green] {display_name}")
+        if entry.download_path:
+            rprint(f"   📁 Files stored at: {entry.download_path}")
+        if entry.download_location:
+            rprint(f"   🗂️  Location label: {entry.download_location}")
+
+        fmt = entry.download_format or "unknown"
+        quant = entry.quantization or "-"
+        if quant and quant != "-":
+            fmt_summary = f"{fmt} ({quant})" if fmt and fmt != "unknown" else quant
+        else:
+            fmt_summary = fmt
+        rprint(f"   🔧 Format: {fmt_summary}")
+
+        size_display = _format_size(entry.download_size_bytes or 0)
+        rprint(f"   💾 Size: {size_display}")
+
+        metadata: Dict[str, Any] = entry.metadata or {}
+        files_downloaded = metadata.get("files_downloaded")
+        if files_downloaded:
+            rprint(f"   📄 Files downloaded: {files_downloaded}")
+
+        config = get_config()
+        backend_candidates = config.get_compatible_backends(
+            entry.download_format or fmt
+        )
+        if backend_candidates:
+            rprint(f"   ⚡ Compatible with: {', '.join(backend_candidates)}")
+
+        info_bits: List[str] = []
+        if metadata.get("model_type"):
+            info_bits.append(str(metadata["model_type"]))
+        if metadata.get("library"):
+            info_bits.append(str(metadata["library"]))
+        if info_bits:
+            rprint(f"   🧩 Model info: {', '.join(info_bits)}")
+
+        if metadata.get("has_chat_template"):
+            detail = (
+                "embedded"
+                if metadata.get("has_embedded_chat_template")
+                else "external file"
+            )
+            template_files = metadata.get("external_chat_template_files") or []
+            file_note = ""
+            if template_files:
+                preview = ", ".join(template_files[:3])
+                if len(template_files) > 3:
+                    preview += ", …"
+                file_note = f" ({preview})"
+            rprint(f"   💬 Chat template detected: {detail}{file_note}")
+
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Download failed:[/red] {exc}")
+        raise typer.Exit(code=1)
 
 
 ## undeprecate-ollama command removed in layered registry design.
@@ -519,6 +629,91 @@ def list_models(
         rprint(f"\n📊 Total: {len(entries)} variants, {_format_size(total_size)}")
     except Exception as e:  # noqa: BLE001
         rprint(f"❌ [red]Failed to list models:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command("analyze")
+def analyze_url(
+    url: str = typer.Argument(..., help="URL or owner/repo identifier to analyze"),
+    show_files: bool = typer.Option(
+        False, "--files", help="Show detailed file information"
+    ),
+):
+    """Analyze a HuggingFace URL without downloading."""
+
+    try:
+        analyzer = URLAnalyzer()
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("Analyzing URL...", total=None)
+            analysis = analyzer.analyze_url(url)
+
+        repo = analysis.repository
+        branch_suffix = f"@{repo.branch}" if getattr(repo, "branch", None) else ""
+        rprint(
+            f"📍 [bold]Repository:[/bold] {repo.owner}/{repo.repo}{branch_suffix}"
+        )
+        if getattr(repo, "model_type", None):
+            rprint(f"🏷️  Model Type: {repo.model_type}")
+        if getattr(repo, "library_name", None):
+            rprint(f"📚 Library: {repo.library_name}")
+        tags = getattr(repo, "tags", None) or []
+        if tags:
+            rprint(f"🔖 Tags: {', '.join(tags[:10])}{' …' if len(tags) > 10 else ''}")
+
+        rprint("\n🔧 [bold]Detected Formats:[/bold]")
+        if analysis.formats:
+            for format_info in analysis.formats:
+                confidence = f"{format_info.confidence:.0%}"
+                quant_bits = ""
+                quant_details = format_info.quantization_details or {}
+                if quant_details:
+                    rendered = ", ".join(
+                        f"{key}={value}" for key, value in quant_details.items()
+                    )
+                    if rendered:
+                        quant_bits = f" [{rendered}]"
+                rprint(
+                    f"   • {format_info.format_type}{quant_bits} ({confidence} confidence)"
+                )
+                for evidence in format_info.evidence[:3]:
+                    rprint(f"     - {evidence}")
+                if len(format_info.evidence) > 3:
+                    remaining = len(format_info.evidence) - 3
+                    rprint(f"     - … {remaining} more signals")
+        else:
+            rprint("   • No formats detected")
+
+        rprint("\n📁 [bold]Files Summary:[/bold]")
+        for category, files in analysis.files.items():
+            if not files:
+                continue
+            total_size = sum(getattr(f, "size", 0) for f in files)
+            rprint(
+                f"   • {category}: {len(files)} files ({_format_size(total_size)})"
+            )
+
+        rprint(f"\n💾 [bold]Total Size:[/bold] {_format_size(analysis.total_size)}")
+
+        if show_files:
+            interesting_categories = {"model_weights", "config", "tokenizer"}
+            for category, files in analysis.files.items():
+                if not files or category not in interesting_categories:
+                    continue
+                rprint(f"\n📄 [bold]{category.title()}:[/bold]")
+                for file_info in files[:5]:
+                    priority_suffix = " ⭐" if getattr(file_info, "priority", False) else ""
+                    rprint(
+                        f"   • {file_info.path} ({_format_size(file_info.size)}){priority_suffix}"
+                    )
+                if len(files) > 5:
+                    rprint(f"   … and {len(files) - 5} more files")
+
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Analysis failed:[/red] {exc}")
         raise typer.Exit(code=1)
 
 
