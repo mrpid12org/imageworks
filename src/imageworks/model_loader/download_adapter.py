@@ -89,11 +89,14 @@ def record_download(
     family_override: Optional[str] = None,
     served_model_id: Optional[str] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
+    display_name: Optional[str] = None,
 ) -> RegistryEntry:
     """Create or update a RegistryEntry to reflect a downloaded variant.
 
     If an existing entry matches (same name) it's enriched; otherwise a new skeleton is created.
-    Name is derived from (family, backend, format, quantization).
+    Name is derived from (family, backend, format, quantization). A `display_name` override
+    allows callers to persist a canonical label (used by importers) without issuing a
+    follow-up update.
     """
     # Allow tolerant duplicate handling for dynamic download writes
     import os as _os
@@ -145,6 +148,8 @@ def record_download(
             for k, v in extra_metadata.items():
                 if v is not None and k not in e.metadata:
                     e.metadata[k] = v
+        if display_name:
+            e.display_name = display_name
         # compute artifacts hashes only if empty
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
@@ -154,7 +159,7 @@ def record_download(
     capabilities = _infer_capabilities(variant_name)
     entry = RegistryEntry(
         name=variant_name,
-        display_name=hf_id.split("/")[-1] if hf_id else variant_name,
+        display_name=(display_name or (hf_id.split("/")[-1] if hf_id else variant_name)),
         backend=backend,
         backend_config=BackendConfig(port=0, model_path=str(p), extra_args=[]),
         capabilities=capabilities,
