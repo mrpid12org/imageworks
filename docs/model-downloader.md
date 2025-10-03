@@ -483,7 +483,6 @@ assets landed and how they were classified. The CLI highlights:
 - 📁 download directory and 🗂️ logical location label (when available)
 - 🔧 detected format/quantisation pair and 💾 aggregate size
 - 📄 file-count metadata, 🧩 model-type/library hints, and 💬 chat template status
-- ⚡ compatible runtime backends inferred from the stored format
 
 Example output:
 
@@ -494,7 +493,6 @@ Example output:
    🔧 Format: safetensors
    💾 Size: 1.47 GiB
    📄 Files downloaded: 17
-   ⚡ Compatible with: vLLM, Transformers, AutoAWQ
    💬 Chat template detected: external file (chat_template.json)
 ```
 

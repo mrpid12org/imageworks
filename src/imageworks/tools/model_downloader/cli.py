@@ -125,13 +125,6 @@ def download_model(
         if files_downloaded:
             rprint(f"   📄 Files downloaded: {files_downloaded}")
 
-        config = get_config()
-        backend_candidates = config.get_compatible_backends(
-            entry.download_format or fmt
-        )
-        if backend_candidates:
-            rprint(f"   ⚡ Compatible with: {', '.join(backend_candidates)}")
-
         info_bits: List[str] = []
         if metadata.get("model_type"):
             info_bits.append(str(metadata["model_type"]))
