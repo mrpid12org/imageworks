@@ -1,5 +1,4 @@
 # Model Downloader
-# Model Downloader
 
 A comprehensive tool for downloading and managing AI models across multiple formats and directories, with support for quantized models and cross-platform compatibility.
 
@@ -199,6 +198,11 @@ uv run python scripts/import_ollama_models.py --backend ollama --location linux_
 # Mark legacy placeholder entries (model-ollama-gguf*) deprecated while importing
 uv run python scripts/import_ollama_models.py --deprecate-placeholders
 ```
+
+The importer also migrates existing Strategy A entries that were previously stored
+without a quant suffix. When a quantization tag is detected, any matching
+`<family>-ollama-gguf` record is renamed to `<family>-ollama-gguf-<quant>` so the
+registry keys align with the documented naming convention.
 
 What gets populated:
 * `download_format = gguf`
@@ -646,6 +650,21 @@ model = downloader.download(
 # Target an alternate branch
 experimental = downloader.download("microsoft/DialoGPT-medium@dev", force_redownload=True)
 ```
+
+#### Download pipeline internals
+
+`ModelDownloader.download` now coordinates a series of focused helpers so the
+workflow remains understandable despite new heuristics:
+
+1. `_build_repository_metadata` normalises owner/branch information for reuse.
+2. `_resolve_target_dir` maps formats and overrides onto a concrete folder.
+3. `_partition_files` separates required artefacts from optional extras.
+4. `_download_selected_files` orchestrates aria2c and verifies completion.
+5. `_inspect_chat_templates` captures tokenizer metadata and sidecar templates.
+6. `_register_download` writes the unified registry entry (via `record_download`).
+
+This structure keeps the CLI prompts, verification, and registry bookkeeping the
+same while making it easier to audit individual stages when behaviour changes.
 
 **`list_models(**kwargs)`**
 List downloaded models with filtering.
