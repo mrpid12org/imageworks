@@ -21,6 +21,7 @@ quickly locate design references, domain guides, and operational procedures.
 - [Color Narrator Reference](domains/color-narrator/reference.md)
 
 ### Personal Tagger
+- [Overview](domains/personal-tagger/overview.md)
 - [Model Registry Notes](domains/personal-tagger/model-registry.md)
 
 ## How-To Guides
@@ -43,11 +44,9 @@ quickly locate design references, domain guides, and operational procedures.
 - [Proposals & Future Work](proposals/)
 
 ## Decisions & Gaps
-- Formal architecture decision records (ADRs) have not been captured yet. The
-  runbooks above contain context for naming and registry choices; converting
-  these into ADRs is recommended.
-- Personal Tagger lacks end-to-end workflow and operations documentation. Once
-  the feature stabilises, add a domain overview and runbook alongside the existing
+- [ADR 0001 – Unified Model Identity and Registry Hygiene](decisions/0001-model-naming-and-registry.md)
+- Personal Tagger still needs dedicated operational runbooks (e.g. tips for XMP
+  integration, Lightroom workflows) to sit alongside the new overview and
   registry notes.
 
 ## Using This Map
