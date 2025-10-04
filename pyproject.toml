@@ -61,6 +61,15 @@ dev-dependencies = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+[tool.hatch.build]
+exclude = [".venv", ".pytest_cache", ".ruff_cache"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/imageworks"]
+include = [
+  "src/imageworks/chat_templates/*.jinja",
+]
+
 
 [tool.ruff]
 line-length = 88

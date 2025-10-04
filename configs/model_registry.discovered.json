@@ -1135,14 +1135,14 @@
     "role_priority": {},
     "download_format": "gguf",
     "download_location": "linux_wsl",
-    "download_path": "/tmp/pytest-of-stewa/pytest-134/test_family_override_and_serve0/dummy",
+    "download_path": "/tmp/pytest-of-stewa/pytest-135/test_family_override_and_serve0/dummy",
     "download_size_bytes": 3,
     "download_files": [
       "weights.bin"
     ],
     "download_directory_checksum": "7bab2dcff2fa110a",
     "downloaded_at": "2025-10-03T12:04:22.759039+00:00",
-    "last_accessed": "2025-10-04T15:39:48.644006+00:00"
+    "last_accessed": "2025-10-04T15:54:36.173199+00:00"
   },
   {
     "name": "model-fp16-unassigned-fp16",
@@ -1512,7 +1512,7 @@
     "role_priority": {},
     "download_format": "gguf",
     "download_location": "custom",
-    "download_path": "/tmp/pytest-of-stewa/pytest-134/test_template_promotion_and_ha0/modelA",
+    "download_path": "/tmp/pytest-of-stewa/pytest-135/test_template_promotion_and_ha0/modelA",
     "download_size_bytes": 43,
     "download_files": [
       "chat_template.jinja",
@@ -1520,7 +1520,7 @@
     ],
     "download_directory_checksum": "ed5744268598fdc0",
     "downloaded_at": "2025-10-03T12:09:12.787869+00:00",
-    "last_accessed": "2025-10-04T15:39:48.632964+00:00"
+    "last_accessed": "2025-10-04T15:54:36.164488+00:00"
   },
   {
     "name": "seamon67-gemma3-abliterated-27b-q4-k-m-ollama-gguf-q4_k_m",

@@ -188,15 +188,27 @@ def start_server() -> None:
     args = parser.parse_args()
 
     # Best-effort auto detection for common LLaVA models lacking an embedded chat template.
+    # Prefer packaged template over CWD; fallback to CWD if provided explicitly.
     if not args.chat_template:
         model_id_lower = (args.model or "").lower()
         if "llava" in model_id_lower or "vicuna" in model_id_lower:
-            candidate = Path("llava15_vicuna.jinja")
-            if candidate.exists():
-                args.chat_template = str(candidate.resolve())
-                print(
-                    f"[auto-chat-template] Using {args.chat_template} for model '{args.model or 'auto-resolved'}'"
+            try:
+                from importlib.resources import files as _res_files
+
+                pkg_path = (
+                    _res_files("imageworks.chat_templates") / "llava15_vicuna.jinja"
                 )
+                args.chat_template = str(pkg_path)
+                print(
+                    f"[auto-chat-template] Using packaged template {args.chat_template} for model '{args.model or 'auto-resolved'}'"
+                )
+            except Exception:
+                candidate = Path("llava15_vicuna.jinja")
+                if candidate.exists():
+                    args.chat_template = str(candidate.resolve())
+                    print(
+                        f"[auto-chat-template] Using {args.chat_template} for model '{args.model or 'auto-resolved'}'"
+                    )
 
     if shutil.which("python") is None:
         sys.stderr.write("Python interpreter not found in PATH.\n")
