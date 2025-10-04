@@ -522,724 +522,6 @@
     "last_accessed": "2025-10-02T23:08:44.018631+00:00"
   },
   {
-    "name": "paraphrase-minilm-l6-v2-vllm-fp16",
-    "display_name": "paraphrase-MiniLM-L6-v2",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/sentence-transformers/paraphrase-MiniLM-L6-v2",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "2ea5240fef02b9f07b320532b917933896da84efd4b00a00664dc1e07f24b126",
-      "files": [
-        {
-          "path": "config.json",
-          "sha256": "aed58fca2ba858ac31c042053f99deff1717ca0e7430335d316d58b2d13a046b"
-        },
-        {
-          "path": "model.safetensors",
-          "sha256": "2ce4480dc3b2f8edeee50c43765c72768e79fc0113d3f73773dded4887cca298"
-        },
-        {
-          "path": "pytorch_model.bin",
-          "sha256": "5d716de760acbdc09e79a11e718c5606e0812b6aeb76c6664cba876d174e3ecd"
-        },
-        {
-          "path": "sentence_bert_config.json",
-          "sha256": "70f4448f31320443fe3557cacea5abf2dcc4915dda8c80646bec9f3bb0aa5a1f"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "303df45a03609e4ead04bc3dc1536d0ab19b5358db685b6f3da123d05ec200e3"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "5fd1c882abbd30517dced455a2c9768945ec726b96727927e4959348d9de550b"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "65f933db3e0493bcde9a4e1b8fd5ee13f18d2f8ac62db911a1be51b7fd64ffb0"
-        },
-        {
-          "path": "vocab.txt",
-          "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "sentence-transformers/paraphrase-MiniLM-L6-v2"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "sentence-transformers/paraphrase-MiniLM-L6-v2"
-    },
-    "deprecated": false,
-    "family": "paraphrase-minilm-l6-v2",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "fp16",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/sentence-transformers/paraphrase-MiniLM-L6-v2",
-    "download_size_bytes": 182462223,
-    "download_files": [
-      "vocab.txt",
-      "pytorch_model.bin",
-      "sentence_bert_config.json",
-      "config.json",
-      "model.safetensors",
-      "tokenizer.json",
-      "special_tokens_map.json",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "05585ed670420472",
-    "downloaded_at": "2025-10-02T23:16:37.328670+00:00",
-    "last_accessed": "2025-10-02T23:16:37.328670+00:00"
-  },
-  {
-    "name": "all-mpnet-base-v2-vllm-fp16",
-    "display_name": "all-mpnet-base-v2",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/sentence-transformers/all-mpnet-base-v2",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "614ea7e1486cc55303652717067856f0524670d4817734c34c974af08ca62ef4",
-      "files": [
-        {
-          "path": "config.json",
-          "sha256": "d46a3e04ded82bba22528424480697d394eeda6a27484e08c5bb2bdf5906cfa0"
-        },
-        {
-          "path": "data_config.json",
-          "sha256": "32edcb108fc2516b920734a862ae0692bcae1c5d45d5f8d972cb0d53434a4c54"
-        },
-        {
-          "path": "model.safetensors",
-          "sha256": "78c0197b6159d92658e319bc1d72e4c73a9a03dd03815e70e555c5ef05615658"
-        },
-        {
-          "path": "pytorch_model.bin",
-          "sha256": "a8fd120b1a0032e70ff3d4b8ab8e46a6d01c2cb08ffe7c007a021c1788928146"
-        },
-        {
-          "path": "sentence_bert_config.json",
-          "sha256": "cabfacded9272091a06ff595a46ef027a76ddf4ac9e77d0fcf11c605748f1667"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "9ef40e9c160511bf3f46ceb71f1471dafa1e9473d5120bb816c36b2efa75f8ba"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "b8be2c30ba5dd723a6d5ee26d013da103d5408d92ddcb23747622f9e48f1d842"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "67f2ff7e223518e729869bb3a70f0caf8368fe549383fc11cfe2dfb42fffc268"
-        },
-        {
-          "path": "vocab.txt",
-          "sha256": "dbd90cb94e2247bd4d4ccaecbf616d2290e66691d7d5e5bb81f063c2d0649ada"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "sentence-transformers/all-mpnet-base-v2"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "sentence-transformers/all-mpnet-base-v2"
-    },
-    "deprecated": false,
-    "family": "all-mpnet-base-v2",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "fp16",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/sentence-transformers/all-mpnet-base-v2",
-    "download_size_bytes": 876721873,
-    "download_files": [
-      "vocab.txt",
-      "pytorch_model.bin",
-      "sentence_bert_config.json",
-      "config.json",
-      "model.safetensors",
-      "tokenizer.json",
-      "data_config.json",
-      "special_tokens_map.json",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "5b8a4b65ff3b0c33",
-    "downloaded_at": "2025-10-02T23:16:37.449771+00:00",
-    "last_accessed": "2025-10-02T23:16:37.449771+00:00"
-  },
-  {
-    "name": "idefics2-8b-awq-vllm-awq",
-    "display_name": "idefics2-8b-awq",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/HuggingFaceM4/idefics2-8b-awq",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "ab89be5223439fc09b636cfb41f0cb0f1934aee688110e32ee08e44e908f007c",
-      "files": [
-        {
-          "path": ".aria2c.log",
-          "sha256": "a705ee3694453f8df76a3cd3374f0cd077561c4678338b039ab769be12efeb03"
-        },
-        {
-          "path": "added_tokens.json",
-          "sha256": "d4c4d5bff43f63a93535478cd2e9774bc9b8b46bbf8a0477daf0d15378bd174f"
-        },
-        {
-          "path": "config.json",
-          "sha256": "3b87ff53b59b938304961f985e55471780ad616d1a05f60dd442ff56c67465a0"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "f7ce884e6d3b4b386fe846575187c74ceb6fc266bd81882668fba11f1cc30e52"
-        },
-        {
-          "path": "model-00001-of-00002.safetensors",
-          "sha256": "831fd57d9bc21b068e221c3e360b3ff0aad8a09dbb32bf393aac2ea8e3c01c31"
-        },
-        {
-          "path": "model-00001-of-00002.safetensors.aria2",
-          "sha256": "17b4ef90a49973f803088a7986e4647968f49a349b256b4c3fe83e728a1c94ca"
-        },
-        {
-          "path": "model-00002-of-00002.safetensors",
-          "sha256": "f412f25f2a50953c74169d15c092d8f80dfba11be466b112e70056a4cbd59198"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "4b2b26cb3068b836d20da2ef1be0fde3986b66faf205b406697d323242e84966"
-        },
-        {
-          "path": "processor_config.json",
-          "sha256": "4d4ac2bc2721f12ab6e139d7675f0fe889e1cd45bb1a8444f0d8784d7da0103b"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "3abe56bd9c7d71038a0fd91ba8e7e94f75789ee7000da6d9d64e7d6a6cf2b065"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "36542c90c62d6b9d3fcf240fc41ded07ef74449f21bc3a60a7efa2c112dbc2af"
-        },
-        {
-          "path": "tokenizer.model",
-          "sha256": "dadfd56d766715c61d2ef780a525ab43b8e6da4de6865bda3d95fdef5e134055"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "dc11dae0670be58e217f4cb97109512f1299a2ba24e74c40aacbd4c77dc5faaf"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "HuggingFaceM4/idefics2-8b-awq"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "HuggingFaceM4/idefics2-8b-awq"
-    },
-    "deprecated": false,
-    "family": "idefics2-8b-awq",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "awq",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/HuggingFaceM4/idefics2-8b-awq",
-    "download_size_bytes": 6475392040,
-    "download_files": [
-      "model-00002-of-00002.safetensors",
-      "preprocessor_config.json",
-      ".aria2c.log",
-      "processor_config.json",
-      "model-00001-of-00002.safetensors.aria2",
-      "model-00001-of-00002.safetensors",
-      "generation_config.json",
-      "config.json",
-      "tokenizer.json",
-      "added_tokens.json",
-      "special_tokens_map.json",
-      "tokenizer.model",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "86106d42ec4e6843",
-    "downloaded_at": "2025-10-02T23:16:38.107957+00:00",
-    "last_accessed": "2025-10-02T23:16:38.107957+00:00"
-  },
-  {
-    "name": "llava-1.5-7b-hf-vllm-fp16",
-    "display_name": "llava-1.5-7b-hf",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "955ce6e85a4a4d72ae21eeb2a91d1650087884ba8c7c14852172b1a0211a7259",
-      "files": [
-        {
-          "path": "added_tokens.json",
-          "sha256": "a94c56096001713e3eb9a34b1a545a8c1d5e8034ed2fb81f897c8cb54b420121"
-        },
-        {
-          "path": "config.json",
-          "sha256": "0bde54495c54bcc346064a0d314b010d1c4d3ca7f7e583b6f711949a35352c0f"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "3a6dc8c202be258023f58a03f804bdcacf138b8a2cc7492be2530e16945a0951"
-        },
-        {
-          "path": "model-00001-of-00003.safetensors",
-          "sha256": "09aeea880ea57c87a2a397185705cca51a33a39d3b22934750b4aa2a89c8bc6c"
-        },
-        {
-          "path": "model-00002-of-00003.safetensors",
-          "sha256": "b267faf19ecc2cb2dce7f362e56c0713a47f269881f7d2918a0556c178e949f3"
-        },
-        {
-          "path": "model-00003-of-00003.safetensors",
-          "sha256": "a4251c4a60a7211277d7488ff9649fec0f3da74016f1a82b194ad6cbe1c38ba7"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "a8d5e64ee5c07ff6d70142856d178ac39d0563da3612e32110fa824f5337b7a1"
-        },
-        {
-          "path": "processor_config.json",
-          "sha256": "fef918d6ba333f72a066877965bc4a162308568ba62aa90c806caedf7b45d64e"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "358c249e2fb29060c6b73157d428853b0c48710deffc8ee670ab1013880946c9"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "30e1294abd835edfebb24618fce6f47c21ffb2b2802520d150bdee0b808b47cb"
-        },
-        {
-          "path": "tokenizer.model",
-          "sha256": "9e556afd44213b6bd1be2b850ebbbd98f5481437a8021afaf58ee7fb1818d347"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "79b7f1ebceddf7235f3791c387d781818b0c7e7cf868d0e4f71896a55b949833"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "llava-hf/llava-1.5-7b-hf"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "llava-hf/llava-1.5-7b-hf"
-    },
-    "deprecated": false,
-    "family": "llava-1.5-7b-hf",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "fp16",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/llava-hf/llava-1.5-7b-hf",
-    "download_size_bytes": 14131068964,
-    "download_files": [
-      "model-00002-of-00003.safetensors",
-      "preprocessor_config.json",
-      "processor_config.json",
-      "generation_config.json",
-      "config.json",
-      "model-00003-of-00003.safetensors",
-      "tokenizer.json",
-      "model-00001-of-00003.safetensors",
-      "added_tokens.json",
-      "special_tokens_map.json",
-      "tokenizer.model",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "616f8f2091cd6a50",
-    "downloaded_at": "2025-10-02T23:16:43.128726+00:00",
-    "last_accessed": "2025-10-02T23:16:43.128726+00:00"
-  },
-  {
-    "name": "llava-next-video-7b-hf-vllm-fp16",
-    "display_name": "LLaVA-NeXT-Video-7B-hf",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/llava-hf/LLaVA-NeXT-Video-7B-hf",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "fe17699b823b49343175cf1a6c6d33cb7bfc455e23e3a08682ba92f98fb20da3",
-      "files": [
-        {
-          "path": "added_tokens.json",
-          "sha256": "406af3131433f4814b15d8affb6ae130b5be35be9983ee2670770b28b1891566"
-        },
-        {
-          "path": "config.json",
-          "sha256": "b0b2648174f64a3a0464f09532b52d0aaa03860227ee8eacfc92d2f213c821f3"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "16a2ae86e6b883ce688e08aa30fb2901e62aba94aa9e244b74761850481d2558"
-        },
-        {
-          "path": "model-00001-of-00003.safetensors",
-          "sha256": "fc32753ce8e75e89748b95677d9349d2b47af998457b4ebe22d27dece7338a3d"
-        },
-        {
-          "path": "model-00002-of-00003.safetensors",
-          "sha256": "6c50112e9dffcb204f90a5be738d28e33b92cd14332cabde6e8f39171d999a1b"
-        },
-        {
-          "path": "model-00003-of-00003.safetensors",
-          "sha256": "8022077b98e08236a07b999f1f51ab577bda9c8aa2dc66d12853b1b162731100"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "bfe304dbf539fa58e0dad17885419db1bd5696f90b5fd6c0ec6eceda63e85fa8"
-        },
-        {
-          "path": "processor_config.json",
-          "sha256": "6ff4f239aa04e73860b7c4373178d8d05c47a04821d17514255cb9982bfa1d9e"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "4859e5dbde90e059988a0a2136d8df3f2773d4d2fc4c4543690028f0b2166e7f"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "57a1cfaba34265f65b10969c968114d6725c8332b6909e5838a381f9cb8f82ab"
-        },
-        {
-          "path": "tokenizer.model",
-          "sha256": "9e556afd44213b6bd1be2b850ebbbd98f5481437a8021afaf58ee7fb1818d347"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "88cbc99986a179fb9e3c5b615eeb57a52ba5a5ef25727ec4e152da947a403a68"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "llava-hf/LLaVA-NeXT-Video-7B-hf"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "llava-hf/LLaVA-NeXT-Video-7B-hf"
-    },
-    "deprecated": false,
-    "family": "llava-next-video-7b-hf",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "fp16",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/llava-hf/LLaVA-NeXT-Video-7B-hf",
-    "download_size_bytes": 14129302497,
-    "download_files": [
-      "model-00002-of-00003.safetensors",
-      "preprocessor_config.json",
-      "processor_config.json",
-      "generation_config.json",
-      "config.json",
-      "model-00003-of-00003.safetensors",
-      "tokenizer.json",
-      "model-00001-of-00003.safetensors",
-      "added_tokens.json",
-      "special_tokens_map.json",
-      "tokenizer.model",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "fff9967477ea7d77",
-    "downloaded_at": "2025-10-02T23:16:58.092508+00:00",
-    "last_accessed": "2025-10-02T23:16:58.092508+00:00"
-  },
-  {
-    "name": "llava-1.5-7b-hf-awq-vllm-awq",
-    "display_name": "llava-1.5-7b-hf-awq",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/ybelkada/llava-1.5-7b-hf-awq",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "5b6ddaab55e53cb1e792c8fc8a2beb3e2eda3da6d69fe609337f5de2b285afc3",
-      "files": [
-        {
-          "path": "added_tokens.json",
-          "sha256": "a94c56096001713e3eb9a34b1a545a8c1d5e8034ed2fb81f897c8cb54b420121"
-        },
-        {
-          "path": "config.json",
-          "sha256": "04b39cb4237a90a4a7f64dc2b29717e336158ab61a0448ded1278de268c519ee"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "3a6dc8c202be258023f58a03f804bdcacf138b8a2cc7492be2530e16945a0951"
-        },
-        {
-          "path": "model.safetensors",
-          "sha256": "9ae204cf5b6825ee3dab7076b53054b6d8e276b2ffe8f17e1f9ebd49a3e05915"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "9127b9a82cdbd05d3b901065f63632e626fcba2617e7f87d85cc3ee05a713350"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "358c249e2fb29060c6b73157d428853b0c48710deffc8ee670ab1013880946c9"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "1d97b3e068865540c87c485c79ca6a5f7925a0a3489810c6885befcd3309a81d"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "667253ee5ca9b6d8b4092309d3b4f722e699d413a45bf0a13f53b11f8a1a3109"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "ybelkada/llava-1.5-7b-hf-awq"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "ybelkada/llava-1.5-7b-hf-awq"
-    },
-    "deprecated": false,
-    "family": "llava-1.5-7b-hf-awq",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "awq",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/ybelkada/llava-1.5-7b-hf-awq",
-    "download_size_bytes": 4541326758,
-    "download_files": [
-      "preprocessor_config.json",
-      "generation_config.json",
-      "config.json",
-      "model.safetensors",
-      "tokenizer.json",
-      "added_tokens.json",
-      "special_tokens_map.json",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "9a166970546e4f34",
-    "downloaded_at": "2025-10-02T23:17:08.613502+00:00",
-    "last_accessed": "2025-10-02T23:17:08.613502+00:00"
-  },
-  {
     "name": "qwen2.5-vl-7b-instruct-vllm-fp16",
     "display_name": "Qwen2.5-VL-7B-Instruct",
     "backend": "vllm",
@@ -1321,7 +603,7 @@
     },
     "chat_template": {
       "source": "embedded",
-      "path": null,
+      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct/chat_template.json",
       "sha256": null
     },
     "version_lock": {
@@ -1380,7 +662,7 @@
     ],
     "download_directory_checksum": "1d783bb63d37d961",
     "downloaded_at": "2025-10-02T23:17:11.942665+00:00",
-    "last_accessed": "2025-10-02T23:17:11.942665+00:00"
+    "last_accessed": "2025-10-04T10:01:36.496361+00:00"
   },
   {
     "name": "qwen2.5-vl-7b-instruct-awq-vllm-awq",
@@ -1588,7 +870,7 @@
     },
     "chat_template": {
       "source": "embedded",
-      "path": null,
+      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
       "sha256": null
     },
     "version_lock": {
@@ -1644,324 +926,41 @@
       "special_tokens_map.json",
       "merges.txt",
       "tokenizer_config.json",
-      ".cache/huggingface/.gitignore",
-      ".cache/huggingface/download/generation_config.json.lock",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.lock",
-      ".cache/huggingface/download/tokenizer.json.metadata",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.lock",
-      ".cache/huggingface/download/chat_template.json.metadata",
-      ".cache/huggingface/download/preprocessor_config.json.metadata",
-      ".cache/huggingface/download/.gitattributes.metadata",
-      ".cache/huggingface/download/config.json.lock",
-      ".cache/huggingface/download/merges.txt.lock",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/tokenizer_config.json.metadata",
-      ".cache/huggingface/download/vocab.json.metadata",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/special_tokens_map.json.metadata",
-      ".cache/huggingface/download/chat_template.json.lock",
-      ".cache/huggingface/download/preprocessor_config.json.lock",
-      ".cache/huggingface/download/tokenizer_config.json.lock",
-      ".cache/huggingface/download/added_tokens.json.metadata",
-      ".cache/huggingface/download/tokenizer.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.lock",
-      ".cache/huggingface/download/LICENSE.lock",
-      ".cache/huggingface/download/.gitattributes.lock",
-      ".cache/huggingface/download/merges.txt.metadata",
-      ".cache/huggingface/download/generation_config.json.metadata",
-      ".cache/huggingface/download/added_tokens.json.lock",
-      ".cache/huggingface/download/special_tokens_map.json.lock",
-      ".cache/huggingface/download/vocab.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.metadata",
-      ".cache/huggingface/download/LICENSE.metadata",
-      ".cache/huggingface/download/config.json.metadata"
+      ".gitignore",
+      "generation_config.json.lock",
+      "model-00002-of-00002.safetensors.lock",
+      "tokenizer.json.metadata",
+      "model-00001-of-00002.safetensors.lock",
+      "chat_template.json.metadata",
+      "preprocessor_config.json.metadata",
+      ".gitattributes.metadata",
+      "config.json.lock",
+      "merges.txt.lock",
+      "model-00001-of-00002.safetensors.metadata",
+      "tokenizer_config.json.metadata",
+      "vocab.json.metadata",
+      "model-00002-of-00002.safetensors.metadata",
+      "special_tokens_map.json.metadata",
+      "chat_template.json.lock",
+      "preprocessor_config.json.lock",
+      "tokenizer_config.json.lock",
+      "added_tokens.json.metadata",
+      "tokenizer.json.lock",
+      "model.safetensors.index.json.lock",
+      "LICENSE.lock",
+      ".gitattributes.lock",
+      "merges.txt.metadata",
+      "generation_config.json.metadata",
+      "added_tokens.json.lock",
+      "special_tokens_map.json.lock",
+      "vocab.json.lock",
+      "model.safetensors.index.json.metadata",
+      "LICENSE.metadata",
+      "config.json.metadata"
     ],
     "download_directory_checksum": "d659ee647a141964",
     "downloaded_at": "2025-10-02T23:17:22.944627+00:00",
-    "last_accessed": "2025-10-02T23:17:22.944627+00:00"
-  },
-  {
-    "name": "qwen2-vl-2b-instruct-vllm-fp16",
-    "display_name": "Qwen2-VL-2B-Instruct",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2-VL-2B-Instruct",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "0b6ac9528e720018d66a092ba7e646d32f13652537b051bb252996981d9ae09f",
-      "files": [
-        {
-          "path": ".cache/huggingface/.gitignore",
-          "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1"
-        },
-        {
-          "path": ".cache/huggingface/download/.gitattributes.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/.gitattributes.metadata",
-          "sha256": "43eb57049c51bdbfad65bc7b34a0b83ac637664585a7c19e5b5419d05a240951"
-        },
-        {
-          "path": ".cache/huggingface/download/LICENSE.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/LICENSE.metadata",
-          "sha256": "6a32a07641765ca156ffe5dde7a04ddeb1249edf949e922369092d69a5d57e06"
-        },
-        {
-          "path": ".cache/huggingface/download/README.md.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/README.md.metadata",
-          "sha256": "cb8ae8410087b67163aa15ee4a4c76a2902834cce3f5efd5c914600b54366c1d"
-        },
-        {
-          "path": ".cache/huggingface/download/chat_template.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/chat_template.json.metadata",
-          "sha256": "0a67b80fdf4414f13b190550745bbd638208ea16d7de17de78a42c0d871561c2"
-        },
-        {
-          "path": ".cache/huggingface/download/config.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/config.json.metadata",
-          "sha256": "c3da1b7e7490a87f2ec73bc8f47e6eaa76d5e482a7bf43e6f27266ec92d489c6"
-        },
-        {
-          "path": ".cache/huggingface/download/generation_config.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/generation_config.json.metadata",
-          "sha256": "6ae941749fad63182fe71f42c4558c3727cefee90540e82606998a84282cbf74"
-        },
-        {
-          "path": ".cache/huggingface/download/merges.txt.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/merges.txt.metadata",
-          "sha256": "17d5c2815836e0d8e1bc70db9c38b59afd70f132086d3021a510e25740ebadf2"
-        },
-        {
-          "path": ".cache/huggingface/download/model-00001-of-00002.safetensors.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/model-00001-of-00002.safetensors.metadata",
-          "sha256": "ce3a414f3494ae2c335730698022231e291845366dd371268a89b7cb6665bf28"
-        },
-        {
-          "path": ".cache/huggingface/download/model-00002-of-00002.safetensors.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/model-00002-of-00002.safetensors.metadata",
-          "sha256": "94979d1a943f9e2716016f262d55f4231913cb5796916a08fb880ae7a62f3a3b"
-        },
-        {
-          "path": ".cache/huggingface/download/model.safetensors.index.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/model.safetensors.index.json.metadata",
-          "sha256": "4784b1bee01328fc15e6f83321e6599016e5ca0a1939a4cdf5c96c281f5c6ef8"
-        },
-        {
-          "path": ".cache/huggingface/download/preprocessor_config.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/preprocessor_config.json.metadata",
-          "sha256": "a67e15d953ebeac9ab1c029af4d46256d14b30f5f78868b9681310f2f370a085"
-        },
-        {
-          "path": ".cache/huggingface/download/tokenizer.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/tokenizer.json.metadata",
-          "sha256": "f5bb36f81164d079093509cd2a52778603583c85519207d435e540f965f7b4c6"
-        },
-        {
-          "path": ".cache/huggingface/download/tokenizer_config.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/tokenizer_config.json.metadata",
-          "sha256": "09abcf65a8ec3929fac92a6b83a065d46a3c42ed51d4bfbef6fd35612105438f"
-        },
-        {
-          "path": ".cache/huggingface/download/vocab.json.lock",
-          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        {
-          "path": ".cache/huggingface/download/vocab.json.metadata",
-          "sha256": "caff9a38638df3a7daa85997484a526912da79d81a753dd0429c0d19138ca682"
-        },
-        {
-          "path": ".gitattributes",
-          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
-        },
-        {
-          "path": "LICENSE",
-          "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4"
-        },
-        {
-          "path": "README.md",
-          "sha256": "aeec9a884391f77552960838a1931a2baad849234f43a76b34015f8ff7436f1e"
-        },
-        {
-          "path": "chat_template.json",
-          "sha256": "e0379189dadb503e616416ec87c6598d1b31bdb6d41d7c5e95715bccb284e4f2"
-        },
-        {
-          "path": "config.json",
-          "sha256": "422adefa19e62dd175961cec85bc0400344fe5bf9b22bd1182e05aaae78556e0"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "ec5b18de10c444108db325342efd07937a77a78dab5cdbfa95f9a80f2e98465d"
-        },
-        {
-          "path": "merges.txt",
-          "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
-        },
-        {
-          "path": "model-00001-of-00002.safetensors",
-          "sha256": "994ac2b03f97de8bc647d0fe5eba2e4b632b3e28dc03574c29bdfc36cf47e1b9"
-        },
-        {
-          "path": "model-00002-of-00002.safetensors",
-          "sha256": "92540d8353c8d226a589a3b179bdb33851c970ee2cc2ac7ba035f79425e7b833"
-        },
-        {
-          "path": "model.safetensors.index.json",
-          "sha256": "260ab9fa1418d6d6ab79daa1d9da2c47264f3b72edb4630fc799077ac67d27c6"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "7bdcf829152141f96c2cdd506d137c4fc16413f5bda7d310596169fdf317e222"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "cb63a0a23eef3d5b01063a9880a1925a65aaf4d1591d519910ee3527852950a0"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "ff5c4fd898fe8c39591eb70e5d39d2782802d4204d6ae9ba1223252f354842a0"
-        },
-        {
-          "path": "vocab.json",
-          "sha256": "615a511dd4a5ea888aa00dc9901e3b831df346010d7afc35441abb6d5769d784"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "existing/Qwen2-VL-2B-Instruct"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "existing/Qwen2-VL-2B-Instruct"
-    },
-    "deprecated": false,
-    "family": "qwen2-vl-2b-instruct",
-    "source_provider": "hf",
-    "quantization": null,
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "fp16",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/existing/Qwen2-VL-2B-Instruct",
-    "download_size_bytes": 4429624359,
-    "download_files": [
-      "model-00002-of-00002.safetensors",
-      "preprocessor_config.json",
-      "model.safetensors.index.json",
-      ".gitattributes",
-      "README.md",
-      "model-00001-of-00002.safetensors",
-      "generation_config.json",
-      "vocab.json",
-      "config.json",
-      "tokenizer.json",
-      "LICENSE",
-      "chat_template.json",
-      "merges.txt",
-      "tokenizer_config.json",
-      ".cache/huggingface/.gitignore",
-      ".cache/huggingface/download/README.md.metadata",
-      ".cache/huggingface/download/generation_config.json.lock",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.lock",
-      ".cache/huggingface/download/tokenizer.json.metadata",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.lock",
-      ".cache/huggingface/download/chat_template.json.metadata",
-      ".cache/huggingface/download/preprocessor_config.json.metadata",
-      ".cache/huggingface/download/.gitattributes.metadata",
-      ".cache/huggingface/download/config.json.lock",
-      ".cache/huggingface/download/merges.txt.lock",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/tokenizer_config.json.metadata",
-      ".cache/huggingface/download/vocab.json.metadata",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/chat_template.json.lock",
-      ".cache/huggingface/download/preprocessor_config.json.lock",
-      ".cache/huggingface/download/README.md.lock",
-      ".cache/huggingface/download/tokenizer_config.json.lock",
-      ".cache/huggingface/download/tokenizer.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.lock",
-      ".cache/huggingface/download/LICENSE.lock",
-      ".cache/huggingface/download/.gitattributes.lock",
-      ".cache/huggingface/download/merges.txt.metadata",
-      ".cache/huggingface/download/generation_config.json.metadata",
-      ".cache/huggingface/download/vocab.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.metadata",
-      ".cache/huggingface/download/LICENSE.metadata",
-      ".cache/huggingface/download/config.json.metadata"
-    ],
-    "download_directory_checksum": "bf250853e9601f43",
-    "downloaded_at": "2025-10-02T23:17:27.225363+00:00",
-    "last_accessed": "2025-10-02T23:17:27.225363+00:00"
+    "last_accessed": "2025-10-04T10:01:36.502524+00:00"
   },
   {
     "name": "dialogpt-small-vllm-fp16",
@@ -2074,69 +1073,29 @@
     ],
     "download_directory_checksum": "c93b7cf87af7ea9a",
     "downloaded_at": "2025-10-02T23:17:29.992901+00:00",
-    "last_accessed": "2025-10-02T23:17:29.992901+00:00"
+    "last_accessed": "2025-10-04T10:01:38.667848+00:00"
   },
   {
-    "name": "llava-v1.5-13b-awq-vllm-awq",
-    "display_name": "llava-v1.5-13B-AWQ",
-    "backend": "vllm",
+    "name": "custom-family-x-ollama-gguf",
+    "display_name": "custom-family-x-ollama-gguf",
+    "backend": "ollama",
     "backend_config": {
       "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/TheBloke/llava-v1.5-13B-AWQ",
+      "model_path": "/tmp/pytest-of-stewa/pytest-126/test_family_override_and_serve0/dummy",
       "extra_args": []
     },
     "capabilities": {
       "text": true,
-      "vision": true,
+      "vision": false,
       "embedding": false,
       "audio": false
     },
     "artifacts": {
-      "aggregate_sha256": "f72f573484c01051a3276a8de7775d04d96452014531e67602c18d1fdaf8bc46",
+      "aggregate_sha256": "bd44021af3dbd31be052ecd5ee335815423cc266ae67dd047a8fa2bc1c77b082",
       "files": [
         {
-          "path": "added_tokens.json",
-          "sha256": "d606246b713e31b1b43dfe913554dd47819089b9e44b9ebaa294eda2589a6b4c"
-        },
-        {
-          "path": "config.json",
-          "sha256": "5dc62d87df9d83755eaa676e8fccd782b802a5dc36818e0ea3b73c1ce52d2005"
-        },
-        {
-          "path": "config.json.bak_pre_llava_patch",
-          "sha256": "375a9e544d89b89c6e101fa4d0041af7b5719bf7afc74b32ed292fbc393704cd"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "832e765b6975c3dad45306019b33b6cceeeaa4a36ec7e1007a6f90ce4c072a40"
-        },
-        {
-          "path": "mm_projector.bin",
-          "sha256": "cef35115bca05e7ab8d4c3ad575b2acfca5999beb2801145f8f518beaa606d3b"
-        },
-        {
-          "path": "model.safetensors",
-          "sha256": "c7a6a1f5d7b441ec00b6c02dd99518f2e56d0b72d37b276534c2bd2f87c811e0"
-        },
-        {
-          "path": "quant_config.json",
-          "sha256": "039890acc208cdd893274a337f9df00dbe6047c46beac36a5e7fd77537cfce8b"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "719833ff26ac897a3ec8ed946028a135de2a351470af59b4008744ab1f0ee9b7"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "bcd04f0eadf90287bd26e1a183ac487d8a141b09b06aecb7725bbdd343640f2e"
-        },
-        {
-          "path": "tokenizer.model",
-          "sha256": "9e556afd44213b6bd1be2b850ebbbd98f5481437a8021afaf58ee7fb1818d347"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "8061e4c9a08c2f3fa80b38651f14e8d7434d45bea04cce8f3b5b013592993698"
+          "path": "weights.bin",
+          "sha256": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
         }
       ]
     },
@@ -2163,40 +1122,475 @@
     "metadata": {
       "created_from_download": true
     },
-    "served_model_id": null,
+    "served_model_id": "original:name:tag",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "custom-family-x",
+    "source_provider": "ollama",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/pytest-of-stewa/pytest-134/test_family_override_and_serve0/dummy",
+    "download_size_bytes": 3,
+    "download_files": [
+      "weights.bin"
+    ],
+    "download_directory_checksum": "7bab2dcff2fa110a",
+    "downloaded_at": "2025-10-03T12:04:22.759039+00:00",
+    "last_accessed": "2025-10-04T15:39:48.644006+00:00"
+  },
+  {
+    "name": "model-fp16-unassigned-fp16",
+    "display_name": "model-fp16",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/tmpcg6h33nq/owner2/model-fp16",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "46ac878f510239188b2fa1aa73cbacabbf5119599544303553456072f2b74de2",
+      "files": [
+        {
+          "path": "model.safetensors",
+          "sha256": "f1534392279bddbf9d43dde8701cb5be14b82f76ec6607bf8d6ad557f60f304e"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
     "model_aliases": [
-      "TheBloke/llava-v1.5-13B-AWQ"
+      "owner2/model-fp16"
     ],
     "roles": [],
     "license": null,
     "source": {
-      "huggingface_id": "TheBloke/llava-v1.5-13B-AWQ"
+      "huggingface_id": "owner2/model-fp16"
     },
     "deprecated": false,
-    "family": "llava-v1.5-13b-awq",
+    "family": "model-fp16",
     "source_provider": "hf",
     "quantization": null,
     "backend_alternatives": [],
     "role_priority": {},
+    "download_format": "fp16",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/tmp6qxhcoco/owner2/model-fp16",
+    "download_size_bytes": 2,
+    "download_files": [
+      "model.safetensors"
+    ],
+    "download_directory_checksum": "667b4b143ead218e",
+    "downloaded_at": "2025-10-03T12:04:23.898607+00:00",
+    "last_accessed": "2025-10-03T12:09:26.420406+00:00"
+  },
+  {
+    "name": "model-awq-unassigned-awq-w4g128",
+    "display_name": "model-awq",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/tmpcg6h33nq/owner1/model-awq",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "42bbe19d72b4f4fd61535c53db0bb7649193cd71435275fc46c85091036ccead",
+      "files": [
+        {
+          "path": "quantization_config.json",
+          "sha256": "7a901d6af54379dc22d2bcb4334ada11cdc33ca344ab3358db9aa5bf86e02f71"
+        },
+        {
+          "path": "weights.awq",
+          "sha256": "f1534392279bddbf9d43dde8701cb5be14b82f76ec6607bf8d6ad557f60f304e"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "owner1/model-awq"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "owner1/model-awq"
+    },
+    "deprecated": false,
+    "family": "model-awq",
+    "source_provider": "hf",
+    "quantization": "w4g128",
+    "backend_alternatives": [],
+    "role_priority": {},
     "download_format": "awq",
     "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/TheBloke/llava-v1.5-13B-AWQ",
-    "download_size_bytes": 7313270757,
+    "download_path": "/tmp/tmp6qxhcoco/owner1/model-awq",
+    "download_size_bytes": 58,
     "download_files": [
-      "mm_projector.bin",
-      "config.json.bak_pre_llava_patch",
-      "quant_config.json",
-      "generation_config.json",
-      "config.json",
-      "model.safetensors",
-      "tokenizer.json",
-      "added_tokens.json",
-      "special_tokens_map.json",
-      "tokenizer.model",
-      "tokenizer_config.json"
+      "quantization_config.json",
+      "weights.awq"
     ],
-    "download_directory_checksum": "4cd11c1342179ffe",
-    "downloaded_at": "2025-10-02T23:17:30.405854+00:00",
-    "last_accessed": "2025-10-02T23:17:30.405854+00:00"
+    "download_directory_checksum": "4ed1646e59475bfe",
+    "downloaded_at": "2025-10-03T12:04:23.902337+00:00",
+    "last_accessed": "2025-10-03T12:09:26.424481+00:00"
+  },
+  {
+    "name": "mini-test-latest-ollama-gguf",
+    "display_name": "mini-test-latest",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "ollama:/mini-test:latest",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": null,
+      "ollama_license": null
+    },
+    "served_model_id": "mini-test:latest",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "mini-test-latest",
+    "source_provider": "ollama",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/mini-test:latest",
+    "download_size_bytes": 1024,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-03T12:04:52.029014+00:00",
+    "last_accessed": "2025-10-03T12:04:52.029014+00:00"
+  },
+  {
+    "name": "testmodel-ollama-gguf-q4_k",
+    "display_name": "testmodel-q4_k",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "ollama:/testmodel:Q4_K",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": null,
+      "ollama_license": null
+    },
+    "served_model_id": "testmodel:Q4_K",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "testmodel",
+    "source_provider": "ollama",
+    "quantization": "q4_k",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/testmodel:Q4_K",
+    "download_size_bytes": 2048,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-03T12:04:52.035597+00:00",
+    "last_accessed": "2025-10-03T12:04:52.035597+00:00"
+  },
+  {
+    "name": "r-unassigned-gguf",
+    "display_name": "r",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-127/test_template_promotion_and_ha0/modelA",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "c9bfdd07805d3b893873ad9be99c4e99dbdec5253942b4811a11b54d9577df64",
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+        },
+        {
+          "path": "config.json",
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/tmp/pytest-of-stewa/pytest-127/test_template_promotion_and_ha0/modelA/chat_template.jinja",
+      "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "model_type": "causal",
+      "library": "transformers",
+      "files_downloaded": 0,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [
+        "chat_template.jinja"
+      ],
+      "embedded_chat_template_preview": null,
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "o/r"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "o/r"
+    },
+    "deprecated": false,
+    "family": "r",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "custom",
+    "download_path": "/tmp/pytest-of-stewa/pytest-134/test_template_promotion_and_ha0/modelA",
+    "download_size_bytes": 43,
+    "download_files": [
+      "chat_template.jinja",
+      "config.json"
+    ],
+    "download_directory_checksum": "ed5744268598fdc0",
+    "downloaded_at": "2025-10-03T12:09:12.787869+00:00",
+    "last_accessed": "2025-10-04T15:39:48.632964+00:00"
+  },
+  {
+    "name": "seamon67-gemma3-abliterated-27b-q4-k-m-ollama-gguf-q4_k_m",
+    "display_name": "seamon67-gemma3-abliterated-27b-q4-k-m-q4_k_m",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "ollama:/seamon67/Gemma3-Abliterated:27b-q4_K_M",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_architecture": null,
+      "ollama_parameters": "27.4B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "vision"
+      ],
+      "ollama_license": null
+    },
+    "served_model_id": "seamon67/Gemma3-Abliterated:27b-q4_K_M",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "seamon67-gemma3-abliterated-27b-q4-k-m",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/seamon67/Gemma3-Abliterated:27b-q4_K_M",
+    "download_size_bytes": 18253611008,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-04T09:49:59.342387+00:00",
+    "last_accessed": "2025-10-04T09:49:59.342387+00:00"
   }
 ]

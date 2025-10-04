@@ -141,7 +141,9 @@ def _load_explicit_registry(file_path: Path) -> Dict[str, RegistryEntry]:
 def _migrate_legacy_snapshot(
     curated_file: Path, discovered_file: Path, merged_snapshot: Path
 ) -> bool:
-    if (not curated_file.exists() and not discovered_file.exists()) and merged_snapshot.exists():
+    if (
+        not curated_file.exists() and not discovered_file.exists()
+    ) and merged_snapshot.exists():
         try:
             legacy_data = json.loads(merged_snapshot.read_text())
             if not isinstance(legacy_data, list):
@@ -171,7 +173,9 @@ def _adopt_snapshot_additions(
         return
     if not isinstance(merged_content, list):
         return
-    known = {e.get("name") for e in curated_raw} | {e.get("name") for e in discovered_raw}
+    known = {e.get("name") for e in curated_raw} | {
+        e.get("name") for e in discovered_raw
+    }
     for raw in merged_content:
         name = raw.get("name") if isinstance(raw, dict) else None
         if name and name not in known:
@@ -198,7 +202,9 @@ def _merge_layered_fragments(
     return list(name_index.values()), curated_names
 
 
-def _parse_merged_entries(merged_raw: list[dict]) -> tuple[Dict[str, RegistryEntry], dict[str, int]]:
+def _parse_merged_entries(
+    merged_raw: list[dict],
+) -> tuple[Dict[str, RegistryEntry], dict[str, int]]:
     entries: Dict[str, RegistryEntry] = {}
     duplicate_names: dict[str, int] = {}
     tolerate_dupes = bool(int(os.environ.get("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "0")))
@@ -221,7 +227,9 @@ def _parse_merged_entries(merged_raw: list[dict]) -> tuple[Dict[str, RegistryEnt
 def _warn_on_duplicates(duplicate_names: dict[str, int]) -> None:
     if not duplicate_names:
         return
-    summary = ", ".join(f"{name} x{count + 1}" for name, count in sorted(duplicate_names.items()))
+    summary = ", ".join(
+        f"{name} x{count + 1}" for name, count in sorted(duplicate_names.items())
+    )
     print(
         f"[imageworks.registry] Warning: duplicates after layering: {summary}",
         file=sys.stderr,
@@ -232,7 +240,9 @@ def _materialize_snapshot(
     merged_snapshot: Path, merged_raw: list[dict], *, migrated: bool
 ) -> None:
     try:
-        current_content = merged_snapshot.read_text() if merged_snapshot.exists() else None
+        current_content = (
+            merged_snapshot.read_text() if merged_snapshot.exists() else None
+        )
         new_content = json.dumps(merged_raw, indent=2) + "\n"
         if migrated or current_content != new_content:
             merged_snapshot.write_text(new_content)
@@ -397,6 +407,23 @@ def _parse_entry(raw: dict) -> RegistryEntry:
     )
     if not entry.name:
         raise ValueError("Missing model name")
+    # Auto-attach chat template path when present in downloaded files but not yet linked.
+    try:
+        if (
+            entry.chat_template
+            and not entry.chat_template.path
+            and entry.download_path
+            and any(
+                str(f).endswith("chat_template.json")
+                for f in (entry.download_files or [])
+            )
+        ):
+            entry.chat_template.path = str(
+                Path(entry.download_path) / "chat_template.json"
+            )
+    except Exception:
+        # Non-fatal enrichment; ignore if anything unexpected occurs
+        pass
     return entry
 
 

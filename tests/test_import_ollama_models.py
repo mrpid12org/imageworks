@@ -61,6 +61,7 @@ def test_import_ollama_models_real_insert(monkeypatch):
         location="linux_wsl",
         dry_run=False,
         deprecate_placeholders=False,
+        purge=False,
     )
     reg = _load()
     names = {e["name"] for e in reg}

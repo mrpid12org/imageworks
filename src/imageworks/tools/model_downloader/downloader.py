@@ -22,6 +22,7 @@ from imageworks.model_loader.models import RegistryEntry
 from .url_analyzer import URLAnalyzer
 from .formats import FormatDetector
 from .format_utils import detect_format_and_quant
+import hashlib
 
 
 @dataclass
@@ -420,9 +421,7 @@ class ModelDownloader:
         repo_meta: RepositoryMetadata,
         target_dir: Path,
     ) -> List[Any]:
-        base_url = (
-            f"https://huggingface.co/{repo_meta.repository_id}/resolve/{repo_meta.branch}"
-        )
+        base_url = f"https://huggingface.co/{repo_meta.repository_id}/resolve/{repo_meta.branch}"
 
         self._log(f"📥 Downloading {len(required_files)} required files...")
         if required_files:
@@ -482,7 +481,9 @@ class ModelDownloader:
                 if any(pattern in name_lower for pattern in candidate_patterns):
                     if path.stat().st_size < 2_000_000:
                         try:
-                            head = path.read_text(encoding="utf-8", errors="ignore")[:400]
+                            head = path.read_text(encoding="utf-8", errors="ignore")[
+                                :400
+                            ]
                             if "{{" in head and "}}" in head:
                                 template_files.append(path.name)
                         except Exception:  # noqa: BLE001
@@ -577,6 +578,26 @@ class ModelDownloader:
                     "branch": repo_meta.branch,
                 }
             )
+
+            # Promote external chat template to primary chat_template if no embedded template
+            try:
+                if (not entry.chat_template.path) and chat_template_info[
+                    "external_chat_template_files"
+                ]:
+                    first_path = chat_template_info["external_chat_template_files"][0]
+                    tpl_file = target_dir / first_path
+                    if tpl_file.exists() and tpl_file.is_file():
+                        data = tpl_file.read_text(encoding="utf-8", errors="ignore")
+                        sha = hashlib.sha256(data.encode("utf-8")).hexdigest()
+                        # Update chat_template inline (source=external)
+                        entry.chat_template.source = "external"
+                        entry.chat_template.path = str(tpl_file)
+                        entry.chat_template.sha256 = sha
+                        entry.metadata["primary_chat_template_file"] = first_path
+                        entry.metadata["primary_chat_template_sha256"] = sha
+            except Exception:  # noqa: BLE001
+                # Non-fatal; template promotion best-effort
+                pass
 
             update_entries([entry], save=True)
             self._registry_cache = load_registry(force=True)  # type: ignore[arg-type]

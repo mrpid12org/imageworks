@@ -115,6 +115,10 @@ Import:
 ```bash
 imageworks-download scan --base ~/ai-models/weights
 ```
+Include testing/demo placeholders explicitly (otherwise they are skipped at import):
+```bash
+imageworks-download scan --base ~/ai-models/weights --include-testing
+```
 Update existing entries and (optionally) supply a fallback format used ONLY when auto-detection fails:
 ```bash
 imageworks-download scan --base ~/ai-models/weights --update-existing --format awq
@@ -131,6 +135,11 @@ After scanning:
 ```bash
 imageworks-download list --details | grep awq
 ```
+
+Clean-before-write semantics:
+- The importer skips testing/demo placeholder variants by default using the central testing filters (names containing `testzzz`, or placeholders like `model-awq`, `model-fp16`, `demo-model`, `r` with optional suffixes). Use `--include-testing` to override.
+- When a previously scanned entry exists with backend `unassigned` for the same family/format/quant, a new scan with a concrete backend (e.g. `vllm`) will reconcile it: the unassigned entry is migrated to the requested backend instead of creating a duplicate.
+- If `hf_id` is missing and no `family_override` is provided, the adapter derives the family from the path tail. Overly generic tails like `model`, `demo`, `demo-model`, or `r` are treated as testing/demo and skipped by default to avoid polluting the registry.
 
 If a variant was misclassified earlier (e.g. AWQ marked fp16), re-run with `--update-existing`. Supplying `--format` will NOT overwrite a correctly detected format; it only fills in missing ones.
 
@@ -931,3 +940,35 @@ See the main ImageWorks repository for contributing guidelines.
 ## License
 
 This tool is part of the ImageWorks project and follows the same license terms.
+
+## Addendum: Testing Convention and Clean Imports
+
+### Testing Convention
+
+To prevent test or demo entries from polluting the main registry and UI:
+
+- Use the token `testzzz` in names or display names for all test-created entries.
+- Optionally set `metadata.testing=true` when creating test entries programmatically.
+- The downloader list and chat proxy hide test entries by default.
+  - CLI: `imageworks-download list --include-testing` to show them.
+  - Proxy: set `CHAT_PROXY_INCLUDE_TEST_MODELS=1` to show them in `/v1/models`.
+- You can extend patterns via `IMAGEWORKS_TEST_MODEL_PATTERNS` (comma-separated regex).
+  Defaults include `testzzz`, and legacy placeholders like `model-awq*`, `model-fp16*`, `demo-model*`, and minimalist names like `r*`.
+
+Recommended for tests:
+- Point tests at a temp registry using `IMAGEWORKS_REGISTRY_DIR`.
+- Use cleanup helpers or in-memory registries where possible.
+
+### Import Cleanliness & Default Backends
+
+- Scans of HF-style weights now default to `backend=vllm` so imports align with typical serving and avoid `unassigned` duplicates.
+- The Ollama importer uses `backend=ollama` and preserves the canonical `served_model_id`.
+- Name normalization trims noisy prefixes, consolidates quant tokens, and fills `download_*` metadata.
+- If you ever imported unassigned entries in older versions, you can clean them with:
+  - `uv run imageworks-download purge-hf --backend unassigned`
+  - then `uv run imageworks-download normalize-formats --rebuild --apply`
+  - optionally `uv run imageworks-download prune-duplicates`
+
+### Multi-backend Variants
+
+It is valid to have the same family available on multiple backends (e.g., one vLLM safetensors variant and one Ollama GGUF variant). The registry treats these as distinct variants because the variant name includes the backend token. The proxy exposes them separately so you can select explicitly in OpenWebUI.

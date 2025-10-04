@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from imageworks.model_loader.download_adapter import record_download
+from imageworks.model_loader.download_adapter import record_download, ImportSkipped
 from imageworks.model_loader import registry as unified_registry
 from imageworks.tools.model_downloader.quant_utils import is_quant_token
 
@@ -264,19 +264,27 @@ def _collect_model_data(
     if detail_size:
         size_bytes = detail_size
 
-    details_obj = detail.get("details") if isinstance(detail.get("details"), dict) else {}
+    details_obj = (
+        detail.get("details") if isinstance(detail.get("details"), dict) else {}
+    )
     quant_detail = None
     if isinstance(details_obj, dict):
         quant_detail = details_obj.get("quantization") or details_obj.get("quant")
 
-    architecture = details_obj.get("architecture") if isinstance(details_obj, dict) else None
-    parameters = details_obj.get("parameters") if isinstance(details_obj, dict) else None
+    architecture = (
+        details_obj.get("architecture") if isinstance(details_obj, dict) else None
+    )
+    parameters = (
+        details_obj.get("parameters") if isinstance(details_obj, dict) else None
+    )
     context_length = None
     if isinstance(details_obj, dict):
         context_length = details_obj.get("context_length") or details_obj.get(
             "context_length_tokens"
         )
-    embedding_length = details_obj.get("embedding_length") if isinstance(details_obj, dict) else None
+    embedding_length = (
+        details_obj.get("embedding_length") if isinstance(details_obj, dict) else None
+    )
 
     capabilities = None
     modelfile = detail.get("modelfile")
@@ -493,9 +501,7 @@ def _prepare_registry_for_import(
     return unified_registry.load_registry(force=True)
 
 
-def _persist_existing_entry(
-    existing, data: OllamaModelData, *, location: str
-) -> None:
+def _persist_existing_entry(existing, data: OllamaModelData, *, location: str) -> None:
     existing.quantization = data.quant or existing.quantization
     existing.download_path = str(data.path)
     existing.download_format = "gguf"
@@ -512,9 +518,7 @@ def _persist_existing_entry(
     unified_registry.update_entries([existing], save=True)
 
 
-def _persist_new_entry(
-    data: OllamaModelData, *, backend: str, location: str
-):
+def _persist_new_entry(data: OllamaModelData, *, backend: str, location: str):
     entry = record_download(
         hf_id=None,
         backend=backend,
@@ -556,7 +560,11 @@ def _persist_model(
         _persist_existing_entry(existing, data, location=location)
         registry[existing.name] = existing
         return
-    entry = _persist_new_entry(data, backend=backend, location=location)
+    try:
+        entry = _persist_new_entry(data, backend=backend, location=location)
+    except ImportSkipped:
+        # Skip testing/demo placeholder entries silently
+        return
     registry[entry.name] = entry
 
 

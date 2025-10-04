@@ -46,6 +46,7 @@ imageworks-download = "imageworks.tools.model_downloader.cli:main"
 imageworks-models = "imageworks.model_loader.cli:app"
 imageworks-models-api = "imageworks.model_loader.api:app"
 imageworks-loader = "imageworks.model_loader.cli_sync:app"
+imageworks-chat-proxy = "imageworks.chat_proxy.app:main"
 
 
 [tool.rye]
