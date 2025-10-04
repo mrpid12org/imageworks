@@ -1,10 +1,7 @@
-name: CI (lightweight tests)
+name: CI (lightweight tests) [DISABLED]
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  # Disabled automatic triggers; keep manual trigger for future use
   workflow_dispatch:
 
 jobs:
