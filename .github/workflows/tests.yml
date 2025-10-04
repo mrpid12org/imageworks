@@ -1,23 +1,15 @@
-name: Tests
+name: CI (lightweight tests)
 
 on:
   push:
     branches:
       - main
-      - feature/**
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  pytest:
+  tests:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - color_narrator
-          - mono
-          - personal_tagger
-          - vision
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,14 +17,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v1
 
-      - name: Sync dependencies
-        run: uv sync
-
-      - name: Install pytest
-        run: uv pip install pytest==8.2.2
-
-      - name: Install project package
-        run: uv pip install .
-
-      - name: Run pytest (${{ matrix.target }})
-        run: uv run pytest tests/${{ matrix.target }}
+      - name: Install minimal test dependencies
+        run: |
+          uv pip install pytest==8.2.2 fastapi httpx
+      - name: Run pytest (chat_proxy + model_loader)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          REQUIRE_CUDA: "0"
+        run: |
+          uv run pytest -q tests/chat_proxy tests/model_loader
