@@ -436,15 +436,19 @@ imageworks/
 │  └─ personal_tagger/
 │     └─ color_narrator/                  # CN source (to be created)
 ├─ docs/
-│  ├─ spec/
-│  │  └─ imageworks-colour-narrator-specification.md
-│  ├─ design/
-│  │  └─ imageworks-colour-narrator-design.md          # THIS FILE
-│  ├─ dev-env/
+│  ├─ architecture/
+│  │  └─ deterministic-model-serving.md    # shared serving rationale
+│  ├─ domains/
+│  │  └─ color-narrator/
+│  │     └─ reference.md                   # THIS FILE (once moved)
+│  ├─ guides/
 │  │  └─ ide-setup-wsl-vscode.md
-│  └─ reference/
-│     ├─ hue-bands.md                      # (optional) maintained table
-│     └─ prompt-templates.md               # (optional) versioned prompts
+│  ├─ proposals/
+│  │  └─ color-narrator-*.md               # RFCs / plans
+│  ├─ reference/
+│  │  └─ prompt-templates.md               # (optional) versioned prompts
+│  └─ spec/
+│     └─ imageworks-colour-narrator-specification.md
 ├─ tests/
 │  └─ color_narrator/
 ├─ data/

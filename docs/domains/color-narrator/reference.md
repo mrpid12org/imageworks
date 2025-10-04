@@ -1,6 +1,6 @@
 # Color Narrator Reference
 
-> See [AI Models and Prompting](ai-models-and-prompting.md) for a project-wide view of model selection, experiments, and prompting strategies.
+> See [AI Models and Prompting](../../guides/ai-models-and-prompting.md) for a project-wide view of model selection, experiments, and prompting strategies.
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ Shared utilities in `src/imageworks/libs/personal_tagger/` provide reusable colo
 - Python 3.9+
 - CUDA 12.8+ with compatible NVIDIA drivers (recommended for GPU execution)
 - OpenAI-compatible VLM server: vLLM `>=0.4` (default) or LMDeploy `>=0.5`
-- `uv` for environment management (see `docs/dev-env/ide-setup-wsl-vscode.md`)
+- `uv` for environment management (see `../../guides/ide-setup-wsl-vscode.md`)
 
 ### Install Project Dependencies
 ```bash
@@ -99,7 +99,7 @@ For GPUs with ≥48 GB VRAM you can point either script at larger Qwen2/VL che
 ## Usage
 
 ### Upcoming: Registry + Role-Based Model Selection
-Color Narrator will shortly adopt the unified model registry and the same role indirection pattern already live in Personal Tagger (see `docs/personal_tagger/model_registry.md`, Section 11). Instead of hardcoding `vlm_model` / backend combinations in `pyproject.toml`, you will be able to run:
+Color Narrator will shortly adopt the unified model registry and the same role indirection pattern already live in Personal Tagger (see `../personal-tagger/model-registry.md`, Section 11). Instead of hardcoding `vlm_model` / backend combinations in `pyproject.toml`, you will be able to run:
 
 ```bash
 uv run imageworks-color-narrator narrate \
@@ -298,4 +298,4 @@ elapsed = time.time() - start
 print(f"Processed {len(results)} items in {elapsed:.1f}s")
 ```
 
-For additional architectural context, review `docs/spec/imageworks-colour-narrator-specification.md` and the Mono documentation referenced earlier.
+For additional architectural context, review `../../spec/imageworks-colour-narrator-specification.md` and the Mono documentation referenced earlier.

@@ -168,7 +168,7 @@ Use role-based selection in higher-level apps; use explicit `--served-model-name
 
 ## Further Reading
 
-- [AI Models and Prompting Guide](ai-models-and-prompting.md)
+- [AI Models and Prompting Guide](../guides/ai-models-and-prompting.md)
 - [Color Narrator Reference](color-narrator-reference.md)
 - [vLLM Documentation](https://docs.vllm.ai/)
 - [Transformers Chat Templates](https://huggingface.co/docs/transformers/main/chat_templating)

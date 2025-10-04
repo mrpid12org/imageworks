@@ -1,6 +1,6 @@
 # Model Loader Architecture & Integration Guide
 
-This document provides an in-depth overview of the unified **model_loader** subsystem: data model, registry lifecycle, download integration, hashing/locking, role resolution, probes, and extension points. It complements `docs/model-downloader.md` (acquisition) and `docs/deterministic-model-serving.md` (serving rationale).
+This document provides an in-depth overview of the unified **model_loader** subsystem: data model, registry lifecycle, download integration, hashing/locking, role resolution, probes, and extension points. It complements `../reference/model-downloader.md` (acquisition) and `deterministic-model-serving.md` (serving rationale).
 
 ---
 ## 1. Goals
@@ -68,7 +68,8 @@ JSON schema follows dataclass field names; missing optional fields default grace
 `download_adapter.py` consolidates creation/update of download metadata replacing any legacy fragment registries:
 - `record_download()` – idempotent enrichment or creation:
   1. Determine `family` (from HF id tail or `family_override`).
-  2. Build variant name: `<family>-<backend>-<format>-<quant>` skipping empty parts.
+  2. Materialize a `ModelIdentity` via `naming.build_identity(...)` which yields both the slug
+     (`family-backend-format-quant`) and the human label used by UIs.
   3. Populate file list, size, directory checksum if path exists.
   4. Compute artifact hashes if absent (delegates to `compute_artifact_hashes`).
   5. Merge roles / role_priority if provided.
@@ -77,14 +78,29 @@ JSON schema follows dataclass field names; missing optional fields default grace
 - `remove_download(name, keep_entry=True)` – clears download_* fields (retains logical shell) or purges entire entry on demand.
 
 ### 4.1 Variant Naming Contract
-Constructed by `_build_variant_name(family, backend, format, quant)` with normalization to lowercase; prevents duplicate quant token duplication.
+`ModelIdentity` centralizes normalization:
+
+```
+from imageworks.model_loader.naming import build_identity
+
+identity = build_identity(
+    family="qwen2.5-vl-7b-instruct",
+    backend="vllm",
+    format_type="awq",
+    quantization="q4_k_m",
+)
+identity.slug         # -> "qwen2.5-vl-7b-instruct-vllm-awq-q4_k_m"
+identity.display_name # -> "Qwen2.5 VL 7B Instruct (AWQ Q4 K M, vLLM)"
+```
+
+All importers and download flows should call `build_identity` before persisting data so the registry never contains mismatched naming variants.
 
 ### 4.2 Capability Inference
 Minimal heuristic `_infer_capabilities` (presence of tokens) – expected to be refined or replaced by static curated capability declarations.
 
 ## 5. Ollama Integration (Bridge Summary)
 Importer: `scripts/import_ollama_models.py`
-- Strategy A naming (see `model-downloader.md` / separate summary doc).
+- Uses `ModelIdentity` for slug + presentation naming; importer no longer constructs ad-hoc display strings.
 - Quant detection via regex: `^(q\d(?:_k(?:_m)?)?|int4|int8|fp16|f16)$`.
 - Fallback plaintext parser for older CLI output.
 - `served_model_id` retains colon-annotated identifier.
@@ -260,10 +276,10 @@ remove_download("mistral-7b-instruct-v0.2-vllm-awq", keep_entry=True)
 ```
 
 ## 19. Cross References
-- Acquisition: `docs/model-downloader.md`
-- Ollama specifics: `docs/ollama-summary-and-actions.md`
-- Serving rationale: `docs/deterministic-model-serving.md`
-- Future personal tagger registry usage: `docs/personal_tagger/model_registry.md`
+- Acquisition: `../reference/model-downloader.md`
+- Ollama specifics: `../runbooks/ollama-summary-and-actions.md`
+- Serving rationale: `deterministic-model-serving.md`
+- Future personal tagger registry usage: `../domains/personal-tagger/model-registry.md`
 
 ---
 **End of Model Loader Architecture Overview**

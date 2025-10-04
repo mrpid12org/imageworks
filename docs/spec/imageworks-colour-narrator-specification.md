@@ -249,13 +249,18 @@ imageworks/
 │  ├─ mono_checker/                       # existing (unchanged)
 │  └─ color_narrator/                     # CN source
 ├─ docs/
-│  ├─ spec/
-│  │  └─ imageworks-colour-narrator-specification.md   # THIS FILE
-│  ├─ design/
-│  │  └─ imageworks-colour-narrator-design.md          # design doc (separate)
-│  ├─ dev-env/
-│  │  └─ ide-setup-wsl-vscode.md                      # existing
-│  └─ reference/                                      # (optional: hue tables, prompt versions)
+│  ├─ architecture/
+│  │  └─ deterministic-model-serving.md                # shared serving rationale
+│  ├─ domains/
+│  │  └─ color-narrator/
+│  │     └─ reference.md                               # operational guide
+│  ├─ guides/
+│  │  └─ ide-setup-wsl-vscode.md                      # environment bootstrap
+│  ├─ proposals/
+│  │  └─ color-narrator-plan.md                       # optional RFCs
+│  ├─ reference/                                      # (optional: hue tables, prompt versions)
+│  └─ spec/
+│     └─ imageworks-colour-narrator-specification.md   # THIS FILE
 ├─ tests/
 │  └─ color_narrator/                                 # (future) tests
 ├─ data/

@@ -328,7 +328,10 @@ def list_models(
             ):
                 continue
             filtered.append(e)
-        entries = sorted(filtered, key=lambda x: x.name)
+        entries = sorted(
+            filtered,
+            key=lambda e: (getattr(e, "display_name", None) or e.name).lower(),
+        )
 
         # --- Robust family parsing helpers (avoid collapsing distinct multi-token families) ---
         _KNOWN_BACKENDS = {"ollama", "vllm", "lmdeploy", "unassigned"}
@@ -450,31 +453,6 @@ def list_models(
                 )
             entries = sorted(entries, key=lambda x: x.name)
 
-        def _derive_display_name(e):
-            fam = getattr(e, "family", None)
-            quant = getattr(e, "quantization", None)
-            # Always include quant if present per user preference.
-            if fam and quant:
-                return f"{fam}-{quant.lower()}"
-            if fam:
-                return fam
-            # Fallback: strip backend/format tokens from name heuristically
-            parts = e.name.split("-")
-            if len(parts) >= 4:
-                # assume pattern: family... backend format quant
-                fam_guess = "-".join(parts[:-3])
-                quant_guess = parts[-1]
-                return f"{fam_guess}-{quant_guess}" if quant_guess else fam_guess
-            return e.name
-
-        def _trim_packager(disp: str) -> str:
-            # Remove hf.co-<user>- prefix pattern if present
-            if disp.startswith("hf.co-"):
-                parts = disp.split("-")
-                if len(parts) > 2:  # hf.co user rest...
-                    return "-".join(parts[2:])
-            return disp
-
         if json_output:
             import json as _json
 
@@ -483,11 +461,13 @@ def list_models(
                 installed = bool(
                     e.download_path and Path(e.download_path).expanduser().exists()
                 )
+                if not installed and e.backend == "ollama":
+                    installed = True
+                display = getattr(e, "display_name", None) or e.name
                 payload.append(
                     {
                         "name": e.name,
-                        "display_name": getattr(e, "display_name", None)
-                        or _derive_display_name(e),
+                        "display_name": display,
                         "backend": e.backend,
                         "format": e.download_format,
                         "quantization": e.quantization,
@@ -554,93 +534,28 @@ def list_models(
             return
 
         table = Table(title="Unified Downloaded Variants")
-        table.add_column("Model", style="cyan")  # display name only
+        table.add_column("Model", style="cyan")
         if show_internal_names:
-            table.add_column("Internal", style="white dim")
-        table.add_column(
-            "Fmt", style="magenta"
-        )  # file format (GGUF, AWQ, SAFETENSORS, etc.)
-        table.add_column(
-            "Quant", style="magenta"
-        )  # precision/quantization (fp16, bf16, q4_k_m, awq if variant)
+            table.add_column("Registry ID", style="white dim")
+        table.add_column("Format", style="magenta")
+        table.add_column("Quant", style="magenta")
         table.add_column("Backend", style="green")
+        table.add_column("Caps", style="green")
         table.add_column("Inst", style="yellow")
         table.add_column("Size", justify="right", style="blue")
         if show_details:
             table.add_column("ServedID", style="white")
-        if show_details:
             table.add_column("Roles", style="white")
-        # Helper classification sets
-        _CONTAINER_FORMATS = {"gguf", "safetensors"}
-        _PRECISION_TOKENS = {"fp16", "fp32", "bf16"}
-        _QUANT_SCHEMES = {"awq", "gptq", "exl2", "marlin"}
 
-        def _infer_container(e):
-            raw = (e.download_format or "").lower()
-            if raw in _CONTAINER_FORMATS:
-                return raw.upper()
-            # Infer from files if we can
-            files = getattr(e, "download_files", []) or []
-            for f in files:
-                lf = f.lower()
-                if lf.endswith(".gguf"):
-                    return "GGUF"
-            for f in files:
-                lf = f.lower()
-                if lf.endswith(".safetensors"):
-                    return "SAFETENSORS"
-            # Fallback: inspect on-disk directory if present (covers cases where download_files wasn't captured)
-            dp = getattr(e, "download_path", None)
-            if isinstance(dp, str):
-                from pathlib import Path as _P
+        def _format_label(value: Optional[str], fallback: str = "-") -> str:
+            if not value:
+                return fallback
+            return value.upper()
 
-                p = _P(dp).expanduser()
-                if p.exists() and p.is_dir():
-                    # Shallow fast scan: first match wins. Limit to reasonable number of files to avoid cost.
-                    scanned = 0
-                    try:
-                        for child in p.rglob("*"):
-                            if scanned > 500:  # safety limit
-                                break
-                            scanned += 1
-                            if not child.is_file():
-                                continue
-                            name_lower = child.name.lower()
-                            if name_lower.endswith(".gguf"):
-                                return "GGUF"
-                            if name_lower.endswith(".safetensors"):
-                                return "SAFETENSORS"
-                    except Exception:  # noqa: BLE001
-                        pass
-            # Backend heuristic
-            if e.backend == "ollama":
-                return "GGUF"
-            return "-"
-
-        def _infer_quant_display(e):
-            raw = (e.download_format or "").lower()
-            qfield = e.quantization or ""
-            # Container formats: rely solely on quantization field
-            if raw in _CONTAINER_FORMATS:
-                return qfield or "-"
-            # Precision tokens: treat raw as quant if explicit quant absent
-            if raw in _PRECISION_TOKENS:
-                return qfield or raw
-            # Quantization schemes (awq/gptq/etc.) may also have a second token (e.g. w4g128)
-            if raw in _QUANT_SCHEMES:
-                if qfield and qfield.lower() != raw:
-                    return f"{raw}-{qfield}".lower()
-                return raw
-            # Fallback: if quantization present use it; else raw if meaningful
-            return qfield or (raw if raw else "-")
-
-        # Re-sort entries by trimmed display name (case-insensitive) as requested
-        entries = sorted(
-            entries,
-            key=lambda e: _trim_packager(
-                (getattr(e, "display_name", None) or _derive_display_name(e))
-            ).lower(),
-        )
+        def _format_quant(value: Optional[str]) -> str:
+            if not value:
+                return "-"
+            return value.replace("_", " ").replace("-", " ").upper()
 
         for e in entries:
             installed = bool(
@@ -648,28 +563,40 @@ def list_models(
             )
             if not installed and e.backend == "ollama":
                 installed = True
-            disp = getattr(e, "display_name", None) or _derive_display_name(e)
-            disp = _trim_packager(disp)
-            fmt_display = _infer_container(e)
-            quant_display = _infer_quant_display(e)
-            if quant_display and quant_display != "-":
-                quant_display = quant_display.lower()
-            row = [disp]
+            display = getattr(e, "display_name", None) or e.name
+            fmt_display = _format_label(
+                getattr(e, "download_format", None)
+                or ("gguf" if e.backend == "ollama" else None)
+            )
+            quant_display = _format_quant(getattr(e, "quantization", None))
+            backend_display = e.backend
+            caps_dict = getattr(e, "capabilities", {}) or {}
+            caps_tokens = []
+            if caps_dict.get("vision"):
+                caps_tokens.append("V")
+            if caps_dict.get("embedding"):
+                caps_tokens.append("E")
+            if caps_dict.get("audio"):
+                caps_tokens.append("A")
+            caps_display = "".join(caps_tokens) or "-"
+            size_value = getattr(e, "download_size_bytes", None)
+            size_display = _format_size(size_value) if size_value is not None else "-"
+            row = [display]
             if show_internal_names:
                 row.append(e.name)
             row.extend(
                 [
                     fmt_display,
                     quant_display,
-                    e.backend,
+                    backend_display,
+                    caps_display,
                     "✓" if installed else "✗",
-                    _format_size(e.download_size_bytes or 0),
+                    size_display,
                 ]
             )
             if show_details:
-                row.append(e.served_model_id or "-")
-            if show_details:
-                row.append(",".join(e.roles) or "-")
+                row.append(getattr(e, "served_model_id", None) or "-")
+                row.append(",".join(getattr(e, "roles", []) or []) or "-")
             table.add_row(*row)
         console.print(table)
         total_size = sum((e.download_size_bytes or 0) for e in entries)

@@ -73,6 +73,7 @@ async def list_models_api():
         "on",
     }
     seen_display_ids: set[str] = set()
+
     for name in list_models():
         entry = get_entry(name)
         if not include_testing and is_testing_entry(name, entry):
@@ -87,12 +88,13 @@ async def list_models_api():
             installed = False
         if entry.backend != "ollama" and not installed:
             continue
-        # Expose display_id (with quant) as the primary id for client UX, and keep logical id in extensions
-        display = entry.display_name or entry.name
-        display_id = (
-            f"{display}-{entry.quantization}" if entry.quantization else display
-        )
-        # De-duplicate by display_id (prefer the first encountered; installed-first is enforced by the filter above)
+        display = entry.display_name or entry.name or ""
+        display_id = display or entry.name
+        if display_id in seen_display_ids:
+            # fall back to logical slug if friendly label collides
+            display_id = entry.name
+        if display_id in seen_display_ids:
+            display_id = f"{entry.name}-{entry.backend}"
         if display_id in seen_display_ids:
             continue
         seen_display_ids.add(display_id)
@@ -119,9 +121,13 @@ async def list_models_api():
                 "owned_by": "imageworks",
                 "extensions": {
                     "display_id": display_id,
+                    "display_name": display or entry.name,
                     "logical_id": name,
                     "backend": entry.backend,
-                    "quantization": entry.quantization,
+                    "format": getattr(entry, "download_format", None),
+                    "quantization": getattr(entry, "quantization", None),
+                    "size_bytes": getattr(entry, "download_size_bytes", None),
+                    "capabilities": getattr(entry, "capabilities", {}) or {},
                     "modalities": modalities,
                     "has_chat_template": bool(
                         entry.chat_template and entry.chat_template.path

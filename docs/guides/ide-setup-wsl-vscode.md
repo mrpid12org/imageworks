@@ -280,4 +280,4 @@ If you do, install NVIDIA Container Toolkit, mount your repo plus `~/ai-models`,
 - **CUDA wheels installed but `torch.cuda.is_available()` is `False`** → update Windows GPU drivers so WSL exposes the device.
 
 ## 16. Next Steps
-Keep this guide in `docs/dev-env/`. For future automation we can wrap the scaffold in a Cookiecutter template so new repositories spin up with the agreed defaults in under a minute.
+Keep this guide under `docs/guides/`. For future automation we can wrap the scaffold in a Cookiecutter template so new repositories spin up with the agreed defaults in under a minute.

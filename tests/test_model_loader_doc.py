@@ -1,6 +1,6 @@
 import pathlib
 
-DOC = pathlib.Path("docs/model-loader-overview.md")
+DOC = pathlib.Path("docs/architecture/model-loader-overview.md")
 
 REQUIRED_HEADINGS = [
     "# Model Loader Architecture & Integration Guide",
@@ -13,7 +13,7 @@ REQUIRED_HEADINGS = [
 
 def test_model_loader_overview_contains_required_sections():
     if not DOC.exists():
-        raise AssertionError("model-loader-overview.md missing")
+        raise AssertionError("architecture/model-loader-overview.md missing")
     text = DOC.read_text(encoding="utf-8")
     for h in REQUIRED_HEADINGS:
         assert h in text, f"Missing heading: {h}"
