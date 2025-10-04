@@ -13,6 +13,7 @@ from rich.table import Table
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn
 import json
+import subprocess
 
 from imageworks.logging_utils import configure_logging
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ from .url_analyzer import URLAnalyzer
 from imageworks.model_loader import registry as unified_registry
 from imageworks.model_loader.download_adapter import (
     record_download,
+    ImportSkipped,
     list_downloads as unified_list_downloads,
     remove_download as unified_remove_download,
     compute_directory_checksum,
@@ -38,6 +40,42 @@ app = typer.Typer(
 )
 console = Console()
 LOG_PATH = configure_logging("model_downloader")
+
+
+def _prune_empty_repo_and_owner_dirs(repo_dir: Path) -> None:
+    """Remove empty repo directory and its immediate parent (owner) if empty.
+
+    This only attempts up to two levels: the repo folder itself and its parent (owner).
+    It will not recurse further up the tree. Safe if directories are non-empty or missing.
+    """
+    try:
+        # Remove repo dir if it exists and is empty (in case files were deleted individually)
+        if repo_dir.exists() and repo_dir.is_dir():
+            try:
+                # only remove if empty
+                next(repo_dir.iterdir())
+            except StopIteration:
+                try:
+                    repo_dir.rmdir()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        # Remove owner dir if empty
+        owner = repo_dir.parent
+        if owner.exists() and owner.is_dir():
+            try:
+                next(owner.iterdir())
+            except StopIteration:
+                try:
+                    owner.rmdir()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+    except Exception:
+        # Never raise from cleanup
+        pass
 
 
 def _enable_dupe_tolerance():
@@ -200,6 +238,11 @@ def list_models(
         "--show-internal-names",
         help="Include internal variant name column for debugging",
     ),
+    include_testing: bool = typer.Option(
+        False,
+        "--include-testing",
+        help="Include testing/demo placeholder models (hidden by default)",
+    ),
 ):
     """List downloaded models."""
 
@@ -207,7 +250,7 @@ def list_models(
         _enable_dupe_tolerance()
         base_entries = unified_list_downloads(only_installed=False)
         entries = list(base_entries)
-        if include_logical:
+        if include_logical or include_testing:
             have = {e.name for e in entries}
             try:
                 raw = json.loads(
@@ -248,6 +291,17 @@ def list_models(
         # Apply filters (format/location) only to entries that have those fields
         filtered = []
         for e in entries:
+            # Hide testing/demo placeholders unless explicitly requested
+            if not include_testing:
+                try:
+                    from imageworks.model_loader.testing_filters import (
+                        is_testing_name as _is_testing_name,
+                    )
+
+                    if _is_testing_name(e.name):
+                        continue
+                except Exception:  # noqa: BLE001
+                    pass
             # Determine logical-only status (no real path or synthetic ollama path with no downloaded_at attr)
             synthetic = False
             try:
@@ -646,9 +700,7 @@ def analyze_url(
 
         repo = analysis.repository
         branch_suffix = f"@{repo.branch}" if getattr(repo, "branch", None) else ""
-        rprint(
-            f"📍 [bold]Repository:[/bold] {repo.owner}/{repo.repo}{branch_suffix}"
-        )
+        rprint(f"📍 [bold]Repository:[/bold] {repo.owner}/{repo.repo}{branch_suffix}")
         if getattr(repo, "model_type", None):
             rprint(f"🏷️  Model Type: {repo.model_type}")
         if getattr(repo, "library_name", None):
@@ -685,9 +737,7 @@ def analyze_url(
             if not files:
                 continue
             total_size = sum(getattr(f, "size", 0) for f in files)
-            rprint(
-                f"   • {category}: {len(files)} files ({_format_size(total_size)})"
-            )
+            rprint(f"   • {category}: {len(files)} files ({_format_size(total_size)})")
 
         rprint(f"\n💾 [bold]Total Size:[/bold] {_format_size(analysis.total_size)}")
 
@@ -698,7 +748,9 @@ def analyze_url(
                     continue
                 rprint(f"\n📄 [bold]{category.title()}:[/bold]")
                 for file_info in files[:5]:
-                    priority_suffix = " ⭐" if getattr(file_info, "priority", False) else ""
+                    priority_suffix = (
+                        " ⭐" if getattr(file_info, "priority", False) else ""
+                    )
                     rprint(
                         f"   • {file_info.path} ({_format_size(file_info.size)}){priority_suffix}"
                     )
@@ -1103,7 +1155,9 @@ def remove_model(
         ..., help="Variant name in unified registry (e.g. family-backend-format-quant)"
     ),
     delete_files: bool = typer.Option(
-        False, "--delete-files", help="Also delete the model files from disk"
+        False,
+        "--delete-files",
+        help="Also delete the model files from disk (or run 'ollama rm' for Ollama)",
     ),
     purge: bool = typer.Option(
         False,
@@ -1148,13 +1202,26 @@ def remove_model(
                 rprint("❌ [yellow]Cancelled[/yellow]")
                 return
         # Delete files if requested
-        if delete_files and installed and entry.download_path:
+        if delete_files and entry.backend == "ollama":
+            # Prefer using the Ollama CLI to remove model blobs cleanly
+            ident = entry.served_model_id or entry.display_name or entry.name
+            try:
+                rprint(f"🔧 Invoking: ollama rm {ident}")
+                subprocess.run(["ollama", "rm", str(ident)], check=False)
+            except Exception as exc:  # noqa: BLE001
+                rprint(f"⚠️  [yellow]Failed to run 'ollama rm': {exc}[/yellow]")
+        elif delete_files and installed and entry.download_path:
             try:
                 import shutil
 
                 shutil.rmtree(Path(entry.download_path).expanduser())
             except OSError as exc:  # noqa: BLE001
                 rprint(f"⚠️  [yellow]Failed to delete files: {exc}[/yellow]")
+            try:
+                # Attempt to prune empty repo and owner directories
+                _prune_empty_repo_and_owner_dirs(Path(entry.download_path).expanduser())
+            except Exception:
+                pass
         ok = unified_remove_download(entry.name, keep_entry=not purge)
         if ok:
             if purge:
@@ -1491,7 +1558,7 @@ def scan_existing(
         help="Base directory to scan recursively for HF-style repos",
     ),
     backend: str = typer.Option(
-        "unassigned", help="Backend to assign for imported entries (can edit later)"
+        "vllm", help="Backend to assign for imported entries (can edit later)"
     ),
     location: str = typer.Option(
         "linux_wsl", help="Location label to record (linux_wsl/windows_lmstudio/custom)"
@@ -1510,6 +1577,11 @@ def scan_existing(
         "--update-existing",
         help="If variant already exists, update its format/quant & path instead of skipping",
     ),
+    include_testing: bool = typer.Option(
+        False,
+        "--include-testing",
+        help="Include testing/demo placeholder models during import (off by default)",
+    ),
 ):
     """Scan an existing weights directory and import discovered model folders into the unified registry.
 
@@ -1520,6 +1592,11 @@ def scan_existing(
       - Computes size and directory checksum.
     """
     try:
+        # Honor include-testing by setting adapter env flag
+        if include_testing:
+            import os as _os
+
+            _os.environ["IMAGEWORKS_IMPORT_INCLUDE_TESTING"] = "1"
         if not base.exists():
             rprint(f"❌ [red]Base path does not exist:[/red] {base}")
             raise typer.Exit(code=1)
@@ -1604,6 +1681,7 @@ def scan_existing(
             rprint("🛈 [cyan]Dry run: no changes written[/cyan]")
             return
         imported = 0
+        skipped = 0
         # Load registry for update-existing logic (side effect ensures cache ready)
         unified_registry.load_registry(force=True)
         for r in planned:
@@ -1613,21 +1691,27 @@ def scan_existing(
             if update_existing:
                 # If an entry with same family-backend-format-quant already exists we still call record_download (it updates)
                 pass
-            record_download(
-                hf_id=r["hf_id"],
-                backend=backend,
-                format_type=r["format"],
-                quantization=r.get("quant"),
-                path=r["path"],
-                location=location,
-                files=None,
-                size_bytes=r["size"],
-                source_provider="hf",
-                roles=None,
-                role_priority=None,
-            )
-            imported += 1
-        rprint(f"✅ [green]Imported {imported} repositories into registry[/green]")
+            try:
+                record_download(
+                    hf_id=r["hf_id"],
+                    backend=backend,
+                    format_type=r["format"],
+                    quantization=r.get("quant"),
+                    path=r["path"],
+                    location=location,
+                    files=None,
+                    size_bytes=r["size"],
+                    source_provider="hf",
+                    roles=None,
+                    role_priority=None,
+                )
+                imported += 1
+            except ImportSkipped as _skip:
+                skipped += 1
+        msg = f"✅ [green]Imported {imported} repositories into registry[/green]"
+        if skipped:
+            msg += f"  |  ⚠️ Skipped {skipped} testing/demo entries"
+        rprint(msg)
     except Exception as e:  # noqa: BLE001
         rprint(f"❌ [red]Scan failed:[/red] {e}")
         raise typer.Exit(code=1)
@@ -1839,6 +1923,259 @@ def normalize_formats(
     # Persist via registry utility (uses internal cache)
     unified_registry.save_registry()
     rprint(f"✅ [green]Applied {len(changes)} changes to registry[/green]")
+
+
+@app.command("tidy-empty-dirs")
+def tidy_empty_dirs(
+    weights_root: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        "--weights-root",
+        help="Root path containing <owner>/<repo> model folders",
+    ),
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--apply", help="Preview only by default; --apply to delete"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", help="Show per-folder actions"),
+):
+    """Remove empty repo directories and their owner directories if those are empty.
+
+    This is a safe, one-off tidy for HF-style trees: <root>/<owner>/<repo>.
+    Only deletes directories that are empty at the time of the check.
+    """
+    try:
+        root = weights_root.expanduser()
+        if not root.exists() or not root.is_dir():
+            rprint(f"❌ [red]Weights root not found or not a directory:[/red] {root}")
+            raise typer.Exit(code=1)
+        owners = [d for d in root.iterdir() if d.is_dir()]
+        empty_repos: list[Path] = []
+        for owner in owners:
+            for repo in [r for r in owner.iterdir() if r.is_dir()]:
+                try:
+                    next(repo.iterdir())
+                except StopIteration:
+                    empty_repos.append(repo)
+                except Exception:
+                    pass
+        if not empty_repos:
+            rprint("🛈 [cyan]No empty repo directories found[/cyan]")
+            return
+        # Present summary
+        t = Table(title="Empty Repo Directories (owner/repo)")
+        t.add_column("Owner", style="green")
+        t.add_column("Repo", style="cyan")
+        t.add_column("Path", style="white")
+        for repo in sorted(
+            empty_repos, key=lambda p: (p.parent.name.lower(), p.name.lower())
+        ):
+            t.add_row(repo.parent.name, repo.name, str(repo))
+        console.print(t)
+        rprint(f"📊 Candidates: {len(empty_repos)} under {root}")
+
+        if dry_run:
+            rprint(
+                "🛈 [cyan]Dry run: no changes written. Re-run with --apply to delete.[/cyan]"
+            )
+            return
+
+        # Apply deletions
+        removed_repos = 0
+        removed_owners = 0
+        touched_owners: set[Path] = set()
+        for repo in empty_repos:
+            try:
+                repo.rmdir()
+                removed_repos += 1
+                touched_owners.add(repo.parent)
+                if verbose:
+                    rprint(f"🗑️  removed repo: {repo}")
+            except Exception as exc:  # noqa: BLE001
+                rprint(f"⚠️  [yellow]Failed to remove repo {repo}: {exc}[/yellow]")
+        # After repo removals, attempt owner pruning if empty
+        for owner in sorted(touched_owners):
+            try:
+                next(owner.iterdir())
+            except StopIteration:
+                try:
+                    owner.rmdir()
+                    removed_owners += 1
+                    if verbose:
+                        rprint(f"🗑️  removed owner: {owner}")
+                except Exception as exc:  # noqa: BLE001
+                    rprint(f"⚠️  [yellow]Failed to remove owner {owner}: {exc}[/yellow]")
+            except Exception:
+                pass
+        rprint(
+            f"✅ [green]Tidy complete[/green] — repos removed: {removed_repos}, owners removed: {removed_owners}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Tidy failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("prune-no-chat-template")
+def prune_no_chat_template(
+    backend: str = typer.Option(
+        "vllm", "--backend", "-b", help="Backend to target (default: vllm)"
+    ),
+    weights_root: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        "--weights-root",
+        help="Only delete entries whose download_path is under this directory",
+    ),
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--apply", help="Dry run by default; use --apply to delete"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Skip confirmation when applying"
+    ),
+):
+    """Delete locally installed models that lack a chat template.
+
+    Criteria:
+      - entry.backend matches --backend
+      - entry.download_path exists under --weights-root
+      - No external .jinja/chat_template* files AND no tokenizer_config.json with 'chat_template'
+
+    Action:
+      - Delete the on-disk directory
+      - Remove the entry from the unified registry (purge)
+    """
+    try:
+        root = weights_root.expanduser().resolve()
+        entries = unified_list_downloads(only_installed=False)
+
+        def _has_chat_template(path: Path) -> tuple[bool, list[str], bool]:
+            has_external = False
+            external_candidates: list[str] = []
+            has_embedded = False
+            try:
+                for child in path.iterdir():
+                    if not child.is_file():
+                        continue
+                    n = child.name.lower()
+                    if (
+                        n.endswith(".jinja")
+                        or "chat_template" in n
+                        or n.startswith("template")
+                        or n.endswith("template")
+                    ):
+                        try:
+                            head = child.read_text(encoding="utf-8", errors="ignore")[
+                                :2000
+                            ]
+                            if "{{" in head and "}}" in head:
+                                has_external = True
+                                external_candidates.append(child.name)
+                        except Exception:
+                            pass
+                tcfg = path / "tokenizer_config.json"
+                if tcfg.exists():
+                    try:
+                        txt = tcfg.read_text(encoding="utf-8", errors="ignore")
+                        if "chat_template" in txt:
+                            has_embedded = True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return (has_external or has_embedded, external_candidates, has_embedded)
+
+        targets: list[dict] = []
+        for e in entries:
+            if e.backend != backend:
+                continue
+            dp = getattr(e, "download_path", None)
+            if not dp:
+                continue
+            p = Path(dp).expanduser()
+            if not p.exists() or not p.is_dir():
+                continue
+            try:
+                resolved = p.resolve()
+            except Exception:
+                continue
+            try:
+                if not (resolved == root or root in resolved.parents):
+                    continue
+            except Exception:
+                continue
+            has_any, externals, embedded = _has_chat_template(p)
+            if not has_any:
+                targets.append(
+                    {
+                        "name": e.name,
+                        "path": str(p),
+                        "backend": e.backend,
+                    }
+                )
+
+        if not targets:
+            rprint("🛈 [cyan]No matching models without chat template found[/cyan]")
+            return
+
+        # Present summary
+        t = Table(title="Prune Models Without Chat Templates")
+        t.add_column("Name", style="cyan")
+        t.add_column("Backend", style="green")
+        t.add_column("Path", style="white")
+        for it in targets:
+            t.add_row(it["name"], it["backend"], it["path"])
+        console.print(t)
+        rprint(f"📊 Candidates: {len(targets)} under {root}")
+
+        if dry_run:
+            rprint(
+                "🛈 [cyan]Dry run: no changes written. Re-run with --apply to delete.[/cyan]"
+            )
+            return
+        if not force:
+            if not typer.confirm(
+                f"Delete {len(targets)} model folder(s) from disk and registry?"
+            ):
+                rprint("❌ [yellow]Cancelled[/yellow]")
+                return
+
+        # Apply deletions
+        removed = 0
+        errors = 0
+        for it in targets:
+            try:
+                # Delete from disk
+                try:
+                    import shutil
+
+                    target = Path(it["path"]).expanduser()
+                    shutil.rmtree(target, ignore_errors=False)
+                except Exception as exc:  # noqa: BLE001
+                    rprint(
+                        f"⚠️  [yellow]Failed to delete files for {it['name']}: {exc}[/yellow]"
+                    )
+                else:
+                    try:
+                        _prune_empty_repo_and_owner_dirs(target)
+                    except Exception:
+                        pass
+                # Remove from registry (purge)
+                ok = unified_remove_download(it["name"], keep_entry=False)
+                if ok:
+                    removed += 1
+                else:
+                    errors += 1
+            except Exception as exc:  # noqa: BLE001
+                errors += 1
+                rprint(f"❌ [red]Failed to remove {it['name']}: {exc}[/red]")
+        # Persist registry after batch
+        try:
+            unified_registry.save_registry()
+        except Exception:
+            pass
+        rprint(
+            f"✅ [green]Removed {removed} models[/green]{'  |  ⚠️ errors: ' + str(errors) if errors else ''}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Prune failed:[/red] {exc}")
+        raise typer.Exit(code=1)
 
 
 def main():

@@ -1,0 +1,28 @@
+version: "3.9"
+services:
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: openwebui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"  # Host:Container
+    environment:
+      # Point OpenWebUI at ImageWorks chat proxy (adjust if proxy runs elsewhere)
+      - OPENAI_API_BASE_URL=http://host.docker.internal:8100/v1
+      # Optionally set an API key placeholder if UI demands one
+      - OPENAI_API_KEY=EMPTY
+      # Disable Ollama provider to avoid duplicate model sources in the UI
+      - USE_OLLAMA_DOCKER=false
+      # Ensure no implicit Ollama base URL is set (prevents auto-enabling provider)
+      # (Do not add OLLAMA_BASE_URL here)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - openwebui-data:/app/backend/data
+    # GPU acceleration (NVIDIA). Requires NVIDIA Container Toolkit installed on host.
+    gpus: all
+    # If using WSL2 and host.docker.internal is unreliable, expose network_mode host (Linux only)
+    # network_mode: host
+    # Or define an explicit network shared with proxy
+volumes:
+  openwebui-data:

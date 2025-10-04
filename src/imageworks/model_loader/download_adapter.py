@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import hashlib
+import time as _time
+import requests as _requests
 
-from .registry import load_registry, update_entries, save_registry
+from .registry import load_registry, update_entries, save_registry, remove_entry
 from .models import (
     RegistryEntry,
     BackendConfig,
@@ -24,6 +26,14 @@ from .models import (
     Probes,
 )
 from .hashing import compute_artifact_hashes
+from .testing_filters import is_testing_name
+import os as _os
+
+
+class ImportSkipped(Exception):
+    """Raised when an attempted import is identified as testing/demo and is skipped."""
+
+    pass
 
 
 def _now_iso() -> str:
@@ -44,6 +54,71 @@ def compute_directory_checksum(directory: Path) -> str:
             hasher.update(str(rel).encode())
             hasher.update(str(size).encode())
     return hasher.hexdigest()[:16]
+
+
+def _tiny_png_base64() -> str:
+    """Return a tiny 1x1 transparent PNG as base64 string (no data: prefix)."""
+    # Precomputed 1x1 transparent PNG
+    return (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFGgJ+f3m0JwAA"
+        "AABJRU5ErkJggg=="
+    )
+
+
+def _maybe_probe_and_mark_vision(entry: "RegistryEntry") -> None:
+    """Best-effort vision capability probe for Ollama models.
+
+    Sends a minimal image chat to the local Ollama API and, on success, records
+    probes.vision.vision_ok with a timestamp and basic latency. Failures are ignored.
+    """
+    try:
+        if entry.backend != "ollama":
+            return
+        if _os.environ.get("IMAGEWORKS_SKIP_POST_PROBE") in {"1", "true", "yes"}:
+            return
+        port = entry.backend_config.port or 11434
+        ident = entry.served_model_id or entry.display_name or entry.name
+        url = f"http://127.0.0.1:{port}/api/chat"
+        img_b64 = _tiny_png_base64()
+        payload = {
+            "model": ident,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "vision probe",
+                    "images": [img_b64],
+                }
+            ],
+            "stream": False,
+        }
+        t0 = _time.time()
+        resp = _requests.post(url, json=payload, timeout=6)
+        latency_ms = int((_time.time() - t0) * 1000)
+        ok = resp.status_code < 400
+        if ok:
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:  # noqa: BLE001
+                pass
+            # Basic heuristic: presence of message.content or non-empty response
+            has_msg = bool(((data.get("message") or {}).get("content") or "").strip())
+            if has_msg:
+                from .models import VisionProbe
+
+                # Avoid overwriting an existing affirmative probe
+                if not entry.probes.vision or not entry.probes.vision.vision_ok:
+                    entry.probes.vision = VisionProbe(
+                        vision_ok=True,
+                        timestamp=_now_iso(),
+                        probe_version="1",
+                        latency_ms=latency_ms,
+                        notes="auto-probe:ollama",
+                    )
+                    update_entries([entry], save=True)
+    except Exception:
+        # Silent best-effort; do not block downloads/registration
+        return
 
 
 def _infer_family(hf_id: Optional[str]) -> Optional[str]:
@@ -99,8 +174,6 @@ def record_download(
     follow-up update.
     """
     # Allow tolerant duplicate handling for dynamic download writes
-    import os as _os
-
     _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
     # Use default merged snapshot path; layered loader will choose appropriate files.
     # Explicit path not passed to allow layering when expected. If environment forces single-file
@@ -111,6 +184,36 @@ def record_download(
     if quantization:
         quantization = quantization.lower()
     variant_name = _build_variant_name(family, backend, format_type, quantization)
+
+    # Clean-before-write: strictly skip testing/demo placeholders unless explicitly allowed
+    include_testing = _os.environ.get(
+        "IMAGEWORKS_IMPORT_INCLUDE_TESTING", "0"
+    ).lower() in {"1", "true", "yes", "on"}
+    # Additional guard: if no hf_id and no explicit family, derive family from path tail and
+    # treat overly-generic placeholders as testing/demo to avoid polluting registry.
+    testing_by_family = False
+    if hf_id is None and family_override is None:
+        try:
+            tail = Path(path).expanduser().name.lower().strip()
+            tail_norm = tail.replace("@", "-").replace("_", "-").replace(" ", "-")
+            generic_families = {"model", "demo", "demo-model", "r"}
+            if tail_norm in generic_families or tail_norm.startswith("demo-"):
+                testing_by_family = True
+        except Exception:  # noqa: BLE001
+            pass
+    # Respect explicit family_override: don't apply broad name-based testing filters
+    # unless the caller explicitly marks metadata.testing=True.
+    name_testing = (
+        False if family_override is not None else is_testing_name(variant_name)
+    )
+    is_testing = (
+        name_testing
+        or testing_by_family
+        or bool((extra_metadata or {}).get("testing") is True)
+    )
+    if (not include_testing) and is_testing:
+        # Do not persist this entry; signal a soft skip to callers
+        raise ImportSkipped(f"Skipping testing/demo import: {variant_name}")
     existing = reg.get(variant_name)
     p = Path(path).expanduser()
     if size_bytes is None and p.exists():
@@ -119,6 +222,39 @@ def record_download(
         files = [str(f.relative_to(p)) for f in p.rglob("*") if f.is_file()]
     directory_checksum = compute_directory_checksum(p)
     now = _now_iso()
+
+    # Backend reconciliation on update: if an 'unassigned' variant exists for the same
+    # (family, format, quant), migrate it to the requested backend instead of duplicating.
+    if not existing and backend != "unassigned":
+        unassigned_name = _build_variant_name(
+            family, "unassigned", format_type, quantization
+        )
+        candidate = reg.get(unassigned_name)
+        if candidate is not None:
+            # Build a migrated entry copying fields but updating identity/backend/path
+            e = candidate
+            e.backend = backend
+            e.name = variant_name
+            # Update path and provenance
+            e.backend_config.model_path = str(p)
+            if size_bytes is not None:
+                e.download_size_bytes = size_bytes
+            if files is not None:
+                e.download_files = files
+            e.download_directory_checksum = directory_checksum
+            e.downloaded_at = e.downloaded_at or now
+            e.last_accessed = now
+            if quantization:
+                e.quantization = quantization
+            if source_provider:
+                e.source_provider = source_provider
+            if display_name and not e.display_name:
+                e.display_name = display_name
+            # Persist: add new, remove old, then save
+            update_entries([e], save=False)
+            remove_entry(unassigned_name, save=False)
+            save_registry()
+            return e
 
     if existing:
         e = existing
@@ -154,12 +290,16 @@ def record_download(
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
         update_entries([e], save=True)
+        # Post-registration best-effort vision probe (Ollama)
+        _maybe_probe_and_mark_vision(e)
         return e
 
     capabilities = _infer_capabilities(variant_name)
     entry = RegistryEntry(
         name=variant_name,
-        display_name=(display_name or (hf_id.split("/")[-1] if hf_id else variant_name)),
+        display_name=(
+            display_name or (hf_id.split("/")[-1] if hf_id else variant_name)
+        ),
         backend=backend,
         backend_config=BackendConfig(port=0, model_path=str(p), extra_args=[]),
         capabilities=capabilities,
@@ -199,6 +339,8 @@ def record_download(
     )
     entry = compute_artifact_hashes(entry)
     update_entries([entry], save=True)
+    # Post-registration best-effort vision probe (Ollama)
+    _maybe_probe_and_mark_vision(entry)
     return entry
 
 
