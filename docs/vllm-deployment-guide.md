@@ -84,7 +84,7 @@ nohup uv run vllm serve "$IMAGEWORKS_MODEL_ROOT/Qwen2-VL-2B-Instruct" \
 ```
 
 #### c. LLaVA (when experimenting)
-If using LLaVA 1.5 AWQ you may need to provide an explicit chat template (`--chat-template llava15_vicuna.jinja`) depending on tokenizer metadata. See Troubleshooting for multimodal caveats.
+If using LLaVA 1.5 AWQ you may need to provide an explicit chat template. The start script will auto-select a packaged template for common LLaVA/Vicuna models; you can also pass an explicit path with `--chat-template`.
 ```bash
 nohup uv run vllm serve "$IMAGEWORKS_MODEL_ROOT/Qwen2-VL-2B-Instruct" \
   --served-model-name Qwen2-VL-2B-Instruct \
