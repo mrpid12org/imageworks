@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from imageworks.model_loader.download_adapter import record_download, ImportSkipped
+from imageworks.model_loader.naming import build_identity, ModelIdentity
 from imageworks.model_loader import registry as unified_registry
 from imageworks.tools.model_downloader.quant_utils import is_quant_token
 
@@ -44,7 +45,6 @@ class OllamaModelData:
     quant: Optional[str]
     size_bytes: int
     path: Path
-    display_name: str
     extra_metadata: Dict[str, Any]
     architecture: Optional[str]
     parameters: Optional[str]
@@ -228,24 +228,6 @@ def _derive_family_and_quant(full_name: str) -> tuple[str, Optional[str]]:
     return family, None
 
 
-def _canonical_display_name(family: str, quant: Optional[str]) -> str:
-    base_display = family
-    if quant:
-        base_display = f"{base_display}-{quant}"
-    if base_display.startswith("hf.co-"):
-        parts = base_display.split("-")
-        if len(parts) > 2:
-            base_display = "-".join(parts[2:])
-    return base_display
-
-
-def _variant_name(family: str, backend: str, quant: Optional[str]) -> str:
-    base = f"{family}-{backend}-gguf"
-    if quant:
-        return f"{base}-{quant}"
-    return base
-
-
 def _collect_model_data(
     model: dict, tags_index: Dict[str, Dict]
 ) -> OllamaModelData | None:
@@ -326,7 +308,6 @@ def _collect_model_data(
                 extra_meta["ollama_parameters"] = tag_details.get("parameter_size")
 
     path = Path(f"ollama://{name}")
-    display_name = _canonical_display_name(family, quant)
 
     return OllamaModelData(
         name=name,
@@ -334,7 +315,6 @@ def _collect_model_data(
         quant=quant,
         size_bytes=size_bytes,
         path=path,
-        display_name=display_name,
         extra_metadata=extra_meta,
         architecture=architecture,
         parameters=parameters,
@@ -501,15 +481,21 @@ def _prepare_registry_for_import(
     return unified_registry.load_registry(force=True)
 
 
-def _persist_existing_entry(existing, data: OllamaModelData, *, location: str) -> None:
-    existing.quantization = data.quant or existing.quantization
+def _persist_existing_entry(
+    existing, data: OllamaModelData, identity: ModelIdentity, *, location: str
+) -> None:
+    existing.name = identity.slug
+    existing.family = identity.family_key
+    existing.backend = identity.backend_key
+    existing.quantization = identity.quant_key or existing.quantization
+    existing.display_name = identity.display_name
     existing.download_path = str(data.path)
-    existing.download_format = "gguf"
+    existing.download_format = identity.format_key or "gguf"
     existing.download_location = location
     if data.size_bytes:
         existing.download_size_bytes = data.size_bytes
     existing.served_model_id = data.name
-    existing.display_name = data.display_name
+    existing.source_provider = "ollama"
     if data.extra_metadata:
         existing.metadata = existing.metadata or {}
         for key, value in data.extra_metadata.items():
@@ -518,12 +504,14 @@ def _persist_existing_entry(existing, data: OllamaModelData, *, location: str) -
     unified_registry.update_entries([existing], save=True)
 
 
-def _persist_new_entry(data: OllamaModelData, *, backend: str, location: str):
+def _persist_new_entry(
+    data: OllamaModelData, identity: ModelIdentity, *, location: str
+):
     entry = record_download(
         hf_id=None,
-        backend=backend,
-        format_type="gguf",
-        quantization=data.quant,
+        backend=identity.backend_key,
+        format_type=identity.format_key or "gguf",
+        quantization=identity.quant_key,
         path=str(data.path),
         location=location,
         files=None,
@@ -531,10 +519,10 @@ def _persist_new_entry(data: OllamaModelData, *, backend: str, location: str):
         source_provider="ollama",
         roles=None,
         role_priority=None,
-        family_override=data.family,
+        family_override=identity.family_key,
         served_model_id=data.name,
         extra_metadata=data.extra_metadata,
-        display_name=data.display_name,
+        display_name=identity.display_name,
     )
     return entry
 
@@ -546,22 +534,33 @@ def _persist_model(
     location: str,
     registry: Dict[str, Any],
 ) -> None:
-    variant_name = _variant_name(data.family, backend, data.quant)
+    identity = build_identity(
+        family=data.family,
+        backend=backend,
+        format_type="gguf",
+        quantization=data.quant,
+    )
+    variant_name = identity.slug
     existing = registry.get(variant_name)
-    if not existing and data.quant:
-        legacy_name = _variant_name(data.family, backend, None)
+    if not existing and identity.quant_key:
+        legacy_identity = build_identity(
+            family=data.family,
+            backend=backend,
+            format_type="gguf",
+            quantization=None,
+        )
+        legacy_name = legacy_identity.slug
         legacy_entry = registry.get(legacy_name)
         if legacy_entry:
             legacy_entry.name = variant_name
-            if legacy_name in registry:
-                del registry[legacy_name]
+            registry.pop(legacy_name, None)
             existing = legacy_entry
     if existing:
-        _persist_existing_entry(existing, data, location=location)
+        _persist_existing_entry(existing, data, identity, location=location)
         registry[existing.name] = existing
         return
     try:
-        entry = _persist_new_entry(data, backend=backend, location=location)
+        entry = _persist_new_entry(data, identity, location=location)
     except ImportSkipped:
         # Skip testing/demo placeholder entries silently
         return

@@ -1,0 +1,889 @@
+[
+  {
+    "name": "demo-model",
+    "display_name": "demo-model",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-117/test_sync_downloader_creates_e0/model",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "audio": false,
+      "embedding": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "60344067469a34773994f9deab7d7e61f41a51d65b7aacd32473b1e6c9b322cf",
+      "files": [
+        {
+          "path": "config.json",
+          "sha256": "de293733926a41edc94e0c23682995bed19b973a01a4379fc664ec7253fc84eb"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "bf70a592b5be4b8a7039db065a11109e1ea6bfb73fbc4c7cadabfb844797781e"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "notes": "Imported from downloader"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "author/demo-model"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "author/demo-model",
+      "format": "hf",
+      "path": "/tmp/pytest-of-stewa/pytest-117/test_sync_downloader_creates_e0/model",
+      "size_bytes": 1234,
+      "directory_checksum": "abc123",
+      "files": [
+        {
+          "path": "config.json",
+          "size": 19,
+          "sha256": "de293733926a41edc94e0c23682995bed19b973a01a4379fc664ec7253fc84eb"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 22,
+          "sha256": "bf70a592b5be4b8a7039db065a11109e1ea6bfb73fbc4c7cadabfb844797781e"
+        }
+      ]
+    },
+    "deprecated": false,
+    "family": null,
+    "source_provider": null,
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": null,
+    "download_location": null,
+    "download_path": null,
+    "download_size_bytes": null,
+    "download_files": [],
+    "download_directory_checksum": null,
+    "downloaded_at": null,
+    "last_accessed": null
+  },
+  {
+    "name": "qwen2.5-vl-7b-instruct-vllm-fp16",
+    "display_name": "Qwen2.5-VL-7B-Instruct",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "eecd46bf2993893229293c93b0600d61a725f21b8051893937ff1c5dd30a9367",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "chat_template.json",
+          "sha256": "ad60d90252ed0b0705ba14e2d0ad0fec0beac1ea955642b54059b36052d8bc96"
+        },
+        {
+          "path": "config.json",
+          "sha256": "77d9ec7321cc572e3579e2c84799c9cadaded63c49ce93b101733349fc330c43"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "0a3aea82869fe29f20dc95ccf3e2bcff380eca1f5ad6447a4a4b37110b08e43e"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
+        },
+        {
+          "path": "model-00001-of-00005.safetensors",
+          "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e"
+        },
+        {
+          "path": "model-00002-of-00005.safetensors",
+          "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024"
+        },
+        {
+          "path": "model-00003-of-00005.safetensors",
+          "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507"
+        },
+        {
+          "path": "model-00004-of-00005.safetensors",
+          "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed"
+        },
+        {
+          "path": "model-00005-of-00005.safetensors",
+          "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "73b333b0b16e5286ddba615d2caebcd495cf7e616f52eb217a81781393d79de9"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "f2058c716eef96ccaed1cc1e2d0c08306b62586d535b28d9d08e691b2fab7ca0"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "4abd3520120e266da84c0864fee064d1fb10806f02225911a47253dd38dc5f56"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct/chat_template.json",
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "existing/Qwen2.5-VL-7B-Instruct"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "existing/Qwen2.5-VL-7B-Instruct"
+    },
+    "deprecated": false,
+    "family": "qwen2.5-vl-7b-instruct",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "fp16",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
+    "download_size_bytes": 16595962707,
+    "download_files": [
+      "model-00003-of-00005.safetensors",
+      "preprocessor_config.json",
+      "model.safetensors.index.json",
+      ".gitattributes",
+      "model-00002-of-00005.safetensors",
+      "model-00004-of-00005.safetensors",
+      "generation_config.json",
+      "vocab.json",
+      "config.json",
+      "tokenizer.json",
+      "chat_template.json",
+      "model-00005-of-00005.safetensors",
+      "merges.txt",
+      "model-00001-of-00005.safetensors",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "1d783bb63d37d961",
+    "downloaded_at": "2025-10-02T23:17:11.942665+00:00",
+    "last_accessed": "2025-10-04T10:01:36.496361+00:00"
+  },
+  {
+    "name": "qwen2.5-vl-7b-instruct-awq-vllm-awq",
+    "display_name": "Qwen2.5-VL-7B-Instruct-AWQ",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "c069173fe0d19c0146b0f0fd50f79fcbb5f9f8a878fac99c612c82519145d794",
+      "files": [
+        {
+          "path": ".cache/huggingface/.gitignore",
+          "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1"
+        },
+        {
+          "path": ".cache/huggingface/download/.gitattributes.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/.gitattributes.metadata",
+          "sha256": "40e08ceeddbb65242774b4cd424e936739951ec7d71c489c12cc1dfe93824b4b"
+        },
+        {
+          "path": ".cache/huggingface/download/LICENSE.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/LICENSE.metadata",
+          "sha256": "cc946100ee10d8836da3182344c5f03f366c511d072a66c7cce0acd695ae6f86"
+        },
+        {
+          "path": ".cache/huggingface/download/added_tokens.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/added_tokens.json.metadata",
+          "sha256": "82731d77cbba4bfd4f1551ed222cafc9137e918cb27139d83d2477ae8b7194f8"
+        },
+        {
+          "path": ".cache/huggingface/download/chat_template.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/chat_template.json.metadata",
+          "sha256": "cb7df8325ecea406385584b634317cf748652bf27b85f6159739fe977cebd433"
+        },
+        {
+          "path": ".cache/huggingface/download/config.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/config.json.metadata",
+          "sha256": "44730926409368180784347f690fb3ca17261754afa0b2330d6a2a759013c4b3"
+        },
+        {
+          "path": ".cache/huggingface/download/generation_config.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/generation_config.json.metadata",
+          "sha256": "f9dfd91057af76a6108548da6481d5852c663e8c9200c93b597e55577ab05a45"
+        },
+        {
+          "path": ".cache/huggingface/download/merges.txt.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/merges.txt.metadata",
+          "sha256": "f0082dfc4a62103612ee3c5b2a512714f40c1b912e28453936a2e136ea9526f7"
+        },
+        {
+          "path": ".cache/huggingface/download/model-00001-of-00002.safetensors.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/model-00001-of-00002.safetensors.metadata",
+          "sha256": "93b8167b42dc6bec7f0b7bd8a34c1d784824d24bd8b21b068003afc40c3531b3"
+        },
+        {
+          "path": ".cache/huggingface/download/model-00002-of-00002.safetensors.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/model-00002-of-00002.safetensors.metadata",
+          "sha256": "48fbe53cdcedbbddf43154cbaf015978929164086fab87488dcf067ed1c017cc"
+        },
+        {
+          "path": ".cache/huggingface/download/model.safetensors.index.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/model.safetensors.index.json.metadata",
+          "sha256": "13322f613e6727052bcad94fa30586ac7208444a7b0a99d7e3b4ccfb8fa4ad5e"
+        },
+        {
+          "path": ".cache/huggingface/download/preprocessor_config.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/preprocessor_config.json.metadata",
+          "sha256": "b346fd1cd2c4872e6c178417ee5e4ebd20d53cc86f256ad4ebe000bd67da56e4"
+        },
+        {
+          "path": ".cache/huggingface/download/special_tokens_map.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/special_tokens_map.json.metadata",
+          "sha256": "470c64d556601a54933ed29c680246739dd3788396acc51fec405851d036d2b0"
+        },
+        {
+          "path": ".cache/huggingface/download/tokenizer.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/tokenizer.json.metadata",
+          "sha256": "7e97dcd4206ed9c11c71e4e14fa039b11f00f9c60cd99eb1ee9fcb450b2479f1"
+        },
+        {
+          "path": ".cache/huggingface/download/tokenizer_config.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/tokenizer_config.json.metadata",
+          "sha256": "a21a4f49161d5176cf5956720017399639f4fa22fe8deb62cee3b925a80f64e0"
+        },
+        {
+          "path": ".cache/huggingface/download/vocab.json.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".cache/huggingface/download/vocab.json.metadata",
+          "sha256": "014fa4c7daf4eada5027ec73db72ff993c7a65c70fdbac3b9899e58de4a015f2"
+        },
+        {
+          "path": ".gitattributes",
+          "sha256": "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "a64b31d02653e5354ae174101be2e97e221f57f53ed22a084b7df7e8364d018b"
+        },
+        {
+          "path": "added_tokens.json",
+          "sha256": "58b54bbe36fc752f79a24a271ef66a0a0830054b4dfad94bde757d851968060b"
+        },
+        {
+          "path": "chat_template.json",
+          "sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+        },
+        {
+          "path": "config.json",
+          "sha256": "0ccd6378c18544511f59a2ffedb2a616974cd17b24f33ce9caaa40fdb53e187c"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "c685cb6ca7485922d0c1778c30da8102e0fbeeda9d1fbe58fc19c327ac79ea8c"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+        },
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "sha256": "4f75e3de726546ee43620d1227d3596cd3ba0fdd19f11faeea71de578d2d1052"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "sha256": "dae4128bbfd2b8d489e838048edc0bbe6e31f269d9b96fa3effe11cc534b8f0c"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "9bbb7f66770d7f0f3c2f880f257f991d0e6c756e0b2a86eedc37c7ad37d5581d"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "549c158011407dfb750d9ec578047cf76f5bfe365cd0aa069a50137d3f98d9dd"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "5eee858c5123a4279c3e1f7b81247343f356ac767940b2692a928ad929543214"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "0a6be425d5d62ec1904deb45e569c809d0973bd39a411452388f268a855e3183"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "existing/Qwen2.5-VL-7B-Instruct-AWQ"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "existing/Qwen2.5-VL-7B-Instruct-AWQ"
+    },
+    "deprecated": false,
+    "family": "qwen2.5-vl-7b-instruct-awq",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "awq",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+    "download_size_bytes": 6939953111,
+    "download_files": [
+      "model-00002-of-00002.safetensors",
+      "preprocessor_config.json",
+      "model.safetensors.index.json",
+      ".gitattributes",
+      "model-00001-of-00002.safetensors",
+      "generation_config.json",
+      "vocab.json",
+      "config.json",
+      "tokenizer.json",
+      "LICENSE",
+      "chat_template.json",
+      "added_tokens.json",
+      "special_tokens_map.json",
+      "merges.txt",
+      "tokenizer_config.json",
+      ".gitignore",
+      "generation_config.json.lock",
+      "model-00002-of-00002.safetensors.lock",
+      "tokenizer.json.metadata",
+      "model-00001-of-00002.safetensors.lock",
+      "chat_template.json.metadata",
+      "preprocessor_config.json.metadata",
+      ".gitattributes.metadata",
+      "config.json.lock",
+      "merges.txt.lock",
+      "model-00001-of-00002.safetensors.metadata",
+      "tokenizer_config.json.metadata",
+      "vocab.json.metadata",
+      "model-00002-of-00002.safetensors.metadata",
+      "special_tokens_map.json.metadata",
+      "chat_template.json.lock",
+      "preprocessor_config.json.lock",
+      "tokenizer_config.json.lock",
+      "added_tokens.json.metadata",
+      "tokenizer.json.lock",
+      "model.safetensors.index.json.lock",
+      "LICENSE.lock",
+      ".gitattributes.lock",
+      "merges.txt.metadata",
+      "generation_config.json.metadata",
+      "added_tokens.json.lock",
+      "special_tokens_map.json.lock",
+      "vocab.json.lock",
+      "model.safetensors.index.json.metadata",
+      "LICENSE.metadata",
+      "config.json.metadata"
+    ],
+    "download_directory_checksum": "d659ee647a141964",
+    "downloaded_at": "2025-10-02T23:17:22.944627+00:00",
+    "last_accessed": "2025-10-04T10:01:36.502524+00:00"
+  },
+  {
+    "name": "dialogpt-small-vllm-fp16",
+    "display_name": "DialoGPT-small",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/microsoft/DialoGPT-small",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "83054736b71aafa7a9b6c6fb0cedc6bec8b34f20ece5642edbc1526b7adb29a8",
+      "files": [
+        {
+          "path": ".aria2c.log",
+          "sha256": "38ac37af45be98ce7976e8a0567edaad523581f3351b4576992ce7ead9f14203"
+        },
+        {
+          "path": "config.json",
+          "sha256": "b176718354910f9839f68da96eaf2fce4b561655cac18dade5165b4b45e02a3e"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "b90eadacf585a743a30ea51e8b5c88b8d282a2a34dc0c7e556d0987cdbd68805"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5"
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "5757a96a9997bf58f69d885fb9501dfcfb372b709a74589198e13957cab36e6f"
+        },
+        {
+          "path": "model.safetensors.aria2",
+          "sha256": "ec04a70581716d6f83971a8c8bb766a33368050d792f5433d585d4ddbfd08856"
+        },
+        {
+          "path": "pytorch_model.bin",
+          "sha256": "d8592cedd17b95f5fdcb064ef81e74873816622fb7bd6497debffdf99e1073e9"
+        },
+        {
+          "path": "pytorch_model.bin.aria2",
+          "sha256": "2707b93caf61407a736621a5bd16223a7b9f34c8c0f3a6e2f00b1d49cea5cc22"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "24a5d96785e2a90a051ff80a62acb3a1c9267ff2124f689911d671a6f90bca28"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "microsoft/DialoGPT-small"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "microsoft/DialoGPT-small"
+    },
+    "deprecated": false,
+    "family": "dialogpt-small",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "fp16",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/microsoft/DialoGPT-small",
+    "download_size_bytes": 702999577,
+    "download_files": [
+      "pytorch_model.bin.aria2",
+      "pytorch_model.bin",
+      ".aria2c.log",
+      "generation_config.json",
+      "config.json",
+      "model.safetensors",
+      "merges.txt",
+      "model.safetensors.aria2",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "c93b7cf87af7ea9a",
+    "downloaded_at": "2025-10-02T23:17:29.992901+00:00",
+    "last_accessed": "2025-10-04T10:01:38.667848+00:00"
+  },
+  {
+    "name": "model-fp16-unassigned-fp16",
+    "display_name": "model-fp16",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/tmpcg6h33nq/owner2/model-fp16",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "46ac878f510239188b2fa1aa73cbacabbf5119599544303553456072f2b74de2",
+      "files": [
+        {
+          "path": "model.safetensors",
+          "sha256": "f1534392279bddbf9d43dde8701cb5be14b82f76ec6607bf8d6ad557f60f304e"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "owner2/model-fp16"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "owner2/model-fp16"
+    },
+    "deprecated": false,
+    "family": "model-fp16",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "fp16",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/tmp6qxhcoco/owner2/model-fp16",
+    "download_size_bytes": 2,
+    "download_files": [
+      "model.safetensors"
+    ],
+    "download_directory_checksum": "667b4b143ead218e",
+    "downloaded_at": "2025-10-03T12:04:23.898607+00:00",
+    "last_accessed": "2025-10-03T12:09:26.420406+00:00"
+  },
+  {
+    "name": "model-awq-unassigned-awq-w4g128",
+    "display_name": "model-awq",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/tmpcg6h33nq/owner1/model-awq",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "42bbe19d72b4f4fd61535c53db0bb7649193cd71435275fc46c85091036ccead",
+      "files": [
+        {
+          "path": "quantization_config.json",
+          "sha256": "7a901d6af54379dc22d2bcb4334ada11cdc33ca344ab3358db9aa5bf86e02f71"
+        },
+        {
+          "path": "weights.awq",
+          "sha256": "f1534392279bddbf9d43dde8701cb5be14b82f76ec6607bf8d6ad557f60f304e"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "owner1/model-awq"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "owner1/model-awq"
+    },
+    "deprecated": false,
+    "family": "model-awq",
+    "source_provider": "hf",
+    "quantization": "w4g128",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "awq",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/tmp6qxhcoco/owner1/model-awq",
+    "download_size_bytes": 58,
+    "download_files": [
+      "quantization_config.json",
+      "weights.awq"
+    ],
+    "download_directory_checksum": "4ed1646e59475bfe",
+    "downloaded_at": "2025-10-03T12:04:23.902337+00:00",
+    "last_accessed": "2025-10-03T12:09:26.424481+00:00"
+  },
+  {
+    "name": "r-unassigned-gguf",
+    "display_name": "r",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-127/test_template_promotion_and_ha0/modelA",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "c9bfdd07805d3b893873ad9be99c4e99dbdec5253942b4811a11b54d9577df64",
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+        },
+        {
+          "path": "config.json",
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/tmp/pytest-of-stewa/pytest-127/test_template_promotion_and_ha0/modelA/chat_template.jinja",
+      "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "model_type": "causal",
+      "library": "transformers",
+      "files_downloaded": 0,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [
+        "chat_template.jinja"
+      ],
+      "embedded_chat_template_preview": null,
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "o/r"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "o/r"
+    },
+    "deprecated": false,
+    "family": "r",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "custom",
+    "download_path": "/tmp/pytest-of-stewa/pytest-135/test_template_promotion_and_ha0/modelA",
+    "download_size_bytes": 43,
+    "download_files": [
+      "chat_template.jinja",
+      "config.json"
+    ],
+    "download_directory_checksum": "ed5744268598fdc0",
+    "downloaded_at": "2025-10-03T12:09:12.787869+00:00",
+    "last_accessed": "2025-10-04T15:54:36.164488+00:00"
+  }
+]

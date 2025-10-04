@@ -27,6 +27,7 @@ from .models import (
 )
 from .hashing import compute_artifact_hashes
 from .testing_filters import is_testing_name
+from .naming import build_identity
 import os as _os
 
 
@@ -137,17 +138,6 @@ def _infer_capabilities(name: str) -> Dict[str, bool]:
     return {"text": text, "vision": vision, "embedding": embedding, "audio": audio}
 
 
-def _build_variant_name(
-    family: str, backend: str, fmt: Optional[str], quant: Optional[str]
-) -> str:
-    parts = [family, backend]
-    if fmt:
-        parts.append(fmt.lower())
-    if quant and quant.lower() not in parts:
-        parts.append(quant.lower())
-    return "-".join(filter(None, parts))
-
-
 def record_download(
     *,
     hf_id: Optional[str],
@@ -180,10 +170,18 @@ def record_download(
     # mode, caller can set IMAGEWORKS_REGISTRY_NO_LAYERING.
     reg = load_registry(force=True)
     family = family_override or _infer_family(hf_id) or "model"
-    # Normalize quant to lowercase early for consistent persistence
-    if quantization:
-        quantization = quantization.lower()
-    variant_name = _build_variant_name(family, backend, format_type, quantization)
+    identity = build_identity(
+        family=family,
+        backend=backend,
+        format_type=format_type,
+        quantization=quantization,
+        display_override=display_name,
+    )
+    variant_name = identity.slug
+    backend = identity.backend_key
+    format_type = identity.format_key
+    quantization = identity.quant_key
+    family = identity.family_key
 
     # Clean-before-write: strictly skip testing/demo placeholders unless explicitly allowed
     include_testing = _os.environ.get(
@@ -226,9 +224,8 @@ def record_download(
     # Backend reconciliation on update: if an 'unassigned' variant exists for the same
     # (family, format, quant), migrate it to the requested backend instead of duplicating.
     if not existing and backend != "unassigned":
-        unassigned_name = _build_variant_name(
-            family, "unassigned", format_type, quantization
-        )
+        unassigned_identity = identity.with_backend("unassigned")
+        unassigned_name = unassigned_identity.slug
         candidate = reg.get(unassigned_name)
         if candidate is not None:
             # Build a migrated entry copying fields but updating identity/backend/path
@@ -248,8 +245,7 @@ def record_download(
                 e.quantization = quantization
             if source_provider:
                 e.source_provider = source_provider
-            if display_name and not e.display_name:
-                e.display_name = display_name
+            e.display_name = identity.display_name
             # Persist: add new, remove old, then save
             update_entries([e], save=False)
             remove_entry(unassigned_name, save=False)
@@ -284,8 +280,7 @@ def record_download(
             for k, v in extra_metadata.items():
                 if v is not None and k not in e.metadata:
                     e.metadata[k] = v
-        if display_name:
-            e.display_name = display_name
+        e.display_name = identity.display_name
         # compute artifacts hashes only if empty
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
@@ -297,9 +292,7 @@ def record_download(
     capabilities = _infer_capabilities(variant_name)
     entry = RegistryEntry(
         name=variant_name,
-        display_name=(
-            display_name or (hf_id.split("/")[-1] if hf_id else variant_name)
-        ),
+        display_name=identity.display_name,
         backend=backend,
         backend_config=BackendConfig(port=0, model_path=str(p), extra_args=[]),
         capabilities=capabilities,

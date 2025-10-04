@@ -131,8 +131,15 @@ class ChatForwarder:
             resolved = None
             for name, e in reg.items():
                 disp = e.display_name or e.name
-                disp_id = f"{disp}-{e.quantization}" if e.quantization else disp
-                if disp_id == model:
+                if disp == model:
+                    resolved = name
+                    break
+                if e.quantization:
+                    legacy_disp = f"{disp}-{e.quantization}"
+                    if legacy_disp == model:
+                        resolved = name
+                        break
+                if e.name == model:
                     resolved = name
                     break
             if not resolved:

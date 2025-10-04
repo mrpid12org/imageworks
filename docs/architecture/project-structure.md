@@ -13,7 +13,7 @@ Mono and Color Narrator are production-ready and share significant infrastructur
 - `pyproject.toml` – project metadata, dependencies, and console scripts.
 - `uv.lock` – pinned dependency set for reproducible environments.
 - `configs/` – repository-scoped configuration (e.g., ExifTool namespaces).
-- `docs/` – architecture notes, specifications, and workflow documentation.
+- `docs/` – architecture notes, specifications, workflow documentation, runbooks, and proposals.
 - `scripts/` – developer utilities (model servers, helpers) outside packaged apps.
 - `src/` – Python source tree (installed via the `src/` layout).
 - `tests/` – unit, integration, and analysis suites plus supporting assets.
@@ -33,7 +33,7 @@ Key documentation is grouped here:
 - `mono-workflow.md` – end-to-end competition workflow.
 - `processing-downloads.md` – ingest pipeline for competition ZIP files.
 - `mono-overview.md` / `mono-technical.md` – algorithm overviews and deep dives.
-- `dev-env/ide-setup-wsl-vscode.md` – development environment bootstrap.
+- `guides/ide-setup-wsl-vscode.md` – development environment bootstrap.
 - `spec/` – product specifications and design artefacts.
 - `project-structure.md` – this document.
 

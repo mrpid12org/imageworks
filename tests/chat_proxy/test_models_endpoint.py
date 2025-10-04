@@ -40,6 +40,6 @@ def test_models_endpoint(monkeypatch):
     data = r.json()
     assert data["object"] == "list"
     ids = [m["id"] for m in data["data"]]
-    # IDs now include quantization when present to avoid duplicates
-    assert "llava-q4" in ids
+    # IDs favour human-readable display names; duplicates fall back to logical ids
+    assert "llava" in ids
     assert "vision" in data["data"][0]["extensions"]["modalities"]

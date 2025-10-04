@@ -115,7 +115,7 @@ Adapter Behavior:
 - Re-download with different format/quant updates the same entry unless the naming changes; to preserve both, download into a distinct format/quant combination.
 
 Cross‑Reference:
-- See `docs/model-downloader.md` for CLI examples (`remove`, `verify`, `list-roles`) operating on these variant names.
+- See `../reference/model-downloader.md` for CLI examples (`remove`, `verify`, `list-roles`) operating on these variant names.
 
 ---
 Logical model registry entry (YAML or JSON persisted plus optional DB/JSONL):
@@ -702,7 +702,7 @@ Risks & Mitigations:
 This plan establishes a minimally invasive deterministic selection path while preserving existing workflows. By landing the registry + loader skeleton first, downstream modules migrate incrementally, reducing risk and enabling early feedback before streaming and full metrics are introduced.
 
 ### 21.15 Role-Based Selection (Cross-Reference)
-Personal Tagger now supports dynamic role-based resolution via `--use-registry` and role flags (`--caption-role`, `--keyword-role`, `--description-role`). Each role maps to the first non-deprecated registry entry advertising that role and required capabilities (vision). This indirection allows changing recommended models centrally by editing `configs/model_registry.json` without modifying deployment scripts. See `docs/personal_tagger/model_registry.md` section 11 for full details.
+Personal Tagger now supports dynamic role-based resolution via `--use-registry` and role flags (`--caption-role`, `--keyword-role`, `--description-role`). Each role maps to the first non-deprecated registry entry advertising that role and required capabilities (vision). This indirection allows changing recommended models centrally by editing `configs/model_registry.json` without modifying deployment scripts. See `../domains/personal-tagger/model-registry.md` section 11 for full details.
 
 ### 21.15 Implemented CLI Flags & Utilities (Running Log)
 Implemented (Phase 1 skeleton):

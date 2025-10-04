@@ -15,7 +15,7 @@ Imageworks provides local-first photography tooling for competition compliance a
 
 All applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
 
-See [Mono Workflow](docs/mono-workflow.md) for detailed documentation of the complete competition checking process.
+See [Mono Workflow](docs/domains/mono/mono-workflow.md) for detailed documentation of the complete competition checking process.
 
 ## Project Layout
 
@@ -46,21 +46,23 @@ imageworks/
 
 ## Documentation
 
+See the [Documentation Map](docs/index.md) for the full categorized list. Key entry points:
+
 ### Core Guides
-- [Mono Workflow](docs/mono-workflow.md) - Complete competition checking process
-- [Project Structure](docs/project-structure.md) - Detailed codebase organization
-- [AI Models and Prompting](docs/ai-models-and-prompting.md) - Comprehensive guide to models, experiments, and prompting strategies
+- [Mono Workflow](docs/domains/mono/mono-workflow.md) - Complete competition checking process
+- [Project Structure](docs/architecture/project-structure.md) - Detailed codebase organization
+- [AI Models and Prompting](docs/guides/ai-models-and-prompting.md) - Comprehensive guide to models, experiments, and prompting strategies
 
 ### Component Guides
-- [Color-Narrator Reference](docs/color-narrator-reference.md) - VLM-based color analysis system
-- [vLLM Deployment Guide](docs/vllm-deployment-guide.md) - Production AI model deployment
-- [Deterministic Model Serving](docs/deterministic-model-serving.md) - Hybrid vLLM + Ollama design (deterministic selection, locking, metrics)
+- [Color-Narrator Reference](docs/domains/color-narrator/reference.md) - VLM-based color analysis system
+- [vLLM Deployment Guide](docs/runbooks/vllm-deployment-guide.md) - Production AI model deployment
+- [Deterministic Model Serving](docs/architecture/deterministic-model-serving.md) - Hybrid vLLM + Ollama design (deterministic selection, locking, metrics)
 
 ### Developer Environment
-- [IDE Setup (WSL/VSCode)](docs/dev-env/ide-setup-wsl-vscode.md) - Development environment configuration
+- [IDE Setup (WSL/VSCode)](docs/guides/ide-setup-wsl-vscode.md) - Development environment configuration
 
 ## Getting Started
-1. Install [uv](https://docs.astral.sh/uv/) following the steps in `docs/dev-env/ide-setup-wsl-vscode.md`.
+1. Install [uv](https://docs.astral.sh/uv/) following the steps in `docs/guides/ide-setup-wsl-vscode.md`.
 2. From the repository root run `uv sync` to create the virtual environment and install dependencies.
 3. Activate tools with `uv run ...` or `uvx ...` so commands use the project environment.
 
@@ -101,6 +103,6 @@ To remove diagnostics/keywords later, generate a cleanup script:
 
 The logic for determining if an image is a valid monochrome is sophisticated, taking into account color variation, saturation, split-toning, and various edge cases.
 
-For a detailed, step-by-step explanation of the decision-making process, see [Mono Technical](docs/mono-technical.md).
+For a detailed, step-by-step explanation of the decision-making process, see [Mono Technical](docs/domains/mono/mono-technical.md).
 
 For architecture or roadmap discussions, start with the specification and follow links into the docs folder.

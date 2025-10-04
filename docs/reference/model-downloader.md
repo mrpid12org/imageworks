@@ -375,7 +375,7 @@ Exit Codes:
 - `1` generic failure (not found, verification error, exception)
 
 ### Cross References
-- Variant naming rationale: `docs/deterministic-model-serving.md` (section 4.1)
+- Variant naming rationale: `../architecture/deterministic-model-serving.md` (section 4.1)
 - Naming quick reference below.
 
 ### Logging
@@ -772,7 +772,7 @@ Rules Recap:
 
 Why this matters: All CLI subcommands (`remove`, `verify`, `list`, `list-roles`) reference the variant name. Scripts can reliably grep/sort by suffixes (e.g. `-awq`, `-gguf-q4_k_m`).
 
-See also: Detailed rationale and collision policy in `docs/deterministic-model-serving.md` (section 4.1).
+See also: Detailed rationale and collision policy in `../architecture/deterministic-model-serving.md` (section 4.1).
 
 ### FormatDetector
 
