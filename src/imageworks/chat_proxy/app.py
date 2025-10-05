@@ -94,6 +94,8 @@ async def list_models_api():
 
     for name in list_models():
         entry = get_entry(name)
+        if entry.deprecated:
+            continue
         if not include_testing and is_testing_entry(name, entry):
             continue
         # Hide non-installed variants for non-Ollama backends to avoid ghost entries
