@@ -20,6 +20,7 @@ from .metrics import MetricsAggregator, MetricSample
 from .autostart import AutostartManager
 from .logging_utils import JsonlLogger
 from ..model_loader.registry import get_entry
+from .capabilities import supports_vision
 
 
 class ChatForwarder:
@@ -149,7 +150,7 @@ class ChatForwarder:
             payload["model"] = resolved
 
         # Capability checks
-        has_vision = bool(entry.probes.vision and entry.probes.vision.vision_ok)
+        has_vision = supports_vision(entry)
         has_images, image_bytes = self._detect_images(payload.get("messages") or [])
         # For Ollama, defer vision capability validation to the backend (some models support vision even if
         # our registry hasn't been probed yet). Keep strict gating for non-Ollama backends.

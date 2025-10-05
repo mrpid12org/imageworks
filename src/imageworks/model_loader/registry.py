@@ -37,7 +37,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 from .models import (
     ArtifactFile,
@@ -93,6 +93,40 @@ def _is_dynamic(entry: RegistryEntry) -> bool:
         ]
     )
     return dynamic_attr_presence
+
+
+def _normalize_download_path(path: str | None) -> str | None:
+    if not path:
+        return None
+    candidate = path.strip()
+    if not candidate:
+        return None
+    # Preserve scheme-style prefixes (e.g. ollama:/model)
+    if candidate.startswith("ollama:"):
+        return candidate.lower()
+    try:
+        return str(Path(candidate).expanduser().resolve(strict=False))
+    except Exception:  # noqa: BLE001
+        try:
+            return str(Path(candidate).expanduser())
+        except Exception:  # noqa: BLE001
+            return candidate
+
+
+def _download_identity(entry: RegistryEntry) -> Tuple[str, str, str] | None:
+    """Return a normalized identity tuple for duplicate detection.
+
+    The tuple is (backend, normalized_path or "", checksum or ""). When neither path nor
+    checksum is available, return None to skip duplicate checks (legacy curated entries).
+    """
+
+    path_norm = _normalize_download_path(entry.download_path)
+    checksum = (entry.download_directory_checksum or "").strip() or (
+        entry.artifacts.aggregate_sha256 or ""
+    ).strip()
+    if not path_norm and not checksum:
+        return None
+    return (entry.backend, path_norm or "", checksum)
 
 
 def _classify_legacy(raw_entries: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -579,7 +613,37 @@ def save_registry(path: Path | None = None) -> Path:
 def update_entries(entries: Iterable[RegistryEntry], *, save: bool = True) -> None:
     if _REGISTRY_CACHE is None:
         raise RuntimeError("Registry not loaded")
+    seen_identities: dict[Tuple[str, str, str], str] = {}
     for entry in entries:
+        identity = _download_identity(entry)
+        if identity:
+            previous = seen_identities.get(identity)
+            if previous and previous != entry.name:
+                raise RegistryLoadError(
+                    (
+                        "Duplicate entries detected for the same download "
+                        f"identity ({identity}) while staging '{entry.name}' and '{previous}'."
+                    )
+                )
+            seen_identities[identity] = entry.name
+            # Detect existing registry entries with the same identity but different name.
+            duplicate = None
+            for existing in _REGISTRY_CACHE.values():
+                if existing.name == entry.name:
+                    continue
+                existing_identity = _download_identity(existing)
+                if existing_identity and existing_identity == identity:
+                    duplicate = existing
+                    break
+            if duplicate:
+                if duplicate.name in _CURATED_NAMES:
+                    raise RegistryLoadError(
+                        (
+                            "Attempted to register duplicate entry with the same "
+                            f"download path/checksum as curated model '{duplicate.name}'."
+                        )
+                    )
+                del _REGISTRY_CACHE[duplicate.name]
         _REGISTRY_CACHE[entry.name] = entry
     if save:
         save_registry()
