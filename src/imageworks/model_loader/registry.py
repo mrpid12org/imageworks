@@ -113,20 +113,25 @@ def _normalize_download_path(path: str | None) -> str | None:
             return candidate
 
 
+def _build_download_identity(
+    backend: str, path: str | None, checksum: str | None
+) -> Tuple[str, str, str] | None:
+    """Return normalized identity tuple for duplicate detection."""
+
+    path_norm = _normalize_download_path(path)
+    checksum_norm = (checksum or "").strip()
+    if not checksum_norm and path_norm is None:
+        return None
+    return (backend, path_norm or "", checksum_norm)
+
+
 def _download_identity(entry: RegistryEntry) -> Tuple[str, str, str] | None:
-    """Return a normalized identity tuple for duplicate detection.
+    """Return a normalized identity tuple for duplicate detection."""
 
-    The tuple is (backend, normalized_path or "", checksum or ""). When neither path nor
-    checksum is available, return None to skip duplicate checks (legacy curated entries).
-    """
-
-    path_norm = _normalize_download_path(entry.download_path)
     checksum = (entry.download_directory_checksum or "").strip() or (
         entry.artifacts.aggregate_sha256 or ""
     ).strip()
-    if not path_norm and not checksum:
-        return None
-    return (entry.backend, path_norm or "", checksum)
+    return _build_download_identity(entry.backend, entry.download_path, checksum)
 
 
 def _classify_legacy(raw_entries: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -468,6 +473,24 @@ def list_models() -> List[str]:
     return sorted(_REGISTRY_CACHE.keys())
 
 
+def find_by_download_identity(
+    *, backend: str, download_path: str | None, checksum: str | None
+) -> RegistryEntry | None:
+    """Return the first registry entry matching the provided download identity."""
+
+    if _REGISTRY_CACHE is None:
+        load_registry()
+    assert _REGISTRY_CACHE is not None
+    identity = _build_download_identity(backend, download_path, checksum)
+    if identity is None:
+        return None
+    for entry in _REGISTRY_CACHE.values():
+        existing_identity = _download_identity(entry)
+        if existing_identity and existing_identity == identity:
+            return entry
+    return None
+
+
 def _serialize_entry(entry: RegistryEntry) -> dict:
     return {
         "name": entry.name,
@@ -636,14 +659,12 @@ def update_entries(entries: Iterable[RegistryEntry], *, save: bool = True) -> No
                     duplicate = existing
                     break
             if duplicate:
-                if duplicate.name in _CURATED_NAMES:
-                    raise RegistryLoadError(
-                        (
-                            "Attempted to register duplicate entry with the same "
-                            f"download path/checksum as curated model '{duplicate.name}'."
-                        )
+                raise RegistryLoadError(
+                    (
+                        "Duplicate entries detected for the same download identity "
+                        f"({identity}) already claimed by '{duplicate.name}'."
                     )
-                del _REGISTRY_CACHE[duplicate.name]
+                )
         _REGISTRY_CACHE[entry.name] = entry
     if save:
         save_registry()
@@ -669,6 +690,7 @@ __all__ = [
     "load_registry",
     "get_entry",
     "list_models",
+    "find_by_download_identity",
     "save_registry",
     "update_entries",
     "remove_entry",

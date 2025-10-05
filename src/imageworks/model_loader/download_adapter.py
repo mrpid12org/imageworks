@@ -15,7 +15,14 @@ import hashlib
 import time as _time
 import requests as _requests
 
-from .registry import load_registry, update_entries, save_registry, remove_entry
+from .registry import (
+    RegistryLoadError,
+    find_by_download_identity,
+    load_registry,
+    remove_entry,
+    save_registry,
+    update_entries,
+)
 from .models import (
     RegistryEntry,
     BackendConfig,
@@ -219,6 +226,42 @@ def record_download(
     directory_checksum = compute_directory_checksum(p)
     now = _now_iso()
 
+    def _apply_download_updates(entry: RegistryEntry) -> RegistryEntry:
+        entry.backend = backend
+        entry.backend_config.model_path = str(p)
+        entry.download_format = format_type or entry.download_format
+        entry.download_location = location or entry.download_location
+        entry.download_path = str(p)
+        entry.download_size_bytes = size_bytes or entry.download_size_bytes
+        if files:
+            entry.download_files = files
+        entry.download_directory_checksum = directory_checksum
+        entry.downloaded_at = entry.downloaded_at or now
+        entry.last_accessed = now
+        if quantization:
+            entry.quantization = quantization
+        if source_provider:
+            entry.source_provider = source_provider
+        if served_model_id:
+            entry.served_model_id = served_model_id
+        if roles:
+            merged_roles = set(entry.roles) | set(roles)
+            entry.roles = sorted(merged_roles)
+        if role_priority:
+            entry.role_priority.update(role_priority)
+        if extra_metadata:
+            entry.metadata = entry.metadata or {}
+            for k, v in extra_metadata.items():
+                if v is not None and k not in entry.metadata:
+                    entry.metadata[k] = v
+        entry.display_name = identity.display_name
+        entry.family = family
+        if hf_id:
+            aliases = entry.model_aliases or []
+            if hf_id not in aliases:
+                entry.model_aliases = aliases + [hf_id]
+        return entry
+
     # Backend reconciliation on update: if an 'unassigned' variant exists for the same
     # (family, format, quant), migrate it to the requested backend instead of duplicating.
     if not existing and backend != "unassigned":
@@ -226,66 +269,46 @@ def record_download(
         unassigned_name = unassigned_identity.slug
         candidate = reg.get(unassigned_name)
         if candidate is not None:
-            # Build a migrated entry copying fields but updating identity/backend/path
             e = candidate
-            e.backend = backend
+            old_name = e.name
             e.name = variant_name
-            # Update path and provenance
-            e.backend_config.model_path = str(p)
-            if size_bytes is not None:
-                e.download_size_bytes = size_bytes
-            if files is not None:
-                e.download_files = files
-            e.download_directory_checksum = directory_checksum
-            e.downloaded_at = e.downloaded_at or now
-            e.last_accessed = now
-            if quantization:
-                e.quantization = quantization
-            if source_provider:
-                e.source_provider = source_provider
-            e.display_name = identity.display_name
-            # Persist: add new, remove old, then save
+            remove_entry(old_name, save=False)
+            e = _apply_download_updates(e)
+            if not e.artifacts.files:
+                e = compute_artifact_hashes(e)
             update_entries([e], save=False)
-            remove_entry(unassigned_name, save=False)
             save_registry()
+            _maybe_probe_and_mark_vision(e)
             return e
 
     if existing:
-        e = existing
-        # update download provenance
-        e.download_format = format_type or e.download_format
-        e.download_location = location or e.download_location
-        e.download_path = str(p)
-        e.download_size_bytes = size_bytes or e.download_size_bytes
-        if files:
-            e.download_files = files
-        e.download_directory_checksum = directory_checksum
-        e.downloaded_at = e.downloaded_at or now
-        e.last_accessed = now
-        if quantization:
-            e.quantization = quantization  # already lowercased
-        e.source_provider = source_provider or e.source_provider
-        if served_model_id:
-            e.served_model_id = served_model_id
-        if roles:
-            merged_roles = set(e.roles) | set(roles)
-            e.roles = sorted(merged_roles)
-        if role_priority:
-            e.role_priority.update(role_priority)
-        if extra_metadata:
-            if e.metadata is None:
-                e.metadata = {}
-            for k, v in extra_metadata.items():
-                if v is not None and k not in e.metadata:
-                    e.metadata[k] = v
-        e.display_name = identity.display_name
-        # compute artifacts hashes only if empty
+        e = _apply_download_updates(existing)
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
         update_entries([e], save=True)
-        # Post-registration best-effort vision probe (Ollama)
         _maybe_probe_and_mark_vision(e)
         return e
+
+    # Detect renamed variants: if another entry already references these weights,
+    # upgrade it in-place instead of appending a duplicate record.
+    rename_source = find_by_download_identity(
+        backend=backend, download_path=str(p), checksum=directory_checksum or None
+    )
+    if rename_source and rename_source.name != variant_name:
+        if not (rename_source.metadata or {}).get("created_from_download"):
+            raise RegistryLoadError(
+                "Refusing to rename curated registry entry based on download identity match."
+            )
+        old_name = rename_source.name
+        remove_entry(old_name, save=False)
+        rename_source.name = variant_name
+        rename_source = _apply_download_updates(rename_source)
+        if not rename_source.artifacts.files:
+            rename_source = compute_artifact_hashes(rename_source)
+        update_entries([rename_source], save=False)
+        save_registry()
+        _maybe_probe_and_mark_vision(rename_source)
+        return rename_source
 
     capabilities = _infer_capabilities(variant_name)
     entry = RegistryEntry(
