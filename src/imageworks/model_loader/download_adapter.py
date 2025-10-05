@@ -163,8 +163,6 @@ def record_download(
     allows callers to persist a canonical label (used by importers) without issuing a
     follow-up update.
     """
-    # Allow tolerant duplicate handling for dynamic download writes
-    _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
     # Use default merged snapshot path; layered loader will choose appropriate files.
     # Explicit path not passed to allow layering when expected. If environment forces single-file
     # mode, caller can set IMAGEWORKS_REGISTRY_NO_LAYERING.

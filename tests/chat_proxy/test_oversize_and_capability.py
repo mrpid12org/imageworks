@@ -11,6 +11,7 @@ def test_capability_mismatch(monkeypatch):
         quantization = None
         backend = "vllm"
         probes = type("P", (), {"vision": None})  # No vision
+        capabilities = {}
         chat_template = type("T", (), {"path": "templates/chat.jinja"})
         backend_config = type("cfg", (), {"port": 12352})
         served_model_id = None
@@ -50,6 +51,7 @@ def test_oversize(monkeypatch):
         quantization = None
         backend = "vllm"
         probes = type("P", (), {"vision": type("V", (), {"vision_ok": True})()})
+        capabilities = {"vision": True}
         chat_template = type("T", (), {"path": "templates/chat.jinja"})
         backend_config = type("cfg", (), {"port": 12353})
         served_model_id = None

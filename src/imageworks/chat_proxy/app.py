@@ -13,6 +13,7 @@ from .metrics import MetricsAggregator
 from .autostart import AutostartManager
 from .logging_utils import JsonlLogger
 from .forwarder import ChatForwarder
+from .capabilities import supports_vision
 from .errors import ProxyError
 from ..model_loader.registry import load_registry, list_models, get_entry
 from ..model_loader.testing_filters import is_testing_entry
@@ -30,6 +31,23 @@ app = FastAPI(title="ImageWorks Chat Proxy", version="0.1")
 # Track registry file modification time to auto-reload on change
 _REGISTRY_PATH = Path("configs/model_registry.json")
 _REGISTRY_MTIME: float | None = None
+
+
+def _path_exists(maybe_path: str | None) -> bool:
+    if not maybe_path:
+        return False
+    try:
+        candidate = Path(str(maybe_path)).expanduser()
+        return candidate.exists()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _has_served_backend(entry) -> bool:
+    served = getattr(entry, "served_model_id", None)
+    if not served:
+        return False
+    return str(served).strip().lower() != "none"
 
 
 def _refresh_registry_if_changed() -> None:
@@ -79,14 +97,11 @@ async def list_models_api():
         if not include_testing and is_testing_entry(name, entry):
             continue
         # Hide non-installed variants for non-Ollama backends to avoid ghost entries
-        installed = False
-        try:
-            if entry.download_path:
-                p = Path(entry.download_path).expanduser()
-                installed = p.exists()
-        except Exception:
-            installed = False
-        if entry.backend != "ollama" and not installed:
+        has_assets = _path_exists(
+            getattr(entry, "download_path", None)
+        ) or _path_exists(getattr(entry.backend_config, "model_path", None))
+        if entry.backend != "ollama" and not (has_assets or _has_served_backend(entry)):
+            # Hide entries that neither have local weights nor a configured backend.
             continue
         display = entry.display_name or entry.name or ""
         display_id = display or entry.name
@@ -99,7 +114,7 @@ async def list_models_api():
             continue
         seen_display_ids.add(display_id)
         modalities = ["text"]
-        if entry.probes.vision and entry.probes.vision.vision_ok:
+        if supports_vision(entry):
             modalities.append("vision")
         # Heuristic: for Ollama, some models are vision-capable even if not yet probed.
         # Mark common vision families as such to improve UI hints.

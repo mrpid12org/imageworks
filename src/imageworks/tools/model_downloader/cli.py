@@ -79,14 +79,8 @@ def _prune_empty_repo_and_owner_dirs(repo_dir: Path) -> None:
 
 
 def _enable_dupe_tolerance():
-    """Allow tolerant duplicate handling for CLI operations.
-
-    Tests inject duplicate synthetic entries; production registry should remain clean.
-    This helper centralizes the environment flag enabling tolerant loading.
-    """
-    import os as _os
-
-    _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
+    """Legacy no-op retained for backward compatibility."""
+    return None
 
 
 @app.command("download")
@@ -1056,10 +1050,7 @@ def backfill_ollama_paths(
                 second_pass = True
         if second_pass:
             reg_path.write_text(json.dumps(raw2, indent=2) + "\n", encoding="utf-8")
-        # Invalidate and reload cache (tolerant to duplicates)
-        import os as _os
-
-        _os.environ.setdefault("IMAGEWORKS_ALLOW_REGISTRY_DUPES", "1")
+        # Invalidate and reload cache with strict duplicate enforcement
         try:
             unified_registry.load_registry(force=True)
         except Exception as _exc:  # noqa: BLE001
