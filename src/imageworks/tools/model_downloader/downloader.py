@@ -221,7 +221,8 @@ class ModelDownloader:
         model_identifier: str,
         format_preference: Optional[Union[Sequence[str], str]] = None,
         location_override: Optional[str] = None,
-        include_optional: bool = False,
+        include_optional: bool = True,
+        include_large_optional: bool = False,
         force_redownload: bool = False,
         interactive: bool = True,
     ) -> RegistryEntry:
@@ -247,11 +248,15 @@ class ModelDownloader:
             repo_meta.storage_repo_name,
         )
 
-        required_files, optional_files = self._partition_files(analysis)
+        required_files, optional_files, large_optional_files = self._partition_files(
+            analysis
+        )
         all_files = self._download_selected_files(
             required_files,
             optional_files,
+            large_optional_files,
             include_optional,
+            include_large_optional,
             repo_meta,
             target_dir,
         )
@@ -399,25 +404,31 @@ class ModelDownloader:
         self._log(f"📁 Target directory: {target_dir}")
         return target_dir
 
-    def _partition_files(self, analysis: Any) -> tuple[List[Any], List[Any]]:
+    def _partition_files(self, analysis: Any) -> tuple[List[Any], List[Any], List[Any]]:
         required_files: List[Any] = []
         optional_files: List[Any] = []
+        large_optional_files: List[Any] = []
         for category, file_list in analysis.files.items():
             if category in ["model_weights", "config", "tokenizer"]:
                 required_files.extend(file_list)
             elif category in ["optional", "large_optional"]:
-                optional_files.extend(file_list)
+                if category == "optional":
+                    optional_files.extend(file_list)
+                else:
+                    large_optional_files.extend(file_list)
 
         if not required_files:
             raise RuntimeError("No essential model files found")
 
-        return required_files, optional_files
+        return required_files, optional_files, large_optional_files
 
     def _download_selected_files(
         self,
         required_files: List[Any],
         optional_files: List[Any],
+        large_optional_files: List[Any],
         include_optional: bool,
+        include_large_optional: bool,
         repo_meta: RepositoryMetadata,
         target_dir: Path,
     ) -> List[Any]:
@@ -431,7 +442,17 @@ class ModelDownloader:
             self._log(f"📥 Downloading {len(optional_files)} optional files...")
             self._download_files_with_aria2c(optional_files, base_url, target_dir)
 
-        return required_files + (optional_files if include_optional else [])
+        if include_large_optional and large_optional_files:
+            self._log(
+                f"📥 Downloading {len(large_optional_files)} large optional files..."
+            )
+            self._download_files_with_aria2c(large_optional_files, base_url, target_dir)
+        combined = list(required_files)
+        if include_optional:
+            combined.extend(optional_files)
+        if include_large_optional:
+            combined.extend(large_optional_files)
+        return combined
 
     def _ensure_verified(self, files: List[Any], target_dir: Path) -> None:
         if not self._verify_download_complete(files, target_dir):
@@ -544,10 +565,15 @@ class ModelDownloader:
         det_fmt, det_quant = detect_format_and_quant(target_dir)
         final_format = det_fmt or primary_format
 
+        # Auto-assign backend for certain formats (safetensors -> vllm)
+        auto_backend = None
+        if (final_format or "").lower() == "safetensors":
+            auto_backend = "vllm"
+
         try:
             entry = record_download(
                 hf_id=repo_meta.repository_id,
-                backend="unassigned",
+                backend=auto_backend or "unassigned",
                 format_type=final_format,
                 quantization=det_quant,
                 path=str(target_dir),

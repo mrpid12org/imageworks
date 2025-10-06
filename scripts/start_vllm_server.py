@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional, TextIO
 
 DEFAULT_MODEL_SUBDIR = "Qwen2-VL-2B-Instruct"
 DEFAULT_SERVED_MODEL_NAME = "Qwen2-VL-2B-Instruct"
@@ -84,6 +84,11 @@ def build_command(args: argparse.Namespace) -> List[str]:
         command.extend(["--max-num-seqs", str(args.max_num_seqs)])
     if args.max_num_batched_tokens is not None:
         command.extend(["--max-num-batched-tokens", str(args.max_num_batched_tokens)])
+    # Optional memory tuning flags
+    if getattr(args, "kv_cache_dtype", None):
+        command.extend(["--kv-cache-dtype", args.kv_cache_dtype])
+    if getattr(args, "swap_space", None) is not None:
+        command.extend(["--swap-space", str(args.swap_space)])
 
     if args.enforce_eager:
         command.append("--enforce-eager")
@@ -156,6 +161,29 @@ def start_server() -> None:
         help="Maximum tokens processed in a single batch",
     )
     parser.add_argument(
+        "--kv-cache-dtype",
+        default=None,
+        choices=[
+            "auto",
+            "fp8",
+            "fp8_e5m2",
+            "fp8_e4m3",
+            "fp16",
+            "bfloat16",
+            "bf16",
+        ],
+        help=(
+            "Data type for KV cache. Using FP8 (e5m2) can significantly reduce VRAM "
+            "usage on consumer GPUs."
+        ),
+    )
+    parser.add_argument(
+        "--swap-space",
+        type=int,
+        default=None,
+        help=("CPU swap space in GiB for paged attention (helps when VRAM is tight)."),
+    )
+    parser.add_argument(
         "--enforce-eager",
         action="store_true",
         help="Disable CUDA graphs (lower VRAM, slower throughput)",
@@ -183,6 +211,16 @@ def start_server() -> None:
         "extra",
         nargs=argparse.REMAINDER,
         help="Additional arguments forwarded to vLLM",
+    )
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="Start the server in the background (do not block).",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="If provided, redirect stdout/stderr to this file when running in background.",
     )
 
     args = parser.parse_args()
@@ -218,11 +256,31 @@ def start_server() -> None:
     print("🚀 Launching vLLM server with command:")
     print(" ".join(command))
 
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as exc:
-        sys.stderr.write(f"vLLM server exited with status {exc.returncode}\n")
-        sys.exit(exc.returncode)
+    if args.background:
+        # Start without blocking. Redirect to log file if provided, otherwise inherit.
+        stdout: Optional[TextIO]
+        stderr: Optional[TextIO]
+        if args.log_file:
+            log_path = Path(args.log_file).expanduser()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            f = open(log_path, "a", buffering=1)
+            stdout = f
+            stderr = f
+            print(f"[vllm-launcher] Background mode. Logging to {log_path}")
+        else:
+            stdout = subprocess.DEVNULL
+            stderr = subprocess.STDOUT
+            print("[vllm-launcher] Background mode. Output suppressed (no --log-file).")
+        proc = subprocess.Popen(command, stdout=stdout, stderr=stderr)
+        print(f"[vllm-launcher] Started PID {proc.pid} on port {args.port}.")
+        # Do not wait; caller can check liveness separately
+        return
+    else:
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as exc:
+            sys.stderr.write(f"vLLM server exited with status {exc.returncode}\n")
+            sys.exit(exc.returncode)
 
 
 if __name__ == "__main__":

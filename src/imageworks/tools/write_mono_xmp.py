@@ -92,7 +92,9 @@ def generate(
             if rec.get("failure_reason"):
                 kws.append(_kw("reason", rec["failure_reason"]))
             for kw in filter(None, kws):
+                # Write to both XMP Subject and IPTC Keywords for maximum compatibility
                 args.append(f"-XMP-dc:Subject+={kw}")
+                args.append(f"-IPTC:Keywords+={kw}")
 
         args.append(shlex.quote(str(path)))
         lines.append(" ".join(args))
@@ -142,9 +144,21 @@ def clean(
                 "-XMP-MW:MonoHueR=",
                 "-XMP-MW:MonoHueR2=",
             ]
-        # Remove mono:* keywords if present
+        # Remove mono:* keywords if present (XMP side)
         for key in ("verdict", "mode", "tones", "reason"):
             args.append(f"-XMP-dc:Subject-={{mono:{key}:*}}")
+
+        # Also remove the exact IPTC keywords we would have written
+        kws: List[str] = []
+        kws.append(_kw("verdict", rec.get("verdict")))
+        kws.append(_kw("mode", rec.get("mode")))
+        top_colors_kw = (rec.get("top_colors") or [])[:2]
+        if top_colors_kw:
+            kws.append(_kw("tones", "+".join(top_colors_kw)))
+        if rec.get("failure_reason"):
+            kws.append(_kw("reason", rec["failure_reason"]))
+        for kw in filter(None, kws):
+            args.append(f"-IPTC:Keywords-={kw}")
         args.append(path)
         lines.append(" ".join(args))
     out.write_text("\n".join(lines) + "\n")

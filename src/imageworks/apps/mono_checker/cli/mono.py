@@ -579,10 +579,18 @@ def check(
         help="Generate LAB chroma heatmaps for failed images",
     ),
     write_xmp: bool = typer.Option(
-        False, help="Generate and run the XMP exporter after checks"
+        True,
+        help=(
+            "Generate and run the XMP exporter after checks (default: on). "
+            "Use --no-write-xmp to skip writing."
+        ),
     ),
     xmp_keywords_only: bool = typer.Option(
-        False, help="With --write-xmp, only write mono:* keywords"
+        True,
+        help=(
+            "With --write-xmp, only write mono:* keywords (XMP Subject + IPTC Keywords). "
+            "Disable with --no-xmp-keywords-only to also write custom XMP fields."
+        ),
     ),
     xmp_sidecar: bool = typer.Option(
         False, help="With --write-xmp, write .xmp sidecars instead of in-file tags"
@@ -698,7 +706,14 @@ def check(
         typer.echo(f"No files matched in {scan_folder} for extensions: {final_exts}")
         raise typer.Exit(1)
 
-    out_f = open(final_jsonl_out, "w") if final_jsonl_out else None
+    # Ensure JSONL parent directory exists before writing
+    out_f = None
+    if final_jsonl_out:
+        try:
+            final_jsonl_out.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        out_f = open(final_jsonl_out, "w")
     csv_file = None
     csv_writer = None
     if csv_out:

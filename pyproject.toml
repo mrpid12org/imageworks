@@ -158,6 +158,13 @@ default_overlays_dir = "/mnt/d/Proper Photos/photos/ccc competition images"
 default_mono_jsonl = "outputs/results/mono_results.jsonl"
 
 # Output configuration
+
+
+[tool.imageworks.zip-extract]
+# Default source directory for ZIP files (WSL path)
+default_zip_dir = "/mnt/c/Users/stewa/Downloads/CCC comp zips"
+# Default extract root (WSL path for D:\\Proper Photos\\photos\\ccc competition images)
+default_extract_root = "/mnt/d/Proper Photos/photos/ccc competition images"
 backup_original_files = true
 overwrite_existing_metadata = false
 metadata_version = "1.0"

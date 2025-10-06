@@ -74,13 +74,13 @@ See the [Documentation Map](docs/index.md) for the full categorized list. Key en
   - `POST /mono/batch` (JSON: `folder`, optional `exts`, thresholds)
 - CLI defaults: `pyproject.toml` `[tool.imageworks.mono]` defines the folder, extensions, and output paths used when you omit options.
 - Run with defaults: `uv run imageworks-mono` (produces JSONL and summary without extra flags).
-- Auto-write XMP: `uv run imageworks-mono --write-xmp` regenerates the ExifTool script and runs it (respecting defaults for script path/keywords/sidecars).
+- XMP writing: By default, `uv run imageworks-mono` generates an ExifTool script and writes lightweight keywords derived from results (both XMP-dc:Subject and IPTC:Keywords). Use `--no-write-xmp` to skip writing, or add `--no-xmp-keywords-only` to include custom XMP fields as well.
 
 ### Writing diagnostics into images (Lightroom demo)
 - Generate JSONL with diagnostics: `uv run imageworks-mono check <folder> --jsonl-out mono_results.jsonl`
 - Create an ExifTool script that writes custom XMP fields (and optional keywords):
   - `uv run imageworks-mono-xmp generate mono_results.jsonl --out write_xmp.sh`
-  - Include LR-friendly keywords (prefix `mono:`): add `--as-keywords`
+  - Include LR-friendly keywords (prefix `mono:`): add `--as-keywords` (the CLI writer uses keywords by default when invoked via `imageworks-mono`)
 - Run the script (requires ExifTool): `bash write_xmp.sh`
 - In Lightroom: Metadata → Read Metadata from Files to ingest changes.
 

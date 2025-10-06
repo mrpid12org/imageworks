@@ -12,7 +12,7 @@ import json
 import re
 
 # Priority order of formats we attempt to detect. Earlier = higher priority.
-_FORMAT_PRIORITY = ["gguf", "awq", "gptq", "fp16"]
+_FORMAT_PRIORITY = ["gguf", "awq", "gptq", "safetensors"]
 
 _AWQ_HINT_PATTERNS = [
     re.compile(r"\.awq$"),
@@ -66,10 +66,10 @@ def detect_format_and_quant(path: Path) -> Tuple[Optional[str], Optional[str]]:
         if any(_GPTQ_HINT in n for n in lower_names):
             fmt = "gptq"
 
-    # 4. Safetensors -> fp16 (last resort for these heuristics)
+    # 4. Safetensors container detection
     if fmt is None:
         if any(n.endswith(_SAFETENSORS_SUFFIX) for n in lower_names):
-            fmt = "fp16"
+            fmt = "safetensors"
 
     # AWQ quantization_config parsing (quantization label w<bit>g<group>)
     if quant is None:
@@ -113,6 +113,13 @@ def detect_format_and_quant(path: Path) -> Tuple[Optional[str], Optional[str]]:
                     break
             if quant:
                 break
+
+    # Normalize legacy behavior: if fmt resolved to fp16 (older heuristics),
+    # interpret it as safetensors container with fp16 quantization.
+    if fmt == "fp16":
+        fmt = "safetensors"
+        if quant is None:
+            quant = "fp16"
 
     return fmt, quant
 

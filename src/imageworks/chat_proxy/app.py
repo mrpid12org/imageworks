@@ -251,3 +251,7 @@ def main():  # pragma: no cover
     import uvicorn
 
     uvicorn.run(app, host=_cfg.host, port=_cfg.port)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

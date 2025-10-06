@@ -62,9 +62,7 @@ class URLAnalyzer:
         "direct_file": re.compile(
             r"https?://.*\.(safetensors|gguf|bin|pth|onnx|pt)(?:\?.*)?$"
         ),
-        "huggingface_shorthand": re.compile(
-            r"^([\w.-]+)/([\w.-]+?)(?:@([\w./-]+))?$"
-        ),
+        "huggingface_shorthand": re.compile(r"^([\w.-]+)/([\w.-]+?)(?:@([\w./-]+))?$"),
     }
 
     def __init__(self, timeout: int = 30):
@@ -162,8 +160,10 @@ class URLAnalyzer:
             # Support bare owner/repo identifiers even if they do not
             # strictly match the shorthand regex (e.g. extra whitespace).
             normalized = url.strip()
-            if normalized and "/" in normalized and not normalized.startswith(
-                ("http://", "https://")
+            if (
+                normalized
+                and "/" in normalized
+                and not normalized.startswith(("http://", "https://"))
             ):
                 owner, repo_branch = normalized.split("/", 1)
                 repo, _, branch = repo_branch.partition("@")
@@ -243,6 +243,18 @@ class URLAnalyzer:
         for file_info in files:
             path = file_info.path.lower()
             size = file_info.size
+
+            # Chat template files (treat as essential config)
+            if (
+                path.endswith("chat_template.json")
+                or (path.endswith(".jinja") and ("chat" in path and "template" in path))
+                or (
+                    "chat_template" in path
+                    and (path.endswith(".json") or path.endswith(".jinja"))
+                )
+            ):
+                categories["config"].append(file_info)
+                continue
 
             # Model weights (primary files)
             if any(
