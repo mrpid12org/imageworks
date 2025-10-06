@@ -101,10 +101,15 @@ def download_model(
         help="Target location (linux_wsl, windows_lmstudio, or custom path)",
     ),
     include_optional: bool = typer.Option(
+        True,
+        "--include-optional/--no-include-optional",
+        "-o/-O",
+        help="Include optional small files (docs, small JSONs). Chat templates are always included.",
+    ),
+    include_large_optional: bool = typer.Option(
         False,
-        "--include-optional",
-        "-o",
-        help="Include optional files (documentation, examples, etc.)",
+        "--include-large-optional/--no-include-large-optional",
+        help="Include large optional files (>100MB). Off by default.",
     ),
     force: bool = typer.Option(
         False, "--force", help="Force re-download even if model exists"
@@ -130,6 +135,7 @@ def download_model(
             format_preference=preferred_formats,
             location_override=location,
             include_optional=include_optional,
+            include_large_optional=include_large_optional,
             force_redownload=force,
             interactive=not non_interactive,
         )

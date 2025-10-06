@@ -16,7 +16,6 @@ import time as _time
 import requests as _requests
 
 from .registry import (
-    RegistryLoadError,
     find_by_download_identity,
     load_registry,
     remove_entry,
@@ -62,6 +61,23 @@ def compute_directory_checksum(directory: Path) -> str:
             hasher.update(str(rel).encode())
             hasher.update(str(size).encode())
     return hasher.hexdigest()[:16]
+
+
+def _normalize_filesystem_path(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if candidate.startswith("ollama:"):
+        return candidate.lower()
+    try:
+        return str(Path(candidate).expanduser().resolve(strict=False))
+    except Exception:  # noqa: BLE001
+        try:
+            return str(Path(candidate).expanduser())
+        except Exception:  # noqa: BLE001
+            return candidate
 
 
 def _tiny_png_base64() -> str:
@@ -218,6 +234,34 @@ def record_download(
         # Do not persist this entry; signal a soft skip to callers
         raise ImportSkipped(f"Skipping testing/demo import: {variant_name}")
     existing = reg.get(variant_name)
+    if not existing:
+        normalized_target_path = _normalize_filesystem_path(path)
+        if normalized_target_path:
+            for candidate in reg.values():
+                if candidate.name == variant_name:
+                    continue
+                if candidate.metadata and candidate.metadata.get(
+                    "created_from_download"
+                ):
+                    continue
+                candidate_path = _normalize_filesystem_path(
+                    getattr(candidate.backend_config, "model_path", None)
+                )
+                if candidate_path and candidate_path == normalized_target_path:
+                    existing = candidate
+                    variant_name = candidate.name
+                    target_display = candidate.display_name or identity.display_name
+                    candidate_family = candidate.family or family
+                    identity = build_identity(
+                        family=candidate_family,
+                        backend=candidate.backend or backend,
+                        format_type=format_type,
+                        quantization=quantization,
+                        display_override=target_display,
+                    )
+                    backend = identity.backend_key
+                    family = identity.family_key
+                    break
     p = Path(path).expanduser()
     if size_bytes is None and p.exists():
         size_bytes = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
@@ -291,14 +335,24 @@ def record_download(
 
     # Detect renamed variants: if another entry already references these weights,
     # upgrade it in-place instead of appending a duplicate record.
+    checksum_lookup = directory_checksum or None
     rename_source = find_by_download_identity(
-        backend=backend, download_path=str(p), checksum=directory_checksum or None
+        backend=backend, download_path=str(p), checksum=checksum_lookup
     )
+    if rename_source is None and checksum_lookup is not None:
+        # Retry matching by path only when checksum differs between curated vs. downloaded entries.
+        rename_source = find_by_download_identity(
+            backend=backend, download_path=str(p), checksum=None
+        )
     if rename_source and rename_source.name != variant_name:
         if not (rename_source.metadata or {}).get("created_from_download"):
-            raise RegistryLoadError(
-                "Refusing to rename curated registry entry based on download identity match."
-            )
+            # Curated entry already manages these weights; update it in-place without renaming.
+            curated = _apply_download_updates(rename_source)
+            if not curated.artifacts.files:
+                curated = compute_artifact_hashes(curated)
+            update_entries([curated], save=True)
+            _maybe_probe_and_mark_vision(curated)
+            return curated
         old_name = rename_source.name
         remove_entry(old_name, save=False)
         rename_source.name = variant_name

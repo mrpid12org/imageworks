@@ -56,6 +56,8 @@ class DownloaderConfig:
     max_concurrent_downloads: int = 8
     enable_resume: bool = True
     include_optional_files: bool = False
+    # New default behavior prefers including optional small files by default.
+    # Kept as a separate knob for future programmatic uses; CLI now defaults to include.
 
     # Format preferences
     preferred_formats: List[str] = field(

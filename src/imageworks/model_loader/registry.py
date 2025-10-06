@@ -38,6 +38,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
+import hashlib
 
 from .models import (
     ArtifactFile,
@@ -460,6 +461,51 @@ def _parse_entry(raw: dict) -> RegistryEntry:
             entry.chat_template.path = str(
                 Path(entry.download_path) / "chat_template.json"
             )
+        # If still no chat_template path, promote a suitable external .jinja (or chat_template* file)
+        if entry.chat_template and not entry.chat_template.path and entry.download_path:
+            root = Path(entry.download_path)
+            if root.exists() and root.is_dir():
+                candidates: List[Path] = []
+                try:
+                    for child in root.rglob("*"):
+                        if not child.is_file():
+                            continue
+                        name_lower = child.name.lower()
+                        if name_lower.endswith(".jinja") or (
+                            "chat_template" in name_lower
+                            and (
+                                name_lower.endswith(".json")
+                                or name_lower.endswith(".jinja")
+                            )
+                        ):
+                            try:
+                                if child.stat().st_size <= 2_000_000:
+                                    head = child.read_text(
+                                        encoding="utf-8", errors="ignore"
+                                    )[:4000]
+                                    if "{{" in head and "}}" in head:
+                                        candidates.append(child)
+                            except Exception:
+                                pass
+                except Exception:
+                    candidates = []
+                if candidates:
+                    # Pick a stable candidate (name order) for determinism
+                    tpl = sorted(candidates, key=lambda p: p.name)[0]
+                    try:
+                        data = tpl.read_text(encoding="utf-8", errors="ignore")
+                        sha = hashlib.sha256(data.encode("utf-8")).hexdigest()
+                    except Exception:
+                        sha = None  # best-effort
+                    entry.chat_template.source = "external"
+                    entry.chat_template.path = str(tpl)
+                    entry.chat_template.sha256 = sha
+                    try:
+                        entry.metadata["primary_chat_template_file"] = tpl.name
+                        if sha:
+                            entry.metadata["primary_chat_template_sha256"] = sha
+                    except Exception:
+                        pass
     except Exception:
         # Non-fatal enrichment; ignore if anything unexpected occurs
         pass

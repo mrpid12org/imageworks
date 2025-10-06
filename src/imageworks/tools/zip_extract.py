@@ -92,22 +92,13 @@ def extract_zip(
                 # Update metadata if XMP present and allowed by flag
                 do_metadata = (not file_existed) or update_all_metadata
                 if Path(member).suffix.lower() in IMAGE_EXTS:
-                    # Always add 'monopy' keyword
+                    # Ensure 'ccc' keyword exists on all processed images
                     try:
-                        subprocess.run(
-                            [
-                                "exiftool",
-                                "-overwrite_original",
-                                "-keywords+=monopy",
-                                str(out_path),
-                            ],
-                            check=True,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                        )
+                        if not _has_keyword(out_path, "ccc"):
+                            _add_keyword(out_path, "ccc")
                     except Exception as e:
                         errors.append(
-                            f"Failed to add 'monopy' keyword to {out_path}: {e}"
+                            f"Failed to ensure 'ccc' keyword for {out_path}: {e}"
                         )
                     if do_metadata:
                         stem = Path(member).stem
@@ -299,6 +290,45 @@ def _update_jpg_metadata_exiftool(
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except Exception as e:
         raise RuntimeError(f"Could not update metadata for {jpg_path}: {e}")
+
+
+def _has_keyword(path: Path, keyword: str) -> bool:
+    """Return True if the given keyword is already present (case-insensitive)."""
+    try:
+        result = subprocess.run(
+            [
+                "exiftool",
+                "-s",
+                "-s",
+                "-s",
+                "-keywords",
+                str(path),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        values = [v.strip().lower() for v in result.stdout.splitlines() if v.strip()]
+        return keyword.strip().lower() in values
+    except Exception as e:  # treat failures as missing to attempt add later
+        console.print(f"[yellow]Keyword check failed for {path}: {e}")
+        return False
+
+
+def _add_keyword(path: Path, keyword: str) -> None:
+    """Add a keyword using exiftool (writes XMP-dc:Subject / IPTC:Keywords via shortcut)."""
+    subprocess.run(
+        [
+            "exiftool",
+            "-overwrite_original",
+            f"-keywords+={keyword}",
+            str(path),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 if __name__ == "__main__":

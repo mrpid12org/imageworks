@@ -170,7 +170,8 @@ class ChatForwarder:
         # Backend-specific base URL and API path
         if entry.backend == "ollama":
             port = entry.backend_config.port or 11434
-            base_url = f"http://localhost:{port}"
+            # Prefer IPv4 loopback to avoid ::1 vs 0.0.0.0 mismatch
+            base_url = f"http://127.0.0.1:{port}"
             api_path = "/api/chat"
         else:
             # Sensible defaults if port not set in registry
@@ -180,7 +181,8 @@ class ChatForwarder:
             elif entry.backend == "triton":
                 default_port = 9000
             port = entry.backend_config.port or default_port
-            base_url = f"http://localhost:{port}/v1"
+            # Prefer IPv4 loopback to avoid ::1 vs 0.0.0.0 mismatch
+            base_url = f"http://127.0.0.1:{port}/v1"
             api_path = "/chat/completions"
 
         # Ensure backend reachable or autostart
