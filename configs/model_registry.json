@@ -1778,7 +1778,7 @@
       "embedded_chat_template_preview": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0]['role'] == 'system' %}\n        {{- messages[0]['content'] }}\n    {%- else %}\n        {{...",
       "branch": "main"
     },
-    "served_model_id": null,
+    "served_model_id": "None",
     "model_aliases": [
       "Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8"
     ],
@@ -1814,6 +1814,6 @@
     ],
     "download_directory_checksum": "0f75b70c214f12d7",
     "downloaded_at": "2025-10-07T21:44:14.771990+00:00",
-    "last_accessed": "2025-10-07T21:44:14.771990+00:00"
+    "last_accessed": "2025-10-07T22:03:01.706848+00:00"
   }
 ]
