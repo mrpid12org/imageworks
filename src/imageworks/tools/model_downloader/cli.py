@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from imageworks.model_loader.registry import load_registry as _load_unified_registry
 
 from .format_utils import detect_format_and_quant
-from .downloader import ModelDownloader
+from .downloader import ModelDownloader, _derive_producer
 from .url_analyzer import URLAnalyzer
 from imageworks.model_loader import registry as unified_registry
 from imageworks.model_loader.download_adapter import (
@@ -81,6 +81,49 @@ def _prune_empty_repo_and_owner_dirs(repo_dir: Path) -> None:
 def _enable_dupe_tolerance():
     """Legacy no-op retained for backward compatibility."""
     return None
+
+
+def _extract_hf_id(entry: Any) -> Optional[str]:
+    if isinstance(entry, dict):
+        source = entry.get("source")
+    else:
+        source = getattr(entry, "source", None)
+    if isinstance(source, dict):
+        hf_id = source.get("huggingface_id")
+        if isinstance(hf_id, str) and hf_id:
+            return hf_id
+    aliases = []
+    if isinstance(entry, dict):
+        aliases = entry.get("model_aliases") or []
+    else:
+        aliases = getattr(entry, "model_aliases", None) or []
+    for alias in aliases:
+        if isinstance(alias, str) and "/" in alias:
+            return alias
+    return None
+
+
+def _resolve_producer(entry: Any) -> Optional[str]:
+    if isinstance(entry, dict):
+        metadata = entry.get("metadata") or {}
+    else:
+        metadata = getattr(entry, "metadata", None) or {}
+    existing = metadata.get("producer") if isinstance(metadata, dict) else None
+    existing_str = str(existing) if existing else None
+    hf_id = _extract_hf_id(entry)
+    return _derive_producer(
+        existing=existing_str,
+        hf_id=hf_id,
+        source_provider=entry.get("source_provider")
+        if isinstance(entry, dict)
+        else getattr(entry, "source_provider", None),
+        served_model_id=entry.get("served_model_id")
+        if isinstance(entry, dict)
+        else getattr(entry, "served_model_id", None),
+        download_path=entry.get("download_path")
+        if isinstance(entry, dict)
+        else getattr(entry, "download_path", None),
+    )
 
 
 @app.command("download")
@@ -237,6 +280,16 @@ def list_models(
         False,
         "--show-internal-names",
         help="Include internal variant name column for debugging",
+    ),
+    show_backend: bool = typer.Option(
+        False,
+        "--show-backend",
+        help="Include backend column (hidden by default)",
+    ),
+    show_installed: bool = typer.Option(
+        False,
+        "--show-installed",
+        help="Include installed column (hidden by default)",
     ),
     include_testing: bool = typer.Option(
         False,
@@ -464,6 +517,7 @@ def list_models(
                 if not installed and e.backend == "ollama":
                     installed = True
                 display = getattr(e, "display_name", None) or e.name
+                producer_value = _resolve_producer(e)
                 payload.append(
                     {
                         "name": e.name,
@@ -480,6 +534,7 @@ def list_models(
                         "served_model_id": e.served_model_id,
                         "deprecated": getattr(e, "deprecated", False),
                         "capabilities": getattr(e, "capabilities", {}) or {},
+                        "producer": producer_value,
                     }
                 )
             if include_logical:
@@ -523,6 +578,7 @@ def list_models(
                             "logical_only": True,
                             "served_model_id": obj.get("served_model_id"),
                             "deprecated": obj.get("deprecated", False),
+                            "producer": _resolve_producer(obj),
                         }
                     )
                 payload.sort(key=lambda x: x["name"])
@@ -540,9 +596,12 @@ def list_models(
             table.add_column("Registry ID", style="white dim")
         table.add_column("Format", style="magenta")
         table.add_column("Quant", style="magenta")
-        table.add_column("Backend", style="green")
+        table.add_column("Producer", style="green")
+        if show_backend:
+            table.add_column("Backend", style="green")
         table.add_column("Caps", style="green")
-        table.add_column("Inst", style="yellow")
+        if show_installed:
+            table.add_column("Inst", style="yellow")
         table.add_column("Size", justify="right", style="blue")
         if show_details:
             table.add_column("ServedID", style="white")
@@ -586,6 +645,7 @@ def list_models(
             caps_display = "".join(caps_tokens) or "-"
             size_value = getattr(e, "download_size_bytes", None)
             size_display = _format_size(size_value) if size_value is not None else "-"
+            producer_display = _resolve_producer(e) or "-"
             row = [display]
             if show_internal_names:
                 row.append(e.name)
@@ -593,12 +653,15 @@ def list_models(
                 [
                     fmt_display,
                     quant_display,
-                    backend_display,
-                    caps_display,
-                    "✓" if installed else "✗",
-                    size_display,
+                    producer_display,
                 ]
             )
+            if show_backend:
+                row.append(backend_display)
+            row.append(caps_display)
+            if show_installed:
+                row.append("✓" if installed else "✗")
+            row.append(size_display)
             if show_details:
                 row.append(getattr(e, "served_model_id", None) or "-")
                 row.append(",".join(getattr(e, "roles", []) or []) or "-")

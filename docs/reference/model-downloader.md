@@ -11,6 +11,7 @@ A comprehensive tool for downloading and managing AI models across multiple form
 - 📁 **Smart Routing**: Sends GGUF models to LM Studio paths and other formats to the WSL weights store
 - 📋 **Model Registry**: Tracks size, checksum, location, and metadata for every download
 - ♻️ **Normalization & Rebuild**: `normalize-formats` command re-detects formats/quantization and optionally rebuilds dynamic fields safely
+- 🧾 **README Capture**: README and LICENSE docs are always fetched; README path, hash (for small files), and curated signals are recorded for later review
 
 - 🔗 **URL Support**: Handles direct HuggingFace URLs and shorthand `owner/repo` identifiers (including `owner/repo@branch`)
 
@@ -66,6 +67,16 @@ Human-readable table (installed + metadata):
 imageworks-download list
 ```
 
+By default the table shows model name, format, quantization, producer, capability flags, and size. Reintroduce the backend or installed columns when you need them:
+
+```bash
+# Show backend column again
+imageworks-download list --show-backend
+
+# Show backend + installed columns
+imageworks-download list --show-backend --show-installed
+```
+
 Add roles column & quant info (already included by default):
 ```bash
 imageworks-download list --details
@@ -101,7 +112,24 @@ JSON output for scripting:
 imageworks-download list --json > downloads.json
 ```
 
-`installed` in JSON is computed (path exists) so stale entries show `false`.
+`installed` in JSON is computed (path exists) so stale entries show `false`. Each JSON entry now includes a `producer` field (typically the Hugging Face owner, or Ollama packager) so you can filter curated quantizers quickly:
+
+```bash
+uv run imageworks-download list --json \
+  | jq -r '.[] | select(.producer == "thebloke") | .name'
+```
+
+`producer` falls back to the upstream HF owner (when available), Ollama served-model identifier heuristics, or the owner folder inside `~/ai-models/weights`.
+
+### README capture & signals
+
+Every HF download stores the repository README (and LICENSE) locally even when `--no-include-optional` is set. The registry metadata gains:
+
+- `metadata.readme_file`: relative path to the README
+- `metadata.readme_sha256`: sha256 hash for small READMEs (files ≥10 MiB skip hashing)
+- `metadata.readme_signals`: curated hints extracted with deterministic regexes (quant schemes, `w4g128` details, container mentions, backend/tool/reasoning claims, and the first license hint)
+
+Use these hints to prioritize manual reviews or filter interesting quantization drops.
 
 
 ### Scanning Existing Downloads
