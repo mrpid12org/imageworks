@@ -67,3 +67,26 @@ def test_validate_model_directory_warns_on_optional_assets(tmp_path):
 
     warnings = module.validate_model_directory(model_dir)
     assert any("chat_template.json" in warning for warning in warnings)
+
+
+def test_build_command_strips_remainder_sentinel():
+    module = load_module()
+    ns = types.SimpleNamespace(
+        model_path="/models/demo",
+        host="0.0.0.0",
+        port=9000,
+        model_name="demo",
+        backend="pytorch",
+        device="cuda",
+        vision_max_batch_size=1,
+        max_batch_size=None,
+        eager=True,
+        disable_fastapi_docs=False,
+        api_keys=None,
+        extra=["--", "--enable-auto-tool-choice", "--tool-call-parser", "openai"],
+    )
+
+    command = module.build_command(ns)
+    assert "--" not in command
+    assert "--enable-auto-tool-choice" in command
+    assert "--tool-call-parser" in command
