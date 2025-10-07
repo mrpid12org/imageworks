@@ -306,8 +306,8 @@
       ".cache/huggingface/download/config.json.metadata"
     ],
     "download_directory_checksum": "d659ee647a141964",
-    "downloaded_at": "2025-10-07T21:11:08.328116+00:00",
-    "last_accessed": "2025-10-07T21:11:08.328116+00:00"
+    "downloaded_at": "2025-10-07T22:22:55.134329+00:00",
+    "last_accessed": "2025-10-07T22:22:55.134329+00:00"
   },
   {
     "name": "qwen2.5-vl-7b-instruct-vllm-safetensors",
@@ -322,7 +322,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "eecd46bf2993893229293c93b0600d61a725f21b8051893937ff1c5dd30a9367",
@@ -449,8 +451,143 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "1d783bb63d37d961",
-    "downloaded_at": "2025-10-07T21:10:55.134024+00:00",
-    "last_accessed": "2025-10-07T21:10:55.134024+00:00"
+    "downloaded_at": "2025-10-07T22:22:42.544895+00:00",
+    "last_accessed": "2025-10-07T22:22:42.544895+00:00"
+  },
+  {
+    "name": "qwen2.5-coder-7b-instruct-gptq-int8-vllm-safetensors",
+    "display_name": "Qwen2.5 Coder 7B Instruct Gptq Int8 (Safetensors GPTQ, vLLM)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "tools": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "21a22dfac67b175e4874908ebb7bb108ad987cc6d5fa4a044a8d6f8b1e970d23",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "17f71b31ccd4fd9ca414244ed3226bd6048b297fa211f242b1f3317e012d16d9"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+        },
+        {
+          "path": "README.md",
+          "sha256": "a804a78e3fdf010104a1f22f60e6b75db4774009176a29ea5036cd74cf883e53"
+        },
+        {
+          "path": "config.json",
+          "sha256": "8b772dec662018ecc71ca6c509ff1dd762c4235d02f80971f89223299ea72b8f"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "5a12f96afb4bda7bcd8c76566b516f43964125f8aca577a67502c0f85e83e21f"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+        },
+        {
+          "path": "model-00001-of-00003.safetensors",
+          "sha256": "9f469a30889a5203c678c948da254fa77bab41337c4a38f636427a581a5c41aa"
+        },
+        {
+          "path": "model-00002-of-00003.safetensors",
+          "sha256": "9cf1c59acc545c62ed9dab6dc30731bcc98efb173384b33dc7d34854f40a1b74"
+        },
+        {
+          "path": "model-00003-of-00003.safetensors",
+          "sha256": "257d7b5d83f002fa53ed7418285d78a4bb75198ac434b1a3f5b53782af474823"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "16e1c3936c31de928a964b22c211e42fe94228d09c943741122cc80f48ca7a37"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "22bfef58b74d2fa40f402ac0c8d638d9e54d12137da2e2c7e9f32a1e7534e42f"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "959e7f1d9a1b7641a6d6ce05ca97b75c7894fcb66cbe5a040406458fb1128ee4"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8"
+    },
+    "deprecated": false,
+    "family": "qwen2.5-coder-7b-instruct-gptq-int8",
+    "source_provider": "hf",
+    "quantization": "gptq",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8",
+    "download_size_bytes": 8875098870,
+    "download_files": [
+      "model-00002-of-00003.safetensors",
+      "model.safetensors.index.json",
+      ".gitattributes",
+      "README.md",
+      "generation_config.json",
+      "vocab.json",
+      "config.json",
+      "model-00003-of-00003.safetensors",
+      "tokenizer.json",
+      "model-00001-of-00003.safetensors",
+      "LICENSE",
+      "merges.txt",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "0f75b70c214f12d7",
+    "downloaded_at": "2025-10-07T22:23:01.173268+00:00",
+    "last_accessed": "2025-10-07T22:23:01.173268+00:00"
   },
   {
     "name": "dialogpt-small-vllm-safetensors",
@@ -465,7 +602,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "83054736b71aafa7a9b6c6fb0cedc6bec8b34f20ece5642edbc1526b7adb29a8",
@@ -562,8 +701,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "c93b7cf87af7ea9a",
-    "downloaded_at": "2025-10-07T21:11:14.652458+00:00",
-    "last_accessed": "2025-10-07T21:11:14.652458+00:00"
+    "downloaded_at": "2025-10-07T22:23:06.596391+00:00",
+    "last_accessed": "2025-10-07T22:23:06.596391+00:00"
   },
   {
     "name": "gpt-oss-20b-vllm-safetensors",
@@ -578,7 +717,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "8dd25acb04cfaba8b32fc6f6243d868be505c2d3b875e5d4ae02128828980797",
@@ -692,8 +833,8 @@
       "logs/vllm_server.log"
     ],
     "download_directory_checksum": "27f2a8598786b347",
-    "downloaded_at": "2025-10-07T21:11:15.075396+00:00",
-    "last_accessed": "2025-10-07T21:11:15.075396+00:00"
+    "downloaded_at": "2025-10-07T22:23:07.024368+00:00",
+    "last_accessed": "2025-10-07T22:23:07.024368+00:00"
   },
   {
     "name": "codellama-13b-instruct-awq-vllm-safetensors",
@@ -708,7 +849,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "c52056dfcbdfa8922a1de507622471b74e85fbdd18214f7524261a0cce1043f3",
@@ -830,8 +973,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "67ea387ef5cca9a4",
-    "downloaded_at": "2025-10-07T21:11:25.792013+00:00",
-    "last_accessed": "2025-10-07T21:11:25.792013+00:00"
+    "downloaded_at": "2025-10-07T22:23:17.469986+00:00",
+    "last_accessed": "2025-10-07T22:23:17.469986+00:00"
   },
   {
     "name": "deepseek-coder-6.7b-instruct-awq-vllm-safetensors",
@@ -846,7 +989,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "70d8bdfcebc7c6b0b736d2249e27cc9f3cd97ffc9c35916ca4d6403e107a4ac7",
@@ -948,8 +1093,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "64f0e9b29c11636f",
-    "downloaded_at": "2025-10-07T21:11:30.440612+00:00",
-    "last_accessed": "2025-10-07T21:11:30.440612+00:00"
+    "downloaded_at": "2025-10-07T22:23:21.622455+00:00",
+    "last_accessed": "2025-10-07T22:23:21.622455+00:00"
   },
   {
     "name": "qwen2.5-coder-7b-instruct-ollama-gguf-q4_k_m",
@@ -964,7 +1109,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -989,9 +1136,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-07T21:11:42.035144+00:00",
+        "timestamp": "2025-10-07T22:23:54.180388+00:00",
         "probe_version": "1",
-        "latency_ms": 4706,
+        "latency_ms": 4840,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1026,8 +1173,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:11:37.327309+00:00",
-    "last_accessed": "2025-10-07T21:11:37.327309+00:00"
+    "downloaded_at": "2025-10-07T22:23:49.338881+00:00",
+    "last_accessed": "2025-10-07T22:23:49.338881+00:00"
   },
   {
     "name": "deepseek-coder-v2-latest-ollama-gguf-q4_0",
@@ -1042,7 +1189,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1097,8 +1246,8 @@
     "download_size_bytes": 9556302233,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:11:42.059856+00:00",
-    "last_accessed": "2025-10-07T21:11:42.059856+00:00"
+    "downloaded_at": "2025-10-07T22:23:54.204774+00:00",
+    "last_accessed": "2025-10-07T22:23:54.204774+00:00"
   },
   {
     "name": "deepseek-coder-6.7b-instruct-ollama-gguf-q4_0",
@@ -1113,7 +1262,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1167,8 +1318,8 @@
     "download_size_bytes": 4080218931,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:11:48.079537+00:00",
-    "last_accessed": "2025-10-07T21:11:48.079537+00:00"
+    "downloaded_at": "2025-10-07T22:23:59.363200+00:00",
+    "last_accessed": "2025-10-07T22:23:59.363200+00:00"
   },
   {
     "name": "llava-7b-ollama-gguf-q4_0",
@@ -1183,7 +1334,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1238,8 +1391,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:11:55.569925+00:00",
-    "last_accessed": "2025-10-07T21:11:55.569925+00:00"
+    "downloaded_at": "2025-10-07T22:24:02.188980+00:00",
+    "last_accessed": "2025-10-07T22:24:02.188980+00:00"
   },
   {
     "name": "seamon67-gemma3-abliterated-27b-q4-k-m-ollama-gguf-q4_k_m",
@@ -1254,7 +1407,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1309,8 +1464,8 @@
     "download_size_bytes": 18253611008,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:12:01.645531+00:00",
-    "last_accessed": "2025-10-07T21:12:01.645531+00:00"
+    "downloaded_at": "2025-10-07T22:24:07.867771+00:00",
+    "last_accessed": "2025-10-07T22:24:07.867771+00:00"
   },
   {
     "name": "qwen2.5vl-7b-ollama-gguf-q4_k_m",
@@ -1325,7 +1480,9 @@
       "text": true,
       "vision": true,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1380,8 +1537,8 @@
     "download_size_bytes": 6442450944,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:12:07.915220+00:00",
-    "last_accessed": "2025-10-07T21:12:07.915220+00:00"
+    "downloaded_at": "2025-10-07T22:24:15.420920+00:00",
+    "last_accessed": "2025-10-07T22:24:15.420920+00:00"
   },
   {
     "name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1-gguf-ollama-q6_k",
@@ -1396,7 +1553,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": true,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1451,8 +1610,8 @@
     "download_size_bytes": 7086696038,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:12:14.010183+00:00",
-    "last_accessed": "2025-10-07T21:12:14.010183+00:00"
+    "downloaded_at": "2025-10-07T22:24:21.472370+00:00",
+    "last_accessed": "2025-10-07T22:24:21.472370+00:00"
   },
   {
     "name": "pixtral-local-latest-ollama-gguf-q4_k_m",
@@ -1467,7 +1626,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1522,8 +1683,8 @@
     "download_size_bytes": 8912057139,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:12:20.075491+00:00",
-    "last_accessed": "2025-10-07T21:12:20.075491+00:00"
+    "downloaded_at": "2025-10-07T22:24:27.512499+00:00",
+    "last_accessed": "2025-10-07T22:24:27.512499+00:00"
   },
   {
     "name": "llama3.1-local-latest-ollama-gguf-q5_k_m",
@@ -1538,7 +1699,9 @@
       "text": true,
       "vision": false,
       "embedding": false,
-      "audio": false
+      "audio": false,
+      "thinking": false,
+      "tools": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -1592,151 +1755,7 @@
     "download_size_bytes": 6120328396,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-07T21:12:27.626148+00:00",
-    "last_accessed": "2025-10-07T21:12:27.626148+00:00"
-  },
-  {
-    "name": "qwen2.5-coder-7b-instruct-gptq-int8-vllm-safetensors",
-    "display_name": "Qwen2.5 Coder 7B Instruct Gptq Int8 (Safetensors GPTQ, vLLM)",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false,
-      "thinking": false,
-      "tools": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "21a22dfac67b175e4874908ebb7bb108ad987cc6d5fa4a044a8d6f8b1e970d23",
-      "files": [
-        {
-          "path": ".gitattributes",
-          "sha256": "17f71b31ccd4fd9ca414244ed3226bd6048b297fa211f242b1f3317e012d16d9"
-        },
-        {
-          "path": "LICENSE",
-          "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
-        },
-        {
-          "path": "README.md",
-          "sha256": "a804a78e3fdf010104a1f22f60e6b75db4774009176a29ea5036cd74cf883e53"
-        },
-        {
-          "path": "config.json",
-          "sha256": "8b772dec662018ecc71ca6c509ff1dd762c4235d02f80971f89223299ea72b8f"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "5a12f96afb4bda7bcd8c76566b516f43964125f8aca577a67502c0f85e83e21f"
-        },
-        {
-          "path": "merges.txt",
-          "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
-        },
-        {
-          "path": "model-00001-of-00003.safetensors",
-          "sha256": "9f469a30889a5203c678c948da254fa77bab41337c4a38f636427a581a5c41aa"
-        },
-        {
-          "path": "model-00002-of-00003.safetensors",
-          "sha256": "9cf1c59acc545c62ed9dab6dc30731bcc98efb173384b33dc7d34854f40a1b74"
-        },
-        {
-          "path": "model-00003-of-00003.safetensors",
-          "sha256": "257d7b5d83f002fa53ed7418285d78a4bb75198ac434b1a3f5b53782af474823"
-        },
-        {
-          "path": "model.safetensors.index.json",
-          "sha256": "16e1c3936c31de928a964b22c211e42fe94228d09c943741122cc80f48ca7a37"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "22bfef58b74d2fa40f402ac0c8d638d9e54d12137da2e2c7e9f32a1e7534e42f"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "959e7f1d9a1b7641a6d6ce05ca97b75c7894fcb66cbe5a040406458fb1128ee4"
-        },
-        {
-          "path": "vocab.json",
-          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true,
-      "model_type": "text-generation",
-      "library": "transformers",
-      "files_downloaded": 13,
-      "verified_complete": true,
-      "has_chat_template": true,
-      "has_embedded_chat_template": true,
-      "external_chat_template_files": [],
-      "embedded_chat_template_preview": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0]['role'] == 'system' %}\n        {{- messages[0]['content'] }}\n    {%- else %}\n        {{...",
-      "branch": "main"
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8"
-    },
-    "deprecated": false,
-    "family": "qwen2.5-coder-7b-instruct-gptq-int8",
-    "source_provider": "hf",
-    "quantization": "gptq",
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "safetensors",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8",
-    "download_size_bytes": 8875098870,
-    "download_files": [
-      "model-00001-of-00003.safetensors",
-      "model-00002-of-00003.safetensors",
-      "model-00003-of-00003.safetensors",
-      "config.json",
-      "generation_config.json",
-      "tokenizer_config.json",
-      "merges.txt",
-      "tokenizer.json",
-      ".gitattributes",
-      "LICENSE",
-      "README.md",
-      "model.safetensors.index.json",
-      "vocab.json"
-    ],
-    "download_directory_checksum": "0f75b70c214f12d7",
-    "downloaded_at": "2025-10-07T21:44:14.771990+00:00",
-    "last_accessed": "2025-10-07T22:03:01.706848+00:00"
+    "downloaded_at": "2025-10-07T22:24:33.552181+00:00",
+    "last_accessed": "2025-10-07T22:24:33.552181+00:00"
   }
 ]

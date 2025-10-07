@@ -166,7 +166,11 @@ class ChatForwarder:
         ):
             raise err_template_required(model)
 
-        backend_id = entry.served_model_id or entry.name
+        # Prefer an explicit served model id; some registries persisted the literal string "None".
+        served = getattr(entry, "served_model_id", None)
+        if isinstance(served, str) and served.strip().lower() == "none":
+            served = None
+        backend_id = served or entry.name
         # Backend-specific base URL and API path
         if entry.backend == "ollama":
             port = entry.backend_config.port or 11434
@@ -184,6 +188,16 @@ class ChatForwarder:
             # Prefer IPv4 loopback to avoid ::1 vs 0.0.0.0 mismatch
             base_url = f"http://127.0.0.1:{port}/v1"
             api_path = "/chat/completions"
+            # For OpenAI-compatible backends (vLLM, LMDeploy, Triton), the upstream expects the
+            # concrete served model name, which may differ from our logical model id. Rewrite the
+            # outgoing payload's model to the backend_id we computed above.
+            try:
+                # Work on a shallow copy; keep original payload for logging/metrics consistency.
+                payload = dict(payload)
+                payload["model"] = backend_id
+            except Exception:
+                # If payload isn't a dict, fall back without rewrite (defensive)
+                pass
 
         # Ensure backend reachable or autostart
         if entry.backend != "ollama" and not await self._probe(base_url):
