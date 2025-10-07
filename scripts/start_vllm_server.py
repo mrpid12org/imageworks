@@ -51,6 +51,19 @@ def resolve_model_argument(raw_model: str | None) -> str:
     return str(Path("./models") / DEFAULT_MODEL_SUBDIR)
 
 
+def _extract_option_value(tokens: List[str], option: str) -> Optional[str]:
+    """Return the value assigned to *option* from *tokens* when present."""
+
+    for idx, token in enumerate(tokens):
+        if token == option:
+            if idx + 1 < len(tokens):
+                return tokens[idx + 1]
+            return ""
+        if token.startswith(f"{option}="):
+            return token.split("=", 1)[1]
+    return None
+
+
 def build_command(args: argparse.Namespace) -> List[str]:
     """Construct the vLLM server command."""
 
@@ -106,6 +119,24 @@ def build_command(args: argparse.Namespace) -> List[str]:
     if args.extra:
         forwarded = [token for token in args.extra if token and token != "--"]
         if forwarded:
+            parser_value = _extract_option_value(forwarded, "--tool-call-parser")
+            chat_format_value = _extract_option_value(
+                forwarded, "--chat-template-content-format"
+            )
+
+            if parser_value == "openai":
+                if chat_format_value is None:
+                    command.extend(["--chat-template-content-format", "openai"])
+
+                if "--return-tokens-as-token-ids" not in forwarded and _extract_option_value(
+                    forwarded, "--return-tokens-as-token-ids"
+                ) is None:
+                    command.append("--return-tokens-as-token-ids")
+
+                tokenizer_mode = _extract_option_value(forwarded, "--tokenizer-mode")
+                if tokenizer_mode is None:
+                    command.extend(["--tokenizer-mode", "slow"])
+
             command.extend(forwarded)
 
     return command
