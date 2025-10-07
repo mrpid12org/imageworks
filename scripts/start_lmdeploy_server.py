@@ -165,7 +165,9 @@ def build_command(args: argparse.Namespace) -> List[str]:
         command.extend(["--api-keys", args.api_keys])
 
     if args.extra:
-        command.extend(args.extra)
+        forwarded = [token for token in args.extra if token and token != "--"]
+        if forwarded:
+            command.extend(forwarded)
 
     return command
 

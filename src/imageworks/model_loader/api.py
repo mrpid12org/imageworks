@@ -12,6 +12,7 @@ from .service import select_model, CapabilityError
 from .hashing import verify_model, VersionLockViolation
 from .probe import run_vision_probe
 from .metrics import RollingMetrics  # placeholder for future aggregation
+from .models import normalize_capabilities
 
 app = FastAPI(title="Imageworks Deterministic Model Loader", version="0.1")
 
@@ -62,7 +63,7 @@ async def api_list_models():
             ModelSummary(
                 name=name,
                 backend=entry.backend,
-                capabilities=entry.capabilities,
+                capabilities=normalize_capabilities(entry.capabilities),
                 locked=entry.version_lock.locked,
                 vision_ok=(
                     entry.probes.vision.vision_ok if entry.probes.vision else None
@@ -84,7 +85,7 @@ async def api_select(req: SelectRequest):
         endpoint=desc.endpoint_url,
         backend=desc.backend,
         internal_model_id=desc.internal_model_id,
-        capabilities=desc.capabilities,
+        capabilities=normalize_capabilities(desc.capabilities),
     )
 
 
