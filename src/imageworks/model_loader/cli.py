@@ -11,6 +11,7 @@ from .registry import load_registry, list_models, get_entry, save_registry
 from .service import select_model, CapabilityError
 from .hashing import verify_model, VersionLockViolation
 from .probe import run_vision_probe
+from .models import normalize_capabilities
 
 app = typer.Typer(help="Deterministic model registry & loader utilities")
 
@@ -26,6 +27,7 @@ def cmd_list(
     rows = []
     for name in list_models():
         e = get_entry(name)
+        caps = normalize_capabilities(e.capabilities)
         if role and role not in (e.roles or []):
             continue
         rows.append(
@@ -33,7 +35,7 @@ def cmd_list(
                 "name": name,
                 "backend": e.backend,
                 "locked": e.version_lock.locked,
-                "vision": e.capabilities.get("vision"),
+                "vision": caps.get("vision"),
                 "roles": e.roles,
                 "hash": (
                     e.artifacts.aggregate_sha256[:12]
@@ -61,6 +63,7 @@ def cmd_select(
     except KeyError as exc:
         typer.echo(str(exc))
         raise typer.Exit(1)
+    desc_caps = normalize_capabilities(desc.capabilities)
     typer.echo(
         json.dumps(
             {
@@ -68,7 +71,7 @@ def cmd_select(
                 "endpoint": desc.endpoint_url,
                 "backend": desc.backend,
                 "internal_model_id": desc.internal_model_id,
-                "capabilities": desc.capabilities,
+                "capabilities": desc_caps,
             },
             indent=2,
         )

@@ -51,6 +51,19 @@ def resolve_model_argument(raw_model: str | None) -> str:
     return str(Path("./models") / DEFAULT_MODEL_SUBDIR)
 
 
+def _extract_option_value(tokens: List[str], option: str) -> Optional[str]:
+    """Return the value assigned to *option* from *tokens* when present."""
+
+    for idx, token in enumerate(tokens):
+        if token == option:
+            if idx + 1 < len(tokens):
+                return tokens[idx + 1]
+            return ""
+        if token.startswith(f"{option}="):
+            return token.split("=", 1)[1]
+    return None
+
+
 def build_command(args: argparse.Namespace) -> List[str]:
     """Construct the vLLM server command."""
 
@@ -104,7 +117,17 @@ def build_command(args: argparse.Namespace) -> List[str]:
         command.extend(["--chat-template", args.chat_template])
 
     if args.extra:
-        command.extend(args.extra)
+        forwarded = [token for token in args.extra if token and token != "--"]
+        if forwarded:
+            parser_value = _extract_option_value(forwarded, "--tool-call-parser")
+            chat_format_value = _extract_option_value(
+                forwarded, "--chat-template-content-format"
+            )
+
+            if parser_value == "openai" and chat_format_value is None:
+                command.extend(["--chat-template-content-format", "openai"])
+
+            command.extend(forwarded)
 
     return command
 

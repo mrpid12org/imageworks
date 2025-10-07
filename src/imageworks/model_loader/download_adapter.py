@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import hashlib
+import re
 import time as _time
 import requests as _requests
 
@@ -152,34 +153,84 @@ def _infer_family(hf_id: Optional[str]) -> Optional[str]:
     return tail.lower().replace("@", "-").replace("_", "-").replace(" ", "-")
 
 
+def _token_match(haystack: str, token: str) -> bool:
+    pattern = rf"(^|[\s_\-/:]){re.escape(token)}($|[\s_\-/:])"
+    return re.search(pattern, haystack) is not None
+
+
 def _infer_capabilities(name: str) -> Dict[str, bool]:
     n = name.lower()
     text = True
-    vision = any(
-        k in n for k in ["vl", "llava", "qwen2.5-vl", "idefics"]
-    )  # vision-language indicators
-    embedding = ("siglip" in n) or ("embed" in n) or ("embedding" in n)
-    audio = any(
-        k in n for k in ["audio", "whisper", "wav", "vits"]
-    )  # conservative guess
-    # Optional extra flags
-    thinking = any(
-        k in n
-        for k in [
-            "-r1",  # deepseek-r1 style
-            " r1 ",
-            "reason",  # reason, reasoner
-            "think",
-            "o3",
+    vision_tokens = [
+        "vision",
+        "multimodal",
+        "vl",
+        "mm",
+    ]
+    vision = any(_token_match(n, tok) for tok in vision_tokens) or any(
+        marker in n
+        for marker in [
+            "llava",
+            "idefics",
+            "minicpm-v",
+            "internvl",
+            "moondream",
+            "phi-3-vision",
+            "pixtral",
+            "qwen-vl",
+            "qwen2-vl",
+            "qwen2.5-vl",
         ]
     )
-    tools = any(k in n for k in ["tool", "function", "tools", "function_call"])
+    embedding = any(
+        marker in n for marker in ["siglip", "embed", "embedding", "nomic", "text-embedding"]
+    )
+    audio = any(
+        marker in n
+        for marker in ["audio", "whisper", "wav", "vits", "sensevoice", "voice", "speech"]
+    )
+    reasoning_markers = [
+        "reason",
+        "reasoning",
+        "reasoner",
+        "think",
+        "-r1",
+        " o1 ",
+        " o3 ",
+        "o1-",
+        "o3-",
+        "deepseek",
+        "longthink",
+    ]
+    thinking = any(marker in n for marker in reasoning_markers)
+    tools = any(
+        marker in n
+        for marker in [
+            "tool",
+            "tool_use",
+            "tool-use",
+            "tool_call",
+            "tool-call",
+            "toolcalling",
+            "function_call",
+            "function-call",
+            "functioncalling",
+            "function_tools",
+            "with-tools",
+            "withtools",
+            "coder",
+        ]
+    ) or ("qwen" in n and "instruct" in n)
+
+    reasoning = thinking or any(marker in n for marker in ["reason", "reasoning", "logic"])
+
     return {
         "text": text,
         "vision": vision,
         "embedding": embedding,
         "audio": audio,
-        "thinking": thinking,
+        "thinking": thinking or reasoning,
+        "reasoning": reasoning or thinking,
         "tools": tools,
     }
 
