@@ -7,6 +7,7 @@ using aria2c for optimal performance.
 
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import shutil
@@ -23,6 +24,191 @@ from .url_analyzer import URLAnalyzer
 from .formats import FormatDetector
 from .format_utils import detect_format_and_quant
 import hashlib
+
+_README_HASH_LIMIT = 10 * 1024 * 1024  # 10 MiB safety guard
+_README_PARSE_LIMIT = 512 * 1024  # parse at most first 512 KiB for regex hints
+
+
+def _is_minimal_doc(path: str) -> bool:
+    """Return True for README*/LICENSE* style documentation files."""
+
+    name = Path(path).name.lower()
+    if not name:
+        return False
+    if name.startswith("readme"):
+        return True
+    if name.startswith("license"):
+        return True
+    return False
+
+
+def _select_primary_readme(root: Path) -> Optional[Path]:
+    """Pick the highest-priority README within the downloaded repo."""
+
+    candidates = [p for p in root.rglob("*") if p.is_file() and p.name.lower().startswith("readme")]
+    if not candidates:
+        return None
+
+    def _priority(path: Path) -> tuple[int, int, str]:
+        name = path.name.lower()
+        if name == "readme.md":
+            rank = 0
+        elif name.endswith(".md"):
+            rank = 1
+        elif name.endswith(".txt"):
+            rank = 2
+        elif "." not in name:
+            rank = 3
+        else:
+            rank = 4
+        try:
+            depth = len(path.relative_to(root).parts)
+        except Exception:  # noqa: BLE001
+            depth = len(path.parts)
+        return (rank, depth, path.as_posix())
+
+    return sorted(candidates, key=_priority)[0]
+
+
+def _hash_small_file(path: Path) -> Optional[str]:
+    """Compute sha256 when the file is below the configured threshold."""
+
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size > _README_HASH_LIMIT:
+        return None
+    hasher = hashlib.sha256()
+    try:
+        with path.open("rb") as fh:
+            while True:
+                chunk = fh.read(1024 * 1024)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+    except OSError:
+        return None
+    return hasher.hexdigest()
+
+
+def _read_text_limited(path: Path, limit: int = _README_PARSE_LIMIT) -> str:
+    try:
+        with path.open("rb") as fh:
+            data = fh.read(limit)
+    except OSError:
+        return ""
+    return data.decode("utf-8", errors="ignore")
+
+
+_QUANT_SCHEME_PATTERN = re.compile(
+    r"\b(awq|gptq|mxfp4|bnb|fp8|fp16|bf16|int4|int8|squeezellm|iq4_xs)\b",
+    re.IGNORECASE,
+)
+_QUANT_DETAIL_WG_PATTERN = re.compile(r"\bw(\d+)\s*g(\d+)\b", re.IGNORECASE)
+_QUANT_DETAIL_BIT_PATTERN = re.compile(r"\b(\d+)\s*[-/]?\s*bit\b", re.IGNORECASE)
+_CONTAINER_PATTERN = re.compile(r"\b(gguf|safetensors)\b", re.IGNORECASE)
+_BACKEND_PATTERN = re.compile(r"\b(vllm|llama\.cpp|ollama|lmdeploy)\b", re.IGNORECASE)
+_TOOL_PATTERN = re.compile(r"\bfunction[- ]?call(?:ing)?\b|\btools?\b", re.IGNORECASE)
+_REASONING_PATTERN = re.compile(r"\breasoning\b|\br1\b|\bo3\b|\bthink\b", re.IGNORECASE)
+_LICENSE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"apache[- ]?2\.0", re.IGNORECASE), "apache-2.0"),
+    (re.compile(r"mit\b", re.IGNORECASE), "mit"),
+    (re.compile(r"llama\s*3", re.IGNORECASE), "llama-3"),
+]
+
+
+def _parse_readme_signals(text: str) -> Dict[str, Any]:
+    signals: Dict[str, Any] = {}
+
+    schemes = {match.lower() for match in _QUANT_SCHEME_PATTERN.findall(text)}
+    if schemes:
+        signals["quant_schemes"] = sorted(schemes)
+
+    details: set[str] = set()
+    for bits, groups in _QUANT_DETAIL_WG_PATTERN.findall(text):
+        details.add(f"w{bits}g{groups}")
+    for phrase in _QUANT_DETAIL_BIT_PATTERN.findall(text):
+        if phrase:
+            normalized = f"{phrase.strip().replace(' ', '').replace('/', '')}".lower()
+            # Ensure it ends with 'bit'
+            if not normalized.endswith("bit"):
+                normalized = f"{normalized}-bit"
+            # Normalize `4bit` -> `4-bit`
+            if normalized.endswith("bit") and not normalized.endswith("-bit"):
+                normalized = normalized[:-3] + "-bit"
+            details.add(normalized)
+    if details:
+        signals["quant_details"] = sorted(details)
+
+    containers = {match.lower() for match in _CONTAINER_PATTERN.findall(text)}
+    if containers:
+        signals["containers"] = sorted(containers)
+
+    backends = {match.lower() for match in _BACKEND_PATTERN.findall(text)}
+    if backends:
+        signals["backends"] = sorted(backends)
+
+    if _TOOL_PATTERN.search(text):
+        signals["tool_calls"] = True
+
+    if _REASONING_PATTERN.search(text):
+        signals["reasoning"] = True
+
+    for pattern, label in _LICENSE_PATTERNS:
+        if pattern.search(text):
+            signals["license_hint"] = label
+            break
+
+    return signals
+
+
+def _derive_producer(
+    *,
+    existing: Optional[str],
+    hf_id: Optional[str],
+    source_provider: Optional[str],
+    served_model_id: Optional[str],
+    download_path: Optional[str],
+) -> Optional[str]:
+    if existing:
+        return existing.lower()
+    if hf_id:
+        owner = hf_id.split("/")[0]
+        if owner:
+            return owner.lower()
+    if source_provider == "ollama" and served_model_id:
+        normalized = (
+            served_model_id.replace(":", "-").replace("/", "-").replace("\\", "-")
+        )
+        lowered = normalized.lower()
+        if lowered.startswith("hf.co-"):
+            tokens = [tok for tok in lowered.split("-") if tok]
+            if len(tokens) >= 3:
+                return tokens[1]
+        if lowered.startswith("hf.co/"):
+            tokens = [tok for tok in lowered.split("/") if tok]
+            if len(tokens) >= 2:
+                return tokens[1]
+        tokens = [tok for tok in normalized.split("-") if tok]
+        if tokens:
+            return tokens[0].lower()
+    if download_path:
+        try:
+            expanded = Path(download_path).expanduser()
+            parts = list(expanded.parts)
+            if "weights" in (part.lower() for part in parts):
+                lowered_parts = [p.lower() for p in parts]
+                idx = lowered_parts.index("weights")
+                if idx + 1 < len(parts):
+                    candidate = parts[idx + 1]
+                    if candidate:
+                        return candidate.lower()
+            if parts:
+                return parts[-2].lower() if len(parts) >= 2 else parts[0].lower()
+        except Exception:  # noqa: BLE001
+            pass
+    return None
 
 
 @dataclass
@@ -434,9 +620,25 @@ class ModelDownloader:
     ) -> List[Any]:
         base_url = f"https://huggingface.co/{repo_meta.repository_id}/resolve/{repo_meta.branch}"
 
+        minimal_docs: List[Any] = []
+        filtered_optional: List[Any] = []
+        seen_required = {f.path for f in required_files}
+        for file_info in optional_files:
+            if _is_minimal_doc(file_info.path) and file_info.path not in seen_required:
+                minimal_docs.append(file_info)
+            else:
+                filtered_optional.append(file_info)
+        optional_files = filtered_optional
+
         self._log(f"📥 Downloading {len(required_files)} required files...")
         if required_files:
             self._download_files_with_aria2c(required_files, base_url, target_dir)
+
+        if minimal_docs:
+            self._log(
+                f"📥 Downloading {len(minimal_docs)} repository docs (README/LICENSE)..."
+            )
+            self._download_files_with_aria2c(minimal_docs, base_url, target_dir)
 
         if include_optional and optional_files:
             self._log(f"📥 Downloading {len(optional_files)} optional files...")
@@ -448,6 +650,7 @@ class ModelDownloader:
             )
             self._download_files_with_aria2c(large_optional_files, base_url, target_dir)
         combined = list(required_files)
+        combined.extend(minimal_docs)
         if include_optional:
             combined.extend(optional_files)
         if include_large_optional:
@@ -565,6 +768,36 @@ class ModelDownloader:
         det_fmt, det_quant = detect_format_and_quant(target_dir)
         final_format = det_fmt or primary_format
 
+        readme_path = _select_primary_readme(target_dir)
+        readme_rel: Optional[str] = None
+        readme_sha: Optional[str] = None
+        readme_signals: Optional[Dict[str, Any]] = None
+        if readme_path:
+            try:
+                readme_rel = readme_path.relative_to(target_dir).as_posix()
+            except ValueError:
+                readme_rel = readme_path.name
+            readme_sha = _hash_small_file(readme_path)
+            read_text = _read_text_limited(readme_path)
+            readme_signals = _parse_readme_signals(read_text) if read_text else {}
+
+        license_candidates = [
+            p
+            for p in target_dir.rglob("*")
+            if p.is_file() and p.name.lower().startswith("license")
+        ]
+        license_rel: Optional[str] = None
+        if license_candidates:
+            try:
+                license_rel = (
+                    sorted(
+                        license_candidates,
+                        key=lambda p: (len(p.relative_to(target_dir).parts), p.as_posix()),
+                    )[0]
+                ).relative_to(target_dir).as_posix()
+            except Exception:  # noqa: BLE001
+                license_rel = license_candidates[0].name
+
         # Auto-assign backend based on container. vLLM handles safetensors broadly,
         # including AWQ, GPTQ, FP8, and SqueezeLLM variants.
         auto_backend = None
@@ -586,6 +819,30 @@ class ModelDownloader:
                 roles=[],
                 role_priority=None,
             )
+
+            entry.metadata = entry.metadata or {}
+            if readme_rel:
+                entry.metadata["readme_file"] = readme_rel
+                entry.metadata["readme_sha256"] = readme_sha
+                entry.metadata["readme_signals"] = readme_signals or {}
+            else:
+                entry.metadata.pop("readme_file", None)
+                entry.metadata.pop("readme_sha256", None)
+                entry.metadata.pop("readme_signals", None)
+            if license_rel:
+                entry.metadata["license_file"] = license_rel
+            else:
+                entry.metadata.pop("license_file", None)
+
+            producer_value = _derive_producer(
+                existing=entry.metadata.get("producer") if entry.metadata else None,
+                hf_id=repo_meta.repository_id,
+                source_provider=entry.source_provider,
+                served_model_id=entry.served_model_id,
+                download_path=entry.download_path,
+            )
+            if producer_value and not entry.metadata.get("producer"):
+                entry.metadata["producer"] = producer_value
 
             entry.metadata.update(
                 {
