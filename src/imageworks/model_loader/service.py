@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional
 
 from .registry import get_entry, load_registry
-from .models import SelectedModel
+from .models import SelectedModel, normalize_capabilities
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,12 @@ def select_model(
     Minimal Phase 1: no process launching yet; returns derived endpoint from port.
     """
     entry = get_entry(name)
+    capabilities = normalize_capabilities(entry.capabilities)
+
     if require_capabilities:
-        missing = [c for c in require_capabilities if not entry.capabilities.get(c)]
+        missing = [
+            cap for cap in require_capabilities if not capabilities.get(cap.strip().lower(), False)
+        ]
         if missing:
             raise CapabilityError(
                 f"Model '{name}' is missing required capabilities: {', '.join(missing)}"
@@ -53,7 +57,7 @@ def select_model(
         endpoint_url=endpoint,
         internal_model_id=internal_id,
         backend=entry.backend,
-        capabilities=entry.capabilities,
+        capabilities=capabilities,
     )
 
 
