@@ -55,7 +55,7 @@ def test_select_model_and_capabilities(tmp_path: Path, monkeypatch):
             "name": "vision-ok",
             "backend": "vllm",
             "backend_config": {"port": 8123, "model_path": "/m"},
-            "capabilities": {"vision": True},
+            "capabilities": {"vision": True, "function_calling": True},
             "artifacts": {"aggregate_sha256": "", "files": []},
             "chat_template": {"source": "embedded"},
             "version_lock": {"locked": False},
@@ -73,6 +73,17 @@ def test_select_model_and_capabilities(tmp_path: Path, monkeypatch):
             "performance": {"rolling_samples": 0},
             "probes": {},
         },
+        {
+            "name": "reasoner",
+            "backend": "vllm",
+            "backend_config": {"port": 8125, "model_path": "/m"},
+            "capabilities": {"thinking": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        },
     ]
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(sample))
@@ -82,9 +93,19 @@ def test_select_model_and_capabilities(tmp_path: Path, monkeypatch):
     sel = select_model("vision-ok", require_capabilities=["vision"])
     assert sel.endpoint_url.endswith(":8123/v1")
     assert sel.capabilities["vision"] is True
+    assert sel.capabilities["tools"] is True
+    assert sel.capabilities["tool_calls"] is True
 
     with pytest.raises(CapabilityError):
         select_model("text-only", require_capabilities=["vision"])
+
+    # Synonym handling
+    sel_reason = select_model("reasoner", require_capabilities=["reasoning"])
+    assert sel_reason.capabilities["reasoning"] is True
+    assert sel_reason.capabilities["thinking"] is True
+
+    with pytest.raises(CapabilityError):
+        select_model("text-only", require_capabilities=["reasoning"])
 
 
 def test_select_ollama_backend(tmp_path: Path, monkeypatch):

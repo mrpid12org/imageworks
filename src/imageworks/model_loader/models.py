@@ -3,7 +3,110 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, Iterable, List, Optional
+
+
+CapabilityMapping = Dict[str, bool]
+
+_CAPABILITY_SYNONYMS: Dict[str, Iterable[str]] = {
+    "text": ("text", "language", "chat"),
+    "vision": (
+        "vision",
+        "visual",
+        "multimodal",
+        "mm",
+        "image",
+        "vl",
+    ),
+    "audio": ("audio", "speech", "voice", "asr", "tts"),
+    "embedding": ("embedding", "embed", "text-embedding", "representation"),
+    "tools": (
+        "tools",
+        "tool_use",
+        "tool-use",
+        "tool_call",
+        "tool-call",
+        "toolcalls",
+        "tool_calls",
+        "toolchoice",
+        "tool_choice",
+        "function_call",
+        "function-call",
+        "function_calls",
+        "function_calling",
+        "function-calling",
+        "function_tools",
+        "functioncalling",
+        "toolcalling",
+        "auto_tool_choice",
+    ),
+    "thinking": (
+        "thinking",
+        "reasoning",
+        "reason",
+        "think",
+        "chain_of_thought",
+        "cot",
+        "reasoner",
+        "o1",
+        "o3",
+        "r1",
+        "deepseek",
+    ),
+    "reasoning": (
+        "reasoning",
+        "thinking",
+        "reason",
+        "think",
+        "chain_of_thought",
+        "cot",
+        "reasoner",
+        "o1",
+        "o3",
+        "r1",
+        "deepseek",
+    ),
+}
+
+
+def _normalize_capability_key(key: str) -> str:
+    return key.strip().lower()
+
+
+def normalize_capabilities(raw: Optional[Dict[str, Any]]) -> CapabilityMapping:
+    """Return a lower-cased capability mapping with synonym promotion."""
+
+    raw = raw or {}
+    cleaned: CapabilityMapping = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        cleaned[_normalize_capability_key(key)] = bool(value)
+
+    result: CapabilityMapping = dict(cleaned)
+    for canonical, synonyms in _CAPABILITY_SYNONYMS.items():
+        value = any(cleaned.get(_normalize_capability_key(alias), False) for alias in synonyms)
+        result[canonical] = value
+        for alias in synonyms:
+            alias_key = _normalize_capability_key(alias)
+            existing = result.get(alias_key, False)
+            result[alias_key] = bool(existing or value)
+
+    if "text" not in result:
+        result["text"] = True
+    else:
+        result["text"] = bool(result["text"])
+
+    return result
+
+
+def capability_supported(capabilities: Dict[str, bool], requirement: str) -> bool:
+    """Return True if the capability requirement is satisfied."""
+
+    if not requirement:
+        return False
+    normalized = normalize_capabilities(capabilities)
+    return normalized.get(_normalize_capability_key(requirement), False)
 
 
 @dataclass
@@ -74,7 +177,7 @@ class RegistryEntry:
     display_name: Optional[str]
     backend: str  # vllm | ollama | gguf | lmdeploy
     backend_config: BackendConfig
-    capabilities: Dict[str, bool]
+    capabilities: CapabilityMapping
     artifacts: Artifacts
     chat_template: ChatTemplate
     version_lock: VersionLock
@@ -123,7 +226,13 @@ class RegistryEntry:
     )
 
     def require_capabilities(self, required: List[str]) -> None:
-        missing = [c for c in required if not self.capabilities.get(c)]
+        normalized = normalize_capabilities(self.capabilities)
+        self.capabilities = normalized
+        missing = [
+            cap
+            for cap in required
+            if not normalized.get(_normalize_capability_key(cap), False)
+        ]
         if missing:
             raise ValueError(
                 f"Model '{self.name}' missing required capabilities: {', '.join(missing)}"
@@ -136,7 +245,7 @@ class SelectedModel:
     endpoint_url: str
     internal_model_id: str
     backend: str
-    capabilities: Dict[str, bool]
+    capabilities: CapabilityMapping
 
 
 __all__ = [
@@ -151,4 +260,6 @@ __all__ = [
     "Probes",
     "RegistryEntry",
     "SelectedModel",
+    "normalize_capabilities",
+    "capability_supported",
 ]
