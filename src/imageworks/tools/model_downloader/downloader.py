@@ -565,12 +565,11 @@ class ModelDownloader:
         det_fmt, det_quant = detect_format_and_quant(target_dir)
         final_format = det_fmt or primary_format
 
-        # Auto-assign backend for certain formats
-        # - safetensors (fp16/bf16) -> vllm
-        # - awq (AutoAWQ quantized safetensors) -> vllm
+        # Auto-assign backend based on container. vLLM handles safetensors broadly,
+        # including AWQ, GPTQ, FP8, and SqueezeLLM variants.
         auto_backend = None
         fmt_lower = (final_format or "").lower()
-        if fmt_lower in {"safetensors", "awq"}:
+        if fmt_lower == "safetensors":
             auto_backend = "vllm"
 
         try:

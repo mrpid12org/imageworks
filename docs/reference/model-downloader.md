@@ -71,7 +71,6 @@ Add roles column & quant info (already included by default):
 imageworks-download list --details
 ```
 
-Filter by format (e.g. AWQ only):
 Filter by backend (e.g. show only Ollama-managed logical/synthetic GGUF entries):
 ```bash
 imageworks-download list --backend ollama
@@ -87,8 +86,9 @@ Include logical (non-downloaded) entries that lack `download_path` (mainly histo
 imageworks-download list --include-logical
 ```
 
+Filter by quantization (e.g., AWQ) via JSON and jq:
 ```bash
-imageworks-download list --format awq
+uv run imageworks-download list --json | jq -r '.[] | select((.quantization // "") | test("awq"; "i"))'
 ```
 
 Filter by location:
@@ -123,13 +123,9 @@ Update existing entries and (optionally) supply a fallback format used ONLY when
 ```bash
 imageworks-download scan --base ~/ai-models/weights --update-existing --format awq
 ```
-Enhanced heuristics detect (in priority order):
-- gguf (`*.gguf`)
-- awq (directory name contains `awq`, weight shards `*.awq`, or `quantization_config.json` with `quant_method: awq`)
-- gptq (`*.gptq` or name contains `gptq`)
-- safetensors → fp16 fallback
-
-Quant hints extracted from filenames or config: `q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`, and for AWQ configs a compact `w<bit>g<group>` label (e.g. `w4g128`).
+Detection notes:
+- Container formats are detected from file extensions: gguf (`*.gguf`), safetensors (`*.safetensors`).
+- Quantization is inferred from config and filenames: schemes like `awq`, `gptq`, precisions like `fp16`, `bf16`, `fp8`, and tokens like `q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`, `mxfp4`, `iq4_xs`, `bnb`. Case-insensitive. For AWQ configs we derive a compact label `w<bit>g<group>` (e.g., `w4g128`).
 
 After scanning:
 ```bash
@@ -212,6 +208,28 @@ The importer also migrates existing Strategy A entries that were previously stor
 without a quant suffix. When a quantization tag is detected, any matching
 `<family>-ollama-gguf` record is renamed to `<family>-ollama-gguf-<quant>` so the
 registry keys align with the documented naming convention.
+
+#### Registry refresh and rediscovery
+
+When you want to rebuild the discovered overlay cleanly using the unified adapter path:
+
+```bash
+# Purge all imported (HF + Ollama) discovered entries (keeps curated intact)
+uv run imageworks-loader purge-imported --apply --providers all
+
+# HF via adapter-backed ingestion (normalized names, deduped by identity)
+uv run imageworks-loader ingest-local-hf --root ~/ai-models/weights
+
+# Ollama-only reset and re-import (adapter-backed importer)
+uv run imageworks-loader rebuild-ollama --location linux_wsl
+
+# Or do both HF+Ollama in one step (adapter-backed)
+uv run imageworks-loader discover-all --hf-root ~/ai-models/weights
+```
+
+Note:
+- The commands live under `imageworks-loader` (module: `imageworks.model_loader.cli_sync`).
+- `discover-all` now invokes `ingest-local-hf` (adapter-backed) and the Ollama importer (already adapter-backed), ensuring there is only one route into the registry.
 
 What gets populated:
 * `download_format = gguf`
@@ -435,11 +453,14 @@ Downloads that use `--location windows_lmstudio` (or detect GGUF formats automat
 
 The downloader aggregates multiple detectors to determine the best storage location:
 
+Terminology update (container vs quantization):
+- Format refers to the weight container (gguf, safetensors).
+- Quantization captures precision/scheme cues (awq, gptq, fp16/bf16/fp8, squeezellm, int4/int8, q4_k_m, etc.).
+- Detectors infer the container from file extensions, and quantization from config files and filename tokens.
+
 | Format | Detection Signals | Default Target |
 |--------|------------------|----------------|
 | **GGUF** | `.gguf` extensions, quantisation suffixes (`Q4_K`) | Windows LM Studio |
-| **AWQ** | Repository name patterns, `quantization_config.quant_method == "awq"` | Linux WSL |
-| **GPTQ** | Repository name patterns, config quantisation metadata | Linux WSL |
 | **Safetensors** | `.safetensors` files | Linux WSL |
 | **PyTorch** | `.bin`, `.pth`, `.pt` weights | Linux WSL |
 
@@ -447,10 +468,10 @@ Results are ranked by confidence; provide `--format awq,gguf` to express an expl
 
 Unified Detection Logic:
 Both `scan` and post-download registration now share the same utility (`detect_format_and_quant`) which:
-1. Prioritises: gguf → awq → gptq → fp16
-2. Parses `quantization_config.json` / `quant_config.json` for AWQ and derives `w<bit>g<group>` labels
-3. Extracts filename-based quant hints (`q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`)
-4. Leaves format unset when insufficient evidence (allowing future improvements without overwriting existing correct entries)
+1. Detects container format (gguf, safetensors)
+2. Parses `quantization_config.json` / `quant_config.json` for quantization schemes (awq/gptq) and derives compact labels (e.g., `w4g128`)
+3. Extracts filename-based quant hints (`q4_k_m`, `q5_k_m`, `q6_k`, `int4`, `int8`, `fp8`, `fp16`, `bf16`, `squeezellm`)
+4. Leaves unknowns unset when evidence is insufficient (allowing future improvements without overwriting existing correct entries)
 
 The downloader performs a second pass after files are written to refine format/quantization (e.g., if initial network analysis was ambiguous). The `--format` option during `scan` acts only as a fallback when auto-detection fails (never overwrites determined values).
 

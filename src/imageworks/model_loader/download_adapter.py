@@ -155,10 +155,33 @@ def _infer_family(hf_id: Optional[str]) -> Optional[str]:
 def _infer_capabilities(name: str) -> Dict[str, bool]:
     n = name.lower()
     text = True
-    vision = any(k in n for k in ["vl", "llava", "qwen2.5-vl", "idefics"])
-    embedding = "siglip" in n or "embed" in n
-    audio = False
-    return {"text": text, "vision": vision, "embedding": embedding, "audio": audio}
+    vision = any(
+        k in n for k in ["vl", "llava", "qwen2.5-vl", "idefics"]
+    )  # vision-language indicators
+    embedding = ("siglip" in n) or ("embed" in n) or ("embedding" in n)
+    audio = any(
+        k in n for k in ["audio", "whisper", "wav", "vits"]
+    )  # conservative guess
+    # Optional extra flags
+    thinking = any(
+        k in n
+        for k in [
+            "-r1",  # deepseek-r1 style
+            " r1 ",
+            "reason",  # reason, reasoner
+            "think",
+            "o3",
+        ]
+    )
+    tools = any(k in n for k in ["tool", "function", "tools", "function_call"])
+    return {
+        "text": text,
+        "vision": vision,
+        "embedding": embedding,
+        "audio": audio,
+        "thinking": thinking,
+        "tools": tools,
+    }
 
 
 def record_download(

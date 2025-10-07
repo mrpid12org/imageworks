@@ -1,15 +1,17 @@
 from imageworks.model_loader.naming import build_identity
 
 
-def test_identity_slug_and_display_awq():
+def test_identity_slug_and_display_awq_as_quant():
     identity = build_identity(
         family="qwen2.5-vl-7b-instruct",
         backend="vllm",
-        format_type="awq",
-        quantization="Q4_K_M",
+        format_type="safetensors",
+        quantization="awq-q4_k_m",
     )
-    assert identity.slug == "qwen2.5-vl-7b-instruct-vllm-awq-q4_k_m"
-    assert identity.display_name == "Qwen2.5 VL 7B Instruct (AWQ Q4 K M, vLLM)"
+    assert identity.slug == "qwen2.5-vl-7b-instruct-vllm-safetensors-awq-q4_k_m"
+    assert (
+        identity.display_name == "Qwen2.5 VL 7B Instruct (Safetensors AWQ Q4 K M, vLLM)"
+    )
 
 
 def test_identity_backend_switch():
