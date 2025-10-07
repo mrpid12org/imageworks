@@ -51,6 +51,7 @@ from .models import (
     RegistryEntry,
     VersionLock,
     VisionProbe,
+    normalize_capabilities,
 )
 
 _REGISTRY_CACHE: Dict[str, RegistryEntry] | None = None
@@ -365,6 +366,8 @@ def _parse_entry(raw: dict) -> RegistryEntry:
     perf_cfg = raw.get("performance", {})
     probes_cfg = raw.get("probes", {})
 
+    raw_caps = raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
+
     entry = RegistryEntry(
         name=str(raw["name"]).strip(),
         display_name=str(raw.get("display_name") or raw.get("name") or "").strip()
@@ -375,7 +378,7 @@ def _parse_entry(raw: dict) -> RegistryEntry:
             model_path=str(backend_cfg.get("model_path", "")),
             extra_args=list(backend_cfg.get("extra_args", []) or []),
         ),
-        capabilities=dict(raw.get("capabilities", {})),
+        capabilities=normalize_capabilities(raw_caps),
         artifacts=Artifacts(
             aggregate_sha256=str(artifacts_cfg.get("aggregate_sha256", "")),
             files=[

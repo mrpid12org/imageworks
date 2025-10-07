@@ -237,6 +237,9 @@ A: Re-verify → aggregate hash drift; if locked, violation raised; if unlocked,
 **Q: How do deprecated entries differ from removed ones?**
 A: Deprecated remain in JSON (auditable); removed entries are physically deleted from the registry list.
 
+**Q: Do I need to drop and re-import models to pick up new capability synonyms?**
+A: No. Capability normalization happens every time the registry is loaded or a caller invokes `require_capabilities`, so restarting the process is enough to pick up the expanded synonyms. The underlying JSON does not need to be rewritten unless you want the normalized map persisted on disk.
+
 ## 18. Programmatic Usage Examples
 ### Recording a Download
 ```python
