@@ -479,6 +479,7 @@ def list_models(
                         "logical_only": e.download_path is None,
                         "served_model_id": e.served_model_id,
                         "deprecated": getattr(e, "deprecated", False),
+                        "capabilities": getattr(e, "capabilities", {}) or {},
                     }
                 )
             if include_logical:
@@ -578,6 +579,10 @@ def list_models(
                 caps_tokens.append("E")
             if caps_dict.get("audio"):
                 caps_tokens.append("A")
+            if caps_dict.get("thinking"):
+                caps_tokens.append("R")  # Reasoning/Thinking
+            if caps_dict.get("tools"):
+                caps_tokens.append("T")  # Tool/function calling
             caps_display = "".join(caps_tokens) or "-"
             size_value = getattr(e, "download_size_bytes", None)
             size_display = _format_size(size_value) if size_value is not None else "-"

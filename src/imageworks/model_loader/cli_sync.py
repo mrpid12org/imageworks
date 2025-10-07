@@ -327,6 +327,7 @@ def discover_local_hf(
     """
     from . import registry as regmod
 
+    # Ensure registry is loaded and capture current entries
     reg = regmod.load_registry(force=True)
     discovered_file = registry_dir / "model_registry.discovered.json"
     # Load raw discovered overlay for append
@@ -433,11 +434,11 @@ def discover_all(
         False, "--skip-ollama", help="Do not run Ollama import step"
     ),
 ):
-    """Run both local HuggingFace discovery and Ollama import (both apply immediately)."""
+    """Run both adapter-backed local HuggingFace ingestion and Ollama import."""
     from typer.testing import CliRunner
 
     runner = CliRunner()
-    hf_res = runner.invoke(app, ["discover-local-hf", f"--root={hf_root}"])
+    hf_res = runner.invoke(app, ["ingest-local-hf", f"--root={hf_root}"])
     typer.echo(hf_res.stdout.rstrip())
     if hf_res.exit_code != 0:
         raise typer.Exit(code=hf_res.exit_code)
@@ -452,6 +453,167 @@ def discover_all(
             typer.echo(f"Ollama import failed: {exc.output}")
             raise typer.Exit(code=exc.returncode)
     typer.echo("Combined discovery complete.")
+
+
+@app.command("ingest-local-hf")
+def ingest_local_hf(
+    root: Path = typer.Option(
+        Path("~/ai-models/weights").expanduser(),
+        help="Root directory containing <owner>/<repo> model folders",
+    ),
+    backend: str = typer.Option("vllm", help="Backend to assign to ingested variants"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview without writing to registry"
+    ),
+):
+    """Ingest HF-style local directories using the unified adapter (no owner/repo stubs)."""
+    from imageworks.tools.model_downloader.format_utils import detect_format_and_quant
+    from .download_adapter import record_download, ImportSkipped
+    from . import registry as regmod
+
+    if not root.exists():
+        typer.echo(f"Root {root} does not exist")
+        raise typer.Exit(code=1)
+
+    candidates: list[tuple[str, str, Path]] = []
+    for owner_dir in root.iterdir():
+        if not owner_dir.is_dir():
+            continue
+        owner = owner_dir.name
+        for repo_dir in owner_dir.iterdir():
+            if not repo_dir.is_dir():
+                continue
+            repo = repo_dir.name
+            candidates.append((owner, repo, repo_dir))
+
+    if not candidates:
+        typer.echo("No HF model directories found.")
+        return
+
+    created = 0
+    updated = 0
+    skipped = 0
+    for owner, repo, path in candidates:
+        hf_id = f"{owner}/{repo}"
+        fmt, quant = detect_format_and_quant(path)
+        if dry_run:
+            typer.echo(
+                f"DRY RUN: would ingest {hf_id} as backend={backend} format={fmt or '-'} quant={quant or '-'}"
+            )
+            continue
+        try:
+            entry = record_download(
+                hf_id=hf_id,
+                backend=backend,
+                format_type=fmt,
+                quantization=quant,
+                path=str(path),
+                location="linux_wsl",
+                files=None,
+                size_bytes=None,
+                source_provider="hf",
+                roles=None,
+                role_priority=None,
+                family_override=None,
+                served_model_id=None,
+                extra_metadata=None,
+                display_name=None,
+            )
+            # record_download updates if existing; we differentiate by presence of downloaded_at
+            if entry.downloaded_at:
+                updated += 1
+            else:
+                created += 1
+        except ImportSkipped:
+            skipped += 1
+        except Exception as exc:  # noqa: BLE001
+            typer.echo(f"Failed to ingest {hf_id}: {exc}")
+    regmod.load_registry(force=True)
+    typer.echo(
+        f"Ingested HF directories: created/updated={created+updated} (created={created}, updated={updated}), skipped={skipped}"
+    )
+
+
+@app.command("purge-imported")
+def purge_imported(
+    providers: str = typer.Option(
+        "all", help="Which imports to purge: hf, ollama, or all"
+    ),
+    dry_run: bool = typer.Option(True, "--dry-run/--apply", help="Preview or apply"),
+    backup: bool = typer.Option(
+        True, "--backup/--no-backup", help="Backup discovered layer before write"
+    ),
+):
+    """Remove imported (discovered) entries by provider without touching curated."""
+    from . import registry as regmod
+    import json as _json
+    from datetime import datetime as _dt
+
+    regmod.load_registry(force=True)
+    discovered_path = Path("configs/model_registry.discovered.json")
+    try:
+        discovered_raw = (
+            _json.loads(discovered_path.read_text()) if discovered_path.exists() else []
+        )
+    except Exception:  # noqa: BLE001
+        discovered_raw = []
+
+    def _is_target(obj: dict) -> bool:
+        backend = obj.get("backend")
+        source = obj.get("source") or {}
+        provider = (obj.get("source_provider") or source.get("provider") or "").lower()
+        dp = obj.get("download_path") or ""
+        is_hf = (
+            bool(source.get("huggingface_id"))
+            or (provider == "hf")
+            or (
+                backend != "ollama"
+                and (obj.get("metadata", {}) or {}).get("created_from_download")
+            )
+        )
+        is_ollama = (
+            backend == "ollama"
+            or str(dp).startswith("ollama://")
+            or provider == "ollama"
+        )
+        if providers == "all":
+            return is_hf or is_ollama
+        if providers == "hf":
+            return is_hf
+        if providers == "ollama":
+            return is_ollama
+        return False
+
+    to_remove = [o for o in discovered_raw if isinstance(o, dict) and _is_target(o)]
+    remain = [o for o in discovered_raw if o not in to_remove]
+
+    typer.echo(
+        f"Purge plan: remove={len(to_remove)} keep={len(remain)} providers={providers}"
+    )
+    if dry_run:
+        return
+    if backup and discovered_path.exists():
+        backup_path = discovered_path.with_name(
+            f"model_registry.discovered.{_dt.utcnow().strftime('%Y%m%d-%H%M%S')}.bak.json"
+        )
+        try:
+            backup_path.write_text(discovered_path.read_text())
+            typer.echo(f"Backup: {backup_path}")
+        except Exception:  # noqa: BLE001
+            pass
+    discovered_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = discovered_path.with_suffix(".tmp")
+    tmp.write_text(_json.dumps(remain, indent=2) + "\n")
+    tmp.replace(discovered_path)
+    # Remove merged snapshot so reload does not re-adopt stale entries back into discovered
+    merged_snapshot = Path("configs/model_registry.json")
+    try:
+        if merged_snapshot.exists():
+            merged_snapshot.unlink()
+    except Exception:  # noqa: BLE001
+        pass
+    regmod.load_registry(force=True)
+    typer.echo("Applied purge and refreshed merged snapshot.")
 
 
 @app.command("rebuild-ollama")
