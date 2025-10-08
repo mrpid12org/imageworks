@@ -100,6 +100,11 @@ def check(
         "--registry-model",
         help="Logical model name from the model registry (requires --use-loader).",
     ),
+    registry_capability: List[str] = typer.Option(
+        None,
+        "--registry-capability",
+        help="Additional capability requirement when resolving models via loader.",
+    ),
     explain: Optional[bool] = typer.Option(
         None,
         "--explain/--no-explain",
@@ -127,6 +132,7 @@ def check(
         "dry_run": dry_run,
         "use_loader": use_loader,
         "registry_model": registry_model,
+        "registry_capabilities": registry_capability,
         "generate_explanations": explain,
     }
     if strategy:

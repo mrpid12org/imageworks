@@ -244,8 +244,16 @@ class SimilarityEngine:
             return config
 
         logical_name = config.registry_model or config.model
+        capabilities = [
+            cap.strip().lower()
+            for cap in config.registry_capabilities
+            if cap.strip()
+        ] or ["vision"]
         try:
-            selected = select_model(logical_name, require_capabilities=["vision", "embedding"])
+            selected = select_model(
+                logical_name,
+                require_capabilities=capabilities,
+            )
         except CapabilityError as exc:  # pragma: no cover - integration path
             raise RuntimeError(
                 f"Model '{logical_name}' is missing required capabilities: {exc}"
@@ -261,6 +269,7 @@ class SimilarityEngine:
                 "endpoint": selected.endpoint_url,
                 "internal_model": selected.internal_model_id,
                 "backend": selected.backend,
+                "required_capabilities": capabilities,
             },
         )
 
