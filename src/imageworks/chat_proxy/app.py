@@ -94,7 +94,7 @@ async def list_models_api():
 
     for name in list_models():
         entry = get_entry(name)
-        if entry.deprecated:
+        if getattr(entry, "deprecated", False):
             continue
         if not include_testing and is_testing_entry(name, entry):
             continue
