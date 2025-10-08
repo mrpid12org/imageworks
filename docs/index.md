@@ -27,6 +27,7 @@ quickly locate design references, domain guides, and operational procedures.
 ## How-To Guides
 - [AI Models and Prompting](guides/ai-models-and-prompting.md)
 - [IDE Setup (WSL/VSCode)](guides/ide-setup-wsl-vscode.md)
+- [Image Similarity Checker](guides/image-similarity-checker.md)
 
 ## Runbooks & Operational Playbooks
 - [Model Naming & Ollama Lingering Analysis](runbooks/model-naming-and-ollama-lingering.md)
@@ -36,6 +37,7 @@ quickly locate design references, domain guides, and operational procedures.
 
 ## Reference Material
 - [Model Downloader Guide](reference/model-downloader.md)
+- [Grounding Duplicate Detection Decisions](analysis/image-similarity-grounding.md)
 
 ## Specifications & Proposals
 - [Imageworks Specification](spec/imageworks-specification.md)
