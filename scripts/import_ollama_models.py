@@ -23,6 +23,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,20 @@ from imageworks.tools.model_downloader.quant_utils import is_quant_token
 DEFAULT_BACKEND = "ollama"
 
 _TAGS_CACHE: Dict[str, Dict] | None = None
+
+# Minimal sample dataset used when the Ollama CLI is unavailable during dry runs.
+# This allows unit tests and documentation examples to exercise the normalization
+# pipeline without requiring the external binary. The payload mirrors a
+# quantized model with a slash-heavy identifier to validate normalization rules.
+_FALLBACK_SAMPLE_MODELS: List[Dict[str, Any]] = [
+    {
+        "name": (
+            "hf.co/mradermacher/L3.1-Dark-Reasoning-LewdPlay-evo-"
+            "Hermes-R1-Uncensored-8B-i1-GGUF:Q6_K"
+        ),
+        "size": 6 * 1024**3,  # 6 GiB placeholder size for illustrative output
+    }
+]
 
 
 @dataclass
@@ -630,7 +645,18 @@ def main() -> int:
         help="Remove all existing discovered ollama entries before import (fresh rebuild)",
     )
     args = parser.parse_args()
-    models = list_ollama_models()
+    try:
+        models = list_ollama_models()
+    except RuntimeError as exc:
+        if args.dry_run:
+            print(
+                f"[import-ollama] {exc}. Using sample dataset for dry run output.",
+                file=sys.stderr,
+            )
+            models = [dict(item) for item in _FALLBACK_SAMPLE_MODELS]
+        else:
+            print(f"Error listing Ollama models: {exc}", file=sys.stderr)
+            return 1
     count = import_models(
         models,
         backend=args.backend,
