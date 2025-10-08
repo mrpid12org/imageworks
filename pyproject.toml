@@ -42,6 +42,7 @@ imageworks-api = "imageworks.apps.mono_checker.api.main:start"
 imageworks-zip = "imageworks.tools.zip_extract:app"
 imageworks-color-narrator = "imageworks.apps.color_narrator.cli.main:app"
 imageworks-personal-tagger = "imageworks.apps.personal_tagger.cli.main:app"
+imageworks-image-similarity = "imageworks.apps.image_similarity_checker.cli.main:app"
 imageworks-download = "imageworks.tools.model_downloader.cli:main"
 imageworks-models = "imageworks.model_loader.cli:app"
 imageworks-models-api = "imageworks.model_loader.api:app"
@@ -219,6 +220,32 @@ image_extensions = [
   ".cr3",
 ]
 json_schema_version = "1.0"
+
+
+[tool.imageworks.image_similarity_checker]
+default_library_root = "/mnt/d/Proper Photos/photos/ccc competition images"
+default_output_jsonl = "outputs/results/similarity_results.jsonl"
+default_summary_path = "outputs/summaries/similarity_summary.md"
+default_cache_dir = "outputs/cache/similarity"
+default_strategies = ["embedding", "perceptual_hash"]
+default_fail_threshold = 0.92
+default_query_threshold = 0.82
+default_top_matches = 5
+default_similarity_metric = "cosine"
+default_embedding_backend = "simple"
+default_write_metadata = false
+default_backup_originals = true
+default_overwrite_metadata = false
+default_use_loader = false
+default_generate_explanations = false
+default_prompt_profile = "baseline"
+image_extensions = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".tif",
+  ".tiff",
+]
 
 
 [tool.imageworks.model-downloader]
