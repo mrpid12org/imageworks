@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
+import time
+import json
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -43,18 +45,21 @@ class SimilarityEngine:
         self._strategies = list(strategies or build_strategies(self.config))
         self._metadata_writer = metadata_writer
         self._explainer: Optional[SimilarityExplainer] = None
+        # Performance metrics container (populated only when enabled)
+        self._perf: dict[str, object] = {"stages": {}, "candidates": []}
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def run(self) -> List[CandidateSimilarity]:
         """Execute similarity analysis for the configured candidates."""
-
+        t0 = time.perf_counter()
         candidate_images = discover_images(
             list(self.config.candidates),
             recursive=self.config.recursive,
             extensions=self.config.image_extensions,
         )
+        t1 = time.perf_counter()
         if not candidate_images:
             raise ValueError("No candidate images were found for analysis")
 
@@ -81,7 +86,10 @@ class SimilarityEngine:
             recursive=self.config.recursive,
             extensions=self.config.image_extensions,
             exclude=candidate_images,
+            refresh_library_cache=self.config.refresh_library_cache,
+            manifest_ttl_seconds=self.config.manifest_ttl_seconds,
         )
+        t2 = time.perf_counter()
         if not library_images:
             logger.warning(
                 "No images discovered in library root %s", self.config.library_root
@@ -104,15 +112,27 @@ class SimilarityEngine:
             strategies=self._strategies,
         )
 
+        prime_timings: dict[str, float] = {}
         for strategy in context.strategies:
             try:
+                s0 = time.perf_counter()
                 strategy.prime(context.library_images)
+                s1 = time.perf_counter()
+                prime_timings[strategy.name] = prime_timings.get(strategy.name, 0.0) + (
+                    s1 - s0
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.error("Strategy %s failed during prime(): %s", strategy.name, exc)
+                logger.error(
+                    "Strategy %s failed during prime(): %s", strategy.name, exc
+                )
 
         results: List[CandidateSimilarity] = []
+        match_timings: dict[str, float] = {}
         for candidate in context.candidate_images:
-            matches = self._evaluate_candidate(candidate, context.strategies)
+            c0 = time.perf_counter()
+            matches = self._evaluate_candidate(
+                candidate, context.strategies, match_timings
+            )
             aggregated = self._aggregate_matches(matches)
             top_score = aggregated[0].score if aggregated else 0.0
             verdict = self._classify(top_score)
@@ -141,12 +161,48 @@ class SimilarityEngine:
             results.append(result)
 
             if self.config.write_metadata:
+                m0 = time.perf_counter()
                 self._write_metadata(candidate, result)
+                m1 = time.perf_counter()
+                if self.config.enable_perf_metrics:
+                    self._record_candidate_perf(
+                        candidate, {"metadata_write_s": round(m1 - m0, 6)}
+                    )
 
             if self.config.generate_explanations:
+                e0 = time.perf_counter()
                 explanation = self._ensure_explainer().explain(result)
                 if explanation:
                     result.notes.append(f"LLM rationale: {explanation}")
+                e1 = time.perf_counter()
+                if self.config.enable_perf_metrics:
+                    self._record_candidate_perf(
+                        candidate, {"explain_s": round(e1 - e0, 6)}
+                    )
+
+            c1 = time.perf_counter()
+            if self.config.enable_perf_metrics:
+                self._record_candidate_perf(
+                    candidate, {"candidate_total_s": round(c1 - c0, 6)}
+                )
+
+        t3 = time.perf_counter()
+        if self.config.enable_perf_metrics:
+            self._perf["stages"] = {
+                "discover_candidates_s": round(t1 - t0, 6),
+                "discover_library_s": round(t2 - t1, 6),
+                "prime_per_strategy_s": {
+                    k: round(v, 6) for k, v in prime_timings.items()
+                },
+                "match_per_strategy_s": {
+                    k: round(v, 6) for k, v in match_timings.items()
+                },
+                "overall_run_s": round(t3 - t0, 6),
+            }
+            try:
+                self._write_perf_metrics()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Failed to write perf metrics: %s", exc)
 
         return results
 
@@ -158,17 +214,32 @@ class SimilarityEngine:
     # Internal helpers
     # ------------------------------------------------------------------
     def _evaluate_candidate(
-        self, candidate: Path, strategies: Sequence[SimilarityStrategy]
+        self,
+        candidate: Path,
+        strategies: Sequence[SimilarityStrategy],
+        match_timings: dict[str, float],
     ) -> List[StrategyMatch]:
         matches: List[StrategyMatch] = []
         for strategy in strategies:
             try:
-                matches.extend(strategy.find_matches(candidate, top_k=self.config.top_matches))
+                s0 = time.perf_counter()
+                matches.extend(
+                    strategy.find_matches(candidate, top_k=self.config.top_matches)
+                )
+                s1 = time.perf_counter()
+                if self.config.enable_perf_metrics:
+                    match_timings[strategy.name] = match_timings.get(
+                        strategy.name, 0.0
+                    ) + (s1 - s0)
             except Exception as exc:  # noqa: BLE001
-                logger.error("Strategy %s failed for %s: %s", strategy.name, candidate, exc)
+                logger.error(
+                    "Strategy %s failed for %s: %s", strategy.name, candidate, exc
+                )
         return matches
 
-    def _aggregate_matches(self, matches: Sequence[StrategyMatch]) -> List[StrategyMatch]:
+    def _aggregate_matches(
+        self, matches: Sequence[StrategyMatch]
+    ) -> List[StrategyMatch]:
         if not matches:
             return []
 
@@ -195,7 +266,9 @@ class SimilarityEngine:
 
         aggregated_matches: List[StrategyMatch] = []
         for info in aggregated.values():
-            reason = " | ".join(info["reasons"]) if info["reasons"] else "combined score"
+            reason = (
+                " | ".join(info["reasons"]) if info["reasons"] else "combined score"
+            )
             aggregated_matches.append(
                 StrategyMatch(
                     candidate=info["candidate"],
@@ -230,7 +303,9 @@ class SimilarityEngine:
             self._metadata_writer = writer
         try:
             wrote = writer.write(candidate, result)
-            logger.debug("Metadata %s for %s", "written" if wrote else "skipped", candidate)
+            logger.debug(
+                "Metadata %s for %s", "written" if wrote else "skipped", candidate
+            )
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to write metadata for %s: %s", candidate, exc)
 
@@ -239,15 +314,28 @@ class SimilarityEngine:
             self._explainer = create_explainer(self.config)
         return self._explainer
 
+    # ------------------------------------------------------------------
+    # Performance metrics helpers
+    # ------------------------------------------------------------------
+    def _record_candidate_perf(self, candidate: Path, data: dict[str, float]) -> None:
+        try:
+            self._perf["candidates"].append({"candidate": str(candidate), **data})  # type: ignore[index]
+        except Exception:
+            pass
+
+    def _write_perf_metrics(self) -> None:
+        p = self.config.metrics_path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(self._perf, f, ensure_ascii=False, indent=2)
+
     def _resolve_model_via_loader(self, config: SimilarityConfig) -> SimilarityConfig:
         if not (config.use_loader or config.registry_model):
             return config
 
         logical_name = config.registry_model or config.model
         capabilities = [
-            cap.strip().lower()
-            for cap in config.registry_capabilities
-            if cap.strip()
+            cap.strip().lower() for cap in config.registry_capabilities if cap.strip()
         ] or ["vision"]
         try:
             selected = select_model(
@@ -259,7 +347,9 @@ class SimilarityEngine:
                 f"Model '{logical_name}' is missing required capabilities: {exc}"
             ) from exc
         except Exception as exc:  # noqa: BLE001 - propagate context
-            raise RuntimeError(f"Failed to resolve model '{logical_name}': {exc}") from exc
+            raise RuntimeError(
+                f"Failed to resolve model '{logical_name}': {exc}"
+            ) from exc
 
         logger.info(
             "model_resolution",

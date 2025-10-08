@@ -6,7 +6,7 @@ import base64
 import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Sequence
+from typing import Dict, Sequence
 
 import numpy as np
 from PIL import Image
@@ -27,6 +27,13 @@ try:  # Optional dependency
     import requests
 except Exception:  # pragma: no cover - dependency optional
     requests = None  # type: ignore[assignment]
+
+# Optional: Hugging Face transformers for SigLIP backend
+try:  # pragma: no cover - optional runtime dep
+    from transformers import AutoImageProcessor, SiglipVisionModel  # type: ignore
+except Exception:  # pragma: no cover - optional
+    AutoImageProcessor = None  # type: ignore[assignment]
+    SiglipVisionModel = None  # type: ignore[assignment]
 
 
 class EmbeddingError(RuntimeError):
@@ -68,11 +75,16 @@ class SimpleVisionEmbedding(EmbeddingModel):
             for channel in range(3):
                 channel_data = spatial[:, :, channel]
                 hist, _ = np.histogram(
-                    channel_data, bins=self.histogram_bins, range=(0.0, 1.0), density=True
+                    channel_data,
+                    bins=self.histogram_bins,
+                    range=(0.0, 1.0),
+                    density=True,
                 )
                 hist_components.append(hist.astype(np.float32))
 
-            feature = np.concatenate([spatial_vector, *hist_components]).astype(np.float32)
+            feature = np.concatenate([spatial_vector, *hist_components]).astype(
+                np.float32
+            )
             return self._normalise(feature)
 
 
@@ -110,6 +122,52 @@ class OpenClipEmbedding(EmbeddingModel):
 
 
 @dataclass
+class SiglipEmbedding(EmbeddingModel):
+    """SigLIP vision encoder via Hugging Face transformers.
+
+    Requires the 'transformers' and 'torch' packages. The configured model name can be
+    a Hugging Face repo id (e.g., 'google/siglip-large-patch16-384') or a local path
+    previously downloaded with the ImageWorks downloader.
+    """
+
+    model_name: str
+    device: str = "cpu"
+
+    def __post_init__(self) -> None:  # pragma: no cover - exercised at runtime
+        if torch is None:
+            raise EmbeddingError("SigLIP backend requires 'torch' to be installed")
+        if AutoImageProcessor is None or SiglipVisionModel is None:
+            raise EmbeddingError(
+                "SigLIP backend requires 'transformers' with SigLIP support; install transformers to use it"
+            )
+        # Auto-detect CUDA if available unless explicitly set
+        if self.device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"  # type: ignore[assignment]
+        self._processor = AutoImageProcessor.from_pretrained(self.model_name)
+        self._model = SiglipVisionModel.from_pretrained(self.model_name)
+        self._model.to(self.device)
+        self._model.eval()
+
+    def embed(self, image_path: Path) -> np.ndarray:  # noqa: D401 - see base
+        with Image.open(image_path) as image:
+            rgb = image.convert("RGB")
+            inputs = self._processor(images=rgb, return_tensors="pt")
+        pixel_values = inputs["pixel_values"].to(self.device)
+
+        with torch.no_grad():  # type: ignore[union-attr]
+            outputs = self._model(pixel_values=pixel_values)
+            # Prefer pooler_output if available; else fall back to mean-pooled last_hidden_state
+            vector = getattr(outputs, "pooler_output", None)
+            if vector is None:
+                last = getattr(outputs, "last_hidden_state", None)
+                if last is None:
+                    raise EmbeddingError("SigLIP model did not return hidden states")
+                vector = last.mean(dim=1)
+            arr = vector.squeeze(0).detach().cpu().numpy().astype(np.float32)
+        return self._normalise(arr)
+
+
+@dataclass
 class RemoteEmbeddingClient(EmbeddingModel):
     """Call an OpenAI-compatible endpoint to retrieve embeddings."""
 
@@ -120,7 +178,9 @@ class RemoteEmbeddingClient(EmbeddingModel):
 
     def __post_init__(self) -> None:
         if requests is None:  # pragma: no cover - optional dependency
-            raise EmbeddingError("The 'requests' package is required for remote embeddings")
+            raise EmbeddingError(
+                "The 'requests' package is required for remote embeddings"
+            )
         self._session = requests.Session()  # type: ignore[assignment]
         self._endpoint = self.base_url.rstrip("/") + "/embeddings"
 
@@ -179,4 +239,13 @@ def create_embedding_model(config: SimilarityConfig) -> EmbeddingModel:
             api_key=config.api_key,
             timeout=config.timeout,
         )
+    if backend in {"siglip", "siglip_vision"}:
+        model_name = (config.embedding_model or config.model or "").strip()
+        if not model_name:
+            raise EmbeddingError(
+                "SigLIP backend requires --model to specify a SigLIP checkpoint (e.g. 'google/siglip-large-patch16-384' or a local path)"
+            )
+        # Prefer CUDA if available
+        device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
+        return SiglipEmbedding(model_name=model_name, device=device)
     raise EmbeddingError(f"Unknown embedding backend '{config.embedding_backend}'")

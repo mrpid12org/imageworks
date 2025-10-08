@@ -29,7 +29,10 @@ def check(
         ..., metavar="CANDIDATE...", help="Candidate image files or directories."
     ),
     library_root: Optional[Path] = typer.Option(
-        None, "--library-root", "-L", help="Root directory containing historical submissions."
+        None,
+        "--library-root",
+        "-L",
+        help="Root directory containing historical submissions.",
     ),
     output_jsonl: Optional[Path] = typer.Option(
         None, "--output-jsonl", help="Machine-readable JSONL output path."
@@ -51,7 +54,9 @@ def check(
         None, "--top-matches", help="Number of matches to retain per candidate."
     ),
     similarity_metric: Optional[str] = typer.Option(
-        None, "--metric", help="Similarity metric to use (cosine, euclidean, manhattan)."
+        None,
+        "--metric",
+        help="Similarity metric to use (cosine, euclidean, manhattan).",
     ),
     strategy: List[str] = typer.Option(
         None,
@@ -60,16 +65,25 @@ def check(
         help="Similarity strategy to enable (repeatable; e.g. embedding, perceptual_hash).",
     ),
     embedding_backend: Optional[str] = typer.Option(
-        None, "--embedding-backend", help="Embedding backend identifier (simple, open_clip, remote)."
+        None,
+        "--embedding-backend",
+        help="Embedding backend identifier (simple, open_clip, remote).",
+    ),
+    embedding_model: Optional[str] = typer.Option(
+        None,
+        "--embedding-model",
+        help="Embedding model identifier (HF repo or local path) for embedding backend.",
     ),
     backend: Optional[str] = typer.Option(
         None, "--backend", help="Inference backend name (lmdeploy, vllm, ollama, ...)."
     ),
     base_url: Optional[str] = typer.Option(
-        None, "--base-url", help="Base URL for OpenAI-compatible explanation/embedding endpoints."
+        None,
+        "--base-url",
+        help="Base URL for OpenAI-compatible explanation/embedding endpoints.",
     ),
     model: Optional[str] = typer.Option(
-        None, "--model", help="Model identifier for embeddings/explanations."
+        None, "--model", help="Explainer model identifier (for VLM explanations)."
     ),
     api_key: Optional[str] = typer.Option(
         None, "--api-key", help="API key for remote backends."
@@ -81,19 +95,29 @@ def check(
         None, "--prompt-profile", help="Prompt profile for explanation generation."
     ),
     write_metadata: Optional[bool] = typer.Option(
-        None, "--write-metadata/--no-write-metadata", help="Write similarity verdicts to image metadata."
+        None,
+        "--write-metadata/--no-write-metadata",
+        help="Write similarity verdicts to image metadata.",
     ),
     backup_originals: Optional[bool] = typer.Option(
-        None, "--backup-originals/--no-backup-originals", help="Create backups before metadata writes."
+        None,
+        "--backup-originals/--no-backup-originals",
+        help="Create backups before metadata writes.",
     ),
     overwrite_metadata: Optional[bool] = typer.Option(
-        None, "--overwrite-metadata/--no-overwrite-metadata", help="Overwrite existing metadata keywords."
+        None,
+        "--overwrite-metadata/--no-overwrite-metadata",
+        help="Overwrite existing metadata keywords.",
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run/--no-dry-run", help="Skip similarity computation and emit placeholder results."
+        False,
+        "--dry-run/--no-dry-run",
+        help="Skip similarity computation and emit placeholder results.",
     ),
     use_loader: Optional[bool] = typer.Option(
-        None, "--use-loader/--no-use-loader", help="Resolve models via the deterministic model loader."
+        None,
+        "--use-loader/--no-use-loader",
+        help="Resolve models via the deterministic model loader.",
     ),
     registry_model: Optional[str] = typer.Option(
         None,
@@ -110,6 +134,41 @@ def check(
         "--explain/--no-explain",
         help="Generate natural-language rationales using the configured backend.",
     ),
+    augment_pooling: Optional[bool] = typer.Option(
+        None,
+        "--augment-pooling/--no-augment-pooling",
+        help="Enable averaging of embeddings across simple augmentations (grayscale, five-crop).",
+    ),
+    augment_grayscale: Optional[bool] = typer.Option(
+        None,
+        "--augment-grayscale/--no-augment-grayscale",
+        help="Include a grayscale variant when augmentation pooling is enabled.",
+    ),
+    augment_five_crop: Optional[bool] = typer.Option(
+        None,
+        "--augment-five-crop/--no-augment-five-crop",
+        help="Include five-crop variants (corners + center) when augmentation pooling is enabled.",
+    ),
+    augment_five_crop_ratio: Optional[float] = typer.Option(
+        None,
+        "--augment-five-crop-ratio",
+        help="Ratio of the shorter image side used for five-crop size (e.g., 0.875).",
+    ),
+    perf_metrics: Optional[bool] = typer.Option(
+        None,
+        "--perf-metrics/--no-perf-metrics",
+        help="Collect and write performance metrics (adds minimal overhead).",
+    ),
+    refresh_library_cache: Optional[bool] = typer.Option(
+        None,
+        "--refresh-library-cache/--no-refresh-library-cache",
+        help="Force rebuild of library manifest cache (discovery).",
+    ),
+    manifest_ttl_seconds: Optional[int] = typer.Option(
+        None,
+        "--manifest-ttl-seconds",
+        help="TTL for library manifest cache before a refresh is allowed (default from config).",
+    ),
 ) -> None:
     overrides: dict[str, object] = {
         "library_root": library_root,
@@ -120,6 +179,7 @@ def check(
         "top_matches": top_matches,
         "similarity_metric": similarity_metric,
         "embedding_backend": embedding_backend,
+        "embedding_model": embedding_model,
         "backend": backend,
         "base_url": base_url,
         "model": model,
@@ -134,11 +194,20 @@ def check(
         "registry_model": registry_model,
         "registry_capabilities": registry_capability,
         "generate_explanations": explain,
+        "enable_augment_pooling": augment_pooling,
+        "augment_grayscale": augment_grayscale,
+        "augment_five_crop": augment_five_crop,
+        "augment_five_crop_ratio": augment_five_crop_ratio,
+        "enable_perf_metrics": perf_metrics,
+        "refresh_library_cache": refresh_library_cache,
+        "manifest_ttl_seconds": manifest_ttl_seconds,
     }
     if strategy:
         overrides["strategies"] = strategy
 
-    config = load_config(candidates=candidates, **{k: v for k, v in overrides.items() if v is not None})
+    config = load_config(
+        candidates=candidates, **{k: v for k, v in overrides.items() if v is not None}
+    )
 
     logger.info(
         "similarity_run_config",
@@ -152,6 +221,12 @@ def check(
             "query_threshold": config.query_threshold,
             "embedding_backend": config.embedding_backend,
             "generate_explanations": config.generate_explanations,
+            "augment_pooling": config.enable_augment_pooling,
+            "augment_grayscale": config.augment_grayscale,
+            "augment_five_crop": config.augment_five_crop,
+            "augment_five_crop_ratio": config.augment_five_crop_ratio,
+            "enable_perf_metrics": config.enable_perf_metrics,
+            "metrics_path": str(getattr(config, "metrics_path", "")),
         },
     )
 
@@ -171,9 +246,7 @@ def _print_terminal_summary(results, config) -> None:
     verdict_counts = Counter(result.verdict for result in results)
     typer.echo("\nSummary:")
     for verdict in SimilarityVerdict:
-        typer.echo(
-            f"  {verdict.value.upper():>5}: {verdict_counts.get(verdict, 0)}"
-        )
+        typer.echo(f"  {verdict.value.upper():>5}: {verdict_counts.get(verdict, 0)}")
 
     typer.echo("\nTop matches:")
     for result in results:
