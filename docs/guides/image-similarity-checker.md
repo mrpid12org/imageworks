@@ -40,6 +40,9 @@ uv run imageworks-image-similarity check \
 | `--fail-threshold`, `--query-threshold` | Adjust sensitivity bands for fail/query verdicts. |
 | `--explain/--no-explain` | Toggle natural-language rationales using prompt profiles. |
 | `--write-metadata` | Append keywords with similarity verdicts to image files via ExifTool. |
+| `--use-loader/--no-use-loader` | Resolve base URLs/models through the deterministic model loader. |
+| `--registry-model` | Provide the logical model name from `configs/model_registry.json`. |
+| `--registry-capability` | Require additional registry capabilities (defaults to `vision`). |
 
 ## Reports
 
@@ -57,7 +60,10 @@ ImageWorks mono checker and personal tagger outputs.
    Delete this cache to force regeneration after large library updates.
 3. **Metadata Writing** – Ensure ExifTool is installed when enabling metadata annotations.
    Keywords follow the `similarity:*` namespace for easy filtering in Lightroom.
-4. **Explanations** – Configure an OpenAI-compatible endpoint in `pyproject.toml` when
+4. **Model Loader Integration** – Enable `--use-loader` to reuse the deterministic model
+   registry. Combine with `--registry-capability` (repeatable) to ensure resolved models
+   advertise capabilities such as `vision` or future `embedding` support.
+5. **Explanations** – Configure an OpenAI-compatible endpoint in `pyproject.toml` when
    enabling `--explain`. Prompt profiles live in code and can be versioned to tune tone.
 
 ## Adjusting Thresholds

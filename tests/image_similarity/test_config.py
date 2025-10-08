@@ -56,3 +56,4 @@ def test_build_runtime_config_overrides(tmp_path: Path):
     assert config.strategies == ("perceptual_hash",)
     assert config.embedding_backend == "simple"
     assert config.generate_explanations is True
+    assert config.registry_capabilities == ("vision",)

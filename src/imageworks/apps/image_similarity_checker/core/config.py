@@ -118,6 +118,7 @@ class SimilaritySettings:
     default_overwrite_metadata: bool = False
     default_use_loader: bool = False
     default_registry_model: Optional[str] = None
+    default_registry_capabilities: Tuple[str, ...] = ("vision",)
     default_embedding_backend: str = "simple"
     default_generate_explanations: bool = False
 
@@ -151,6 +152,7 @@ class SimilarityConfig:
     dry_run: bool
     use_loader: bool
     registry_model: Optional[str]
+    registry_capabilities: Tuple[str, ...]
     generate_explanations: bool
 
 
@@ -254,6 +256,10 @@ def load_settings(start: Optional[Path] = None) -> SimilaritySettings:
     registry_model = raw.get("default_registry_model")
     if registry_model is not None:
         registry_model = str(registry_model).strip() or None
+    registry_capabilities = (
+        _normalise_iterable(raw.get("default_registry_capabilities"))
+        or SimilaritySettings.default_registry_capabilities
+    )
 
     return SimilaritySettings(
         default_candidates=candidate_paths,
@@ -280,6 +286,9 @@ def load_settings(start: Optional[Path] = None) -> SimilaritySettings:
         default_overwrite_metadata=overwrite_metadata,
         default_use_loader=use_loader,
         default_registry_model=registry_model,
+        default_registry_capabilities=tuple(
+            cap.strip().lower() for cap in registry_capabilities if cap.strip()
+        ),
         default_generate_explanations=generate_explanations,
     )
 
@@ -312,6 +321,7 @@ def build_runtime_config(
     dry_run: bool = False,
     use_loader: Optional[bool] = None,
     registry_model: Optional[str] = None,
+    registry_capabilities: Optional[Sequence[str]] = None,
     generate_explanations: Optional[bool] = None,
 ) -> SimilarityConfig:
     """Merge CLI overrides with defaults to produce a runtime config."""
@@ -391,6 +401,15 @@ def build_runtime_config(
     resolved_registry = registry_model if registry_model is not None else settings.default_registry_model
     if resolved_registry is not None:
         resolved_registry = resolved_registry.strip() or None
+    resolved_registry_capabilities = tuple(
+        cap.strip().lower()
+        for cap in (
+            registry_capabilities or settings.default_registry_capabilities
+        )
+        if cap and cap.strip()
+    )
+    if not resolved_registry_capabilities:
+        resolved_registry_capabilities = ("vision",)
 
     return SimilarityConfig(
         candidates=resolved_candidates,
@@ -417,6 +436,7 @@ def build_runtime_config(
         dry_run=dry_run,
         use_loader=resolved_use_loader,
         registry_model=resolved_registry,
+        registry_capabilities=resolved_registry_capabilities,
         embedding_backend=resolved_embedding_backend,
         generate_explanations=resolved_generate_explanations,
     )
