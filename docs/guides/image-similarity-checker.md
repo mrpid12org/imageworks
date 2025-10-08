@@ -18,6 +18,11 @@ for downstream workflows.
   Markdown (`outputs/summaries/similarity_summary.md`) summaries. Metadata updates are
   optional and require ExifTool.
 
+Defaults (explainer backend)
+- Backend: vLLM
+- Base URL: http://localhost:8000/v1
+- Model: Qwen2.5-VL-7B-AWQ
+
 ## CLI Usage
 
 ```bash
@@ -30,15 +35,30 @@ uv run imageworks-image-similarity check \
   --summary outputs/summaries/similarity_summary.md
 ```
 
+SigLIP embeddings + pHash, with vLLM explanations:
+```bash
+uv run imageworks-image-similarity check \
+  /path/to/candidate/folder \
+  --library-root "/mnt/d/Proper Photos/photos/ccc competition images" \
+  --strategy embedding --strategy perceptual_hash \
+  --embedding-backend siglip \
+  --embedding-model google/siglip-large-patch16-384 \
+  --explain \
+  --output-jsonl outputs/results/similarity_siglip_vllm.jsonl \
+  --summary outputs/summaries/similarity_siglip_vllm.md
+```
+
 ### Common Flags
 
 | Option | Purpose |
 | --- | --- |
 | `--strategy` | Enable specific similarity strategies (`embedding`, `perceptual_hash`). |
-| `--embedding-backend` | Choose the embedding implementation (`simple`, `open_clip`, `remote`). |
+| `--embedding-backend` | Choose the embedding implementation (`simple`, `open_clip`, `siglip`, `remote`). |
+| `--embedding-model` | Model id or path for the embedding backend (e.g., `google/siglip-large-patch16-384`). |
 | `--library-root` | Override the default archive location. |
 | `--fail-threshold`, `--query-threshold` | Adjust sensitivity bands for fail/query verdicts. |
-| `--explain/--no-explain` | Toggle natural-language rationales using prompt profiles. |
+| `--explain/--no-explain` | Toggle natural-language rationales using prompt profiles (uses vLLM by default). |
+| `--model` | Explainer (VLM) model name to send to the OpenAI-compatible endpoint. |
 | `--write-metadata` | Append keywords with similarity verdicts to image files via ExifTool. |
 | `--use-loader/--no-use-loader` | Resolve base URLs/models through the deterministic model loader. |
 | `--registry-model` | Provide the logical model name from `configs/model_registry.json`. |
@@ -57,14 +77,24 @@ ImageWorks mono checker and personal tagger outputs.
    Its JSONL output includes a `verdict` field that upstream automation can inspect before
    running heavier modules (mono checker, colour narrator, personal tagger).
 2. **Caching** – Embedding strategies cache library vectors in `outputs/cache/similarity`.
-   Delete this cache to force regeneration after large library updates.
+  Caches are backend/model-specific (e.g., `embedding_index__siglip__siglip-large-patch16-384__<hash>.npz`).
+  This lets you switch backends/models without clearing caches. Delete the specific cache to rebuild.
 3. **Metadata Writing** – Ensure ExifTool is installed when enabling metadata annotations.
    Keywords follow the `similarity:*` namespace for easy filtering in Lightroom.
 4. **Model Loader Integration** – Enable `--use-loader` to reuse the deterministic model
    registry. Combine with `--registry-capability` (repeatable) to ensure resolved models
    advertise capabilities such as `vision` or future `embedding` support.
 5. **Explanations** – Configure an OpenAI-compatible endpoint in `pyproject.toml` when
-   enabling `--explain`. Prompt profiles live in code and can be versioned to tune tone.
+  enabling `--explain`. vLLM is the default (`http://localhost:8000/v1`, `Qwen2-VL-2B-Instruct`).
+  Prompt profiles live in code and can be versioned to tune tone.
+
+### vLLM model loading
+
+The checker does not autoload models on the vLLM server. It sends OpenAI-compatible
+requests to the configured endpoint with the `model` field. Whether the server loads
+that model on demand depends on your vLLM deployment and flags. In the common setup,
+start vLLM with the intended model preloaded (or enable multi-model serving) so the
+`/chat/completions` requests succeed.
 
 ## Adjusting Thresholds
 

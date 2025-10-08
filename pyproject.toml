@@ -15,6 +15,7 @@ dependencies = [
   "tomli; python_version < '3.11'",
   # Color-narrator VLM dependencies
   "torch>=2.3.0",
+  "transformers>=4.38.0",
   "requests",
   "aiohttp",
   # Image metadata dependencies
@@ -233,6 +234,9 @@ default_query_threshold = 0.82
 default_top_matches = 5
 default_similarity_metric = "cosine"
 default_embedding_backend = "simple"
+default_backend = "vllm"
+default_model = "Qwen2.5-VL-7B-AWQ"
+default_base_url = "http://localhost:8000/v1"
 default_write_metadata = false
 default_backup_originals = true
 default_overwrite_metadata = false
