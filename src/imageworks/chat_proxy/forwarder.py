@@ -447,6 +447,41 @@ class ChatForwarder:
             obj = resp.json()
             first_token_at = time.time()
             norm = normalize_response(obj, disabled=self.cfg.disable_tool_normalization)
+            # Final guard for inline function-call content -> tool_calls
+            try:
+                choices = norm.get("choices") or []
+                if choices:
+                    msg = (choices[0] or {}).get("message") or {}
+                    tc = msg.get("tool_calls") or []
+                    content = msg.get("content") or ""
+                    if not tc and content:
+                        try:
+                            from .normalization import (
+                                _maybe_extract_function_call_from_content,
+                                _coerce_str,
+                            )
+
+                            fc = _maybe_extract_function_call_from_content(content)
+                            if fc and isinstance(fc, dict) and fc.get("name"):
+                                msg["tool_calls"] = [
+                                    {
+                                        "id": "call_0",
+                                        "type": "function",
+                                        "function": {
+                                            "name": fc["name"],
+                                            "arguments": _coerce_str(
+                                                fc.get("arguments", "{}")
+                                            ),
+                                        },
+                                    }
+                                ]
+                                msg["content"] = ""
+                                choices[0]["message"] = msg
+                                norm["choices"] = choices
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             usage = norm.get("usage") or {}
             collected_tokens = (
                 usage.get("completion_tokens") or usage.get("total_tokens") or 0
