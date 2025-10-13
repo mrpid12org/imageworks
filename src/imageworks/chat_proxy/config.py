@@ -35,6 +35,8 @@ class ProxyConfig:
     disable_tool_normalization: bool = False
     log_prompts: bool = False
     schema_version: int = 1
+    suppress_decorations: bool = True
+    include_non_installed: bool = False
 
     @classmethod
     def load(cls) -> "ProxyConfig":
@@ -57,4 +59,6 @@ class ProxyConfig:
             ),
             log_prompts=_get_bool("CHAT_PROXY_LOG_PROMPTS", False),
             schema_version=_get_int("CHAT_PROXY_SCHEMA_VERSION", 1),
+            suppress_decorations=_get_bool("CHAT_PROXY_SUPPRESS_DECORATIONS", True),
+            include_non_installed=_get_bool("CHAT_PROXY_INCLUDE_NON_INSTALLED", False),
         )

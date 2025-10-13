@@ -26,29 +26,19 @@ def _normalize_tool_calls(container: dict) -> None:
 
 
 def _maybe_extract_function_call_from_content(content: str) -> dict | None:
-    """Heuristic: if model emitted a function call as inline JSON/XML in content,
-    extract it and return {name, arguments}.
-
-    Handles patterns like:
-    - ```json\n{"name":"foo","arguments":{...}}\n```
-    - ```\n{...}\n```
-    - <response> {"name": "foo", "arguments": {...}} </response>
-    - Raw JSON object text
-    """
+    """Heuristic: parse inline function-call JSON/XML from content and return {name, arguments}."""
     if not content or not isinstance(content, str):
         return None
     s = content.strip()
     # Strip code fences
     if s.startswith("```"):
-        # remove first fence line
         parts = s.split("\n", 1)
         s = parts[1] if len(parts) == 2 else ""
-        # remove trailing fence
         if s.endswith("```"):
             s = s[:-3]
     # Strip simple xml wrapper
     s = re.sub(r"</?response[^>]*>", "", s, flags=re.IGNORECASE)
-    # Find first JSON object
+    # Try JSON object first
     m = re.search(r"\{[\s\S]*\}", s)
     if m:
         try:
@@ -64,14 +54,13 @@ def _maybe_extract_function_call_from_content(content: str) -> dict | None:
                 args = obj.get("arguments")
             if name:
                 return {"name": name, "arguments": args}
-    # Try XML-style function_call as fallback (or primary if no JSON)
+    # Fallback XML-style
     try:
         name_m = re.search(r"<name>([\s\S]*?)</name>", s, flags=re.IGNORECASE)
         args_m = re.search(r"<arguments>([\s\S]*?)</arguments>", s, flags=re.IGNORECASE)
         if name_m:
             name = name_m.group(1).strip()
             arguments_raw = (args_m.group(1) if args_m else "").strip()
-            # If arguments look like JSON, keep; otherwise pass as string
             try:
                 parsed_args = json.loads(arguments_raw)
             except Exception:
@@ -81,22 +70,6 @@ def _maybe_extract_function_call_from_content(content: str) -> dict | None:
     except Exception:
         pass
     return None
-    try:
-        obj = json.loads(m.group(0))
-    except Exception:
-        return None
-    if not isinstance(obj, dict):
-        return None
-    name = obj.get("name")
-    # Some models might nest under {function: {name, arguments}}
-    if not name and isinstance(obj.get("function"), dict):
-        name = obj["function"].get("name")
-        args = obj["function"].get("arguments")
-    else:
-        args = obj.get("arguments")
-    if not name:
-        return None
-    return {"name": name, "arguments": args}
 
 
 def normalize_response(resp_dict: dict, *, disabled: bool) -> dict:
@@ -109,15 +82,11 @@ def normalize_response(resp_dict: dict, *, disabled: bool) -> dict:
 
         choices = resp_dict.get("choices") or []
         for c in choices:
-            # Non-stream responses use "message"; stream chunks use "delta"
             if obj == "chat.completion.chunk":
                 delta = c.get("delta") or {}
-                # Coerce content to string to avoid client-side None errors
                 if "content" in delta:
                     delta["content"] = _coerce_str(delta.get("content"))
-                # Normalize tool_calls if present in delta
                 _normalize_tool_calls(delta)
-                # Fallback: attempt to parse inline function-call JSON from content
                 if not delta.get("tool_calls"):
                     fc = _maybe_extract_function_call_from_content(
                         delta.get("content", "")
@@ -133,9 +102,7 @@ def normalize_response(resp_dict: dict, *, disabled: bool) -> dict:
                                 },
                             }
                         ]
-                        # Optionally clear content to avoid mixed signals
                         delta["content"] = ""
-                # Ensure modifications are reflected
                 c["delta"] = delta
             else:
                 msg = c.get("message") or {}
@@ -157,9 +124,8 @@ def normalize_response(resp_dict: dict, *, disabled: bool) -> dict:
                     }
                     msg["tool_calls"] = [tc]
                     msg.pop("function_call", None)
-                # Ensure tool_calls arguments are strings
+                    msg["content"] = ""
                 _normalize_tool_calls(msg)
-                # Fallback: if still no tool_calls, try extracting from content
                 if not msg.get("tool_calls"):
                     fc = _maybe_extract_function_call_from_content(
                         msg.get("content", "")
@@ -175,11 +141,9 @@ def normalize_response(resp_dict: dict, *, disabled: bool) -> dict:
                                 },
                             }
                         ]
-            msg["content"] = ""
-        # Ensure modifications are reflected
-        c["message"] = msg
+                        msg["content"] = ""
+                c["message"] = msg
 
         return resp_dict
     except Exception:  # noqa: BLE001
-        # Be conservative: if normalization fails, return original response
         return resp_dict

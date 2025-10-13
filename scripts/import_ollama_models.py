@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 
 from imageworks.model_loader.download_adapter import record_download, ImportSkipped
 from imageworks.model_loader.naming import build_identity, ModelIdentity
+from imageworks.model_loader.simplified_naming import simplified_slug_for_fields
 from imageworks.model_loader import registry as unified_registry
 from imageworks.tools.model_downloader.quant_utils import is_quant_token
 
@@ -266,14 +267,24 @@ def _collect_model_data(
     )
     quant_detail = None
     if isinstance(details_obj, dict):
-        quant_detail = details_obj.get("quantization") or details_obj.get("quant")
+        # Prefer authoritative quantization_level per spec
+        quant_detail = (
+            details_obj.get("quantization_level")
+            or details_obj.get("quantization")
+            or details_obj.get("quant")
+        )
 
+    family_name = details_obj.get("family") if isinstance(details_obj, dict) else None
     architecture = (
         details_obj.get("architecture") if isinstance(details_obj, dict) else None
     )
     parameters = (
         details_obj.get("parameters") if isinstance(details_obj, dict) else None
     )
+    parameter_size = None
+    if isinstance(details_obj, dict):
+        # Prefer explicit parameter_size if provided by Ollama
+        parameter_size = details_obj.get("parameter_size")
     context_length = None
     if isinstance(details_obj, dict):
         context_length = details_obj.get("context_length") or details_obj.get(
@@ -289,6 +300,27 @@ def _collect_model_data(
         params = modelfile.get("parameters")
         if isinstance(params, list):
             capabilities = params
+    # Fallback: if quant still unknown and modelfile is a string, try to infer from FROM line
+    inferred_from_modelfile: Optional[str] = None
+    if not quant_detail and isinstance(modelfile, str) and modelfile.strip():
+        try:
+            for line in modelfile.splitlines():
+                if line.strip().upper().startswith("FROM"):
+                    # Try to extract a token like Q4_0 / Q5_K_M / Q8_0 from filename
+                    parts = line.split()
+                    ref = parts[-1] if parts else ""
+                    tokens = [p for p in re.split(r"[/\\.]", ref) if p]
+                    for tok in tokens:
+                        t = tok.strip().upper()
+                        if re.match(r"^Q[0-9]_[01]$", t) or re.match(
+                            r"^Q[0-9]_K(_[SML])?$", t
+                        ):
+                            inferred_from_modelfile = t
+                            break
+                    if inferred_from_modelfile:
+                        break
+        except Exception:  # noqa: BLE001
+            inferred_from_modelfile = None
     if not capabilities and isinstance(detail.get("capabilities"), list):
         capabilities = detail.get("capabilities")
 
@@ -300,13 +332,23 @@ def _collect_model_data(
         license_text = license_info.get("name") or license_info.get("text")
 
     family, quant_inferred = _derive_family_and_quant(name)
-    quant = quant_detail or quant_inferred
+    # Prefer authoritative quantization_level, but ignore placeholders like 'unknown'
+    quant = None
+    for candidate in (quant_detail, inferred_from_modelfile, quant_inferred):
+        if isinstance(candidate, str) and candidate.strip():
+            if candidate.strip().lower() == "unknown":
+                continue
+            quant = candidate
+            break
     if isinstance(quant, str):
         quant = quant.lower()
 
     extra_meta: Dict[str, Any] = {
+        "ollama_family": family_name,
         "ollama_architecture": architecture,
         "ollama_parameters": parameters,
+        "ollama_parameter_size": parameter_size
+        or parameters,  # retain legacy key compatibility
         "ollama_context_length": context_length,
         "ollama_embedding_length": embedding_length,
         "ollama_capabilities": capabilities,
@@ -316,6 +358,7 @@ def _collect_model_data(
     if not quant and name in tags_index:
         tag_details = tags_index[name].get("details") or {}
         if isinstance(tag_details, dict):
+            # Keep this as an additional fallback
             quant_candidate = tag_details.get("quantization_level")
             if isinstance(quant_candidate, str):
                 quant = quant_candidate.lower()
@@ -499,7 +542,16 @@ def _prepare_registry_for_import(
 def _persist_existing_entry(
     existing, data: OllamaModelData, identity: ModelIdentity, *, location: str
 ) -> None:
-    existing.name = identity.slug
+    # Use simplified slug for canonical name
+    existing.name = simplified_slug_for_fields(
+        family=identity.family_key,
+        backend=identity.backend_key,
+        format_type=identity.format_key or "gguf",
+        quantization=identity.quant_key,
+        metadata=existing.metadata,
+        download_path=str(data.path),
+        served_model_id=data.name,
+    )
     existing.family = identity.family_key
     existing.backend = identity.backend_key
     existing.quantization = identity.quant_key or existing.quantization
@@ -555,7 +607,15 @@ def _persist_model(
         format_type="gguf",
         quantization=data.quant,
     )
-    variant_name = identity.slug
+    variant_name = simplified_slug_for_fields(
+        family=identity.family_key,
+        backend=backend,
+        format_type="gguf",
+        quantization=identity.quant_key,
+        metadata=None,
+        download_path=str(data.path),
+        served_model_id=data.name,
+    )
     existing = registry.get(variant_name)
     if not existing and identity.quant_key:
         legacy_identity = build_identity(

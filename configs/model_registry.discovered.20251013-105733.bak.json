@@ -1558,7 +1558,7 @@
     "last_accessed": "2025-10-08T10:43:54.485116+00:00"
   },
   {
-    "name": "qwen2.5-coder-7b-instruct_(Q4_K_M)",
+    "name": "qwen2.5-coder-7b-instruct-ollama-gguf-q4_k_m",
     "display_name": "qwen2.5-coder-7b-instruct (Q4 K M)",
     "backend": "ollama",
     "backend_config": {
@@ -1636,7 +1636,13 @@
       "last_sample": null
     },
     "probes": {
-      "vision": null
+      "vision": {
+        "vision_ok": true,
+        "timestamp": "2025-10-13T10:55:31.547668+00:00",
+        "probe_version": "1",
+        "latency_ms": 5511,
+        "notes": "auto-probe:ollama"
+      }
     },
     "profiles_placeholder": null,
     "metadata": {
@@ -1671,11 +1677,11 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:57:36.845232+00:00",
-    "last_accessed": "2025-10-13T10:57:36.845232+00:00"
+    "downloaded_at": "2025-10-13T10:55:26.033823+00:00",
+    "last_accessed": "2025-10-13T10:55:26.033823+00:00"
   },
   {
-    "name": "deepseek-coder-6.7b-instruct_(Q4_0)",
+    "name": "deepseek-coder-6.7b-instruct-ollama-gguf-q4_0",
     "display_name": "deepseek-coder-6.7b-instruct (Q4 0)",
     "backend": "ollama",
     "backend_config": {
@@ -1755,9 +1761,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-13T10:57:50.385390+00:00",
+        "timestamp": "2025-10-13T10:55:36.285043+00:00",
         "probe_version": "1",
-        "latency_ms": 7513,
+        "latency_ms": 4721,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1792,11 +1798,11 @@
     "download_size_bytes": 4080218931,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:57:42.869267+00:00",
-    "last_accessed": "2025-10-13T10:57:42.869267+00:00"
+    "downloaded_at": "2025-10-13T10:55:31.561619+00:00",
+    "last_accessed": "2025-10-13T10:55:31.561619+00:00"
   },
   {
-    "name": "llava_7b_(Q4_0)",
+    "name": "llava-7b-ollama-gguf-q4_0",
     "display_name": "llava 7b (Q4 0)",
     "backend": "ollama",
     "backend_config": {
@@ -1908,11 +1914,11 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:57:50.397404+00:00",
-    "last_accessed": "2025-10-13T10:57:50.397404+00:00"
+    "downloaded_at": "2025-10-13T10:55:36.295686+00:00",
+    "last_accessed": "2025-10-13T10:55:36.295686+00:00"
   },
   {
-    "name": "seamon67-gemma3-abliterated_27b_(Q4_K_M)",
+    "name": "seamon67-gemma3-abliterated-27b-q4-k-m-ollama-gguf-q4_k_m",
     "display_name": "seamon67-gemma3-abliterated 27b (Q4 K M)",
     "backend": "ollama",
     "backend_config": {
@@ -2024,11 +2030,11 @@
     "download_size_bytes": 18253611008,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:57:56.477254+00:00",
-    "last_accessed": "2025-10-13T10:57:56.477254+00:00"
+    "downloaded_at": "2025-10-13T10:55:44.362804+00:00",
+    "last_accessed": "2025-10-13T10:55:44.362804+00:00"
   },
   {
-    "name": "qwen2.5vl_7b_(Q4_K_M)",
+    "name": "qwen2.5vl-7b-ollama-gguf-q4_k_m",
     "display_name": "qwen2.5vl 7b (Q4 K M)",
     "backend": "ollama",
     "backend_config": {
@@ -2140,11 +2146,11 @@
     "download_size_bytes": 6442450944,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:58:02.520498+00:00",
-    "last_accessed": "2025-10-13T10:58:02.520498+00:00"
+    "downloaded_at": "2025-10-13T10:55:50.408732+00:00",
+    "last_accessed": "2025-10-13T10:55:50.408732+00:00"
   },
   {
-    "name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1_(Q6_K)",
+    "name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1-gguf-ollama-q6_k",
     "display_name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1 (Q6 K)",
     "backend": "ollama",
     "backend_config": {
@@ -2256,11 +2262,11 @@
     "download_size_bytes": 7086696038,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:58:05.326214+00:00",
-    "last_accessed": "2025-10-13T10:58:05.326214+00:00"
+    "downloaded_at": "2025-10-13T10:55:56.457612+00:00",
+    "last_accessed": "2025-10-13T10:55:56.457612+00:00"
   },
   {
-    "name": "pixtral-local-latest_(Q4_K_M)",
+    "name": "pixtral-local-latest-ollama-gguf-q4_k_m",
     "display_name": "pixtral-local-latest (Q4 K M)",
     "backend": "ollama",
     "backend_config": {
@@ -2372,11 +2378,11 @@
     "download_size_bytes": 8912057139,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:58:11.369471+00:00",
-    "last_accessed": "2025-10-13T10:58:11.369471+00:00"
+    "downloaded_at": "2025-10-13T10:56:02.500603+00:00",
+    "last_accessed": "2025-10-13T10:56:02.500603+00:00"
   },
   {
-    "name": "llama3.1-local-latest_(Q5_K_M)",
+    "name": "llama3.1-local-latest-ollama-gguf-q5_k_m",
     "display_name": "llama3.1-local-latest (Q5 K M)",
     "backend": "ollama",
     "backend_config": {
@@ -2447,7 +2453,7 @@
     "download_size_bytes": 6120328396,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T10:58:19.306062+00:00",
-    "last_accessed": "2025-10-13T10:58:19.306062+00:00"
+    "downloaded_at": "2025-10-13T10:56:08.574433+00:00",
+    "last_accessed": "2025-10-13T10:56:08.574433+00:00"
   }
 ]

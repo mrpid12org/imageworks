@@ -380,6 +380,83 @@ Purge (delete entry + optionally files):
 imageworks-download remove llava-v1.5-13b-vllm-awq --purge --delete-files --force
 ```
 
+### Safe removal workflow (keeps registry aligned)
+
+Use this checklist whenever you want to delete models so the registry and the underlying stores don’t drift.
+
+1) Identify exact variant names and, for Ollama entries, their served IDs
+- List and copy the variant name(s):
+  ```bash
+  imageworks-download list --details
+  ```
+- For Ollama-managed entries, also note the served model id shown in the details (e.g., qwen2.5-coder:7b-instruct).
+
+2) Remove the variant via the unified CLI
+- Keep logical entry (roles/capabilities) but delete files on disk:
+  ```bash
+  imageworks-download remove <variant> --delete-files --force
+  ```
+- Purge entirely (delete registry entry and files):
+  ```bash
+  imageworks-download remove <variant> --purge --delete-files --force
+  ```
+
+3) Ollama store cleanup (only for backend=ollama)
+- If the variant is Ollama-backed and you want to free space from Ollama’s internal store, remove it there as well:
+  ```bash
+  # Preview
+  ollama list
+
+  # Remove by served model id (example)
+  ollama rm qwen2.5-coder:7b-instruct
+  ```
+- Note: The downloader records Ollama paths as `ollama:/<name:tag>` or resolves to `~/.ollama/models` if discoverable. Using `ollama rm` is the safest way to reclaim space.
+
+4) Hugging Face weights cleanup (only for HF/vLLM/lmdeploy entries)
+- The downloader stores HF repos under `~/ai-models/weights/<owner>/<repo>` by default. The `--delete-files` flag above should remove this directory. If you ever remove manually, re-run a verify to clear stale metadata:
+  ```bash
+  imageworks-download verify --fix-missing
+  ```
+- Optional HF cache cleanup (advanced, affects shared cache):
+  ```bash
+  # See what’s in your HF cache (respects HF_HOME if set)
+  huggingface-cli scan-cache
+  # Interactively prune large artifacts you no longer need
+  huggingface-cli delete-cache
+  ```
+
+5) Post-clean verification and pruning
+- Rebuild dynamic fields and prune missing entries if you manually moved/removed paths:
+  ```bash
+  imageworks-download normalize-formats --rebuild --prune-missing --apply
+  ```
+- If you mark entries deprecated first, you can purge them later in one sweep:
+  ```bash
+  imageworks-download purge-deprecated --dry-run
+  imageworks-download purge-deprecated
+  ```
+
+Bulk removal examples
+- Remove all Ollama variants whose names contain "deepseek":
+  ```bash
+  # Preview the candidates
+  imageworks-download list --backend ollama --json \
+    | jq -r '.[] | select(.name | test("deepseek"; "i")) | .name'
+
+  # Remove each and delete files (confirm the list first!)
+  imageworks-download list --backend ollama --json \
+    | jq -r '.[] | select(.name | test("deepseek"; "i")) | .name' \
+    | xargs -I{} sh -c 'imageworks-download remove "{}" --delete-files --force'
+  ```
+- Purge every deprecated entry in the registry:
+  ```bash
+  imageworks-download purge-deprecated
+  ```
+
+Tips
+- If a variant is assigned to a role you still use, prefer removing only the files (`--delete-files`) and keep the logical entry so role resolution doesn’t break. You can re-point it later to a different download.
+- A timestamped backup of `configs/model_registry.json` is written by most write operations; you can also copy it manually before large batch changes.
+
 ### Statistics
 Summarize counts & total size:
 ```bash
@@ -405,6 +482,14 @@ for d in list_downloads():
 
 remove_download(entry.name, keep_entry=True)   # clears download fields only
 ```
+
+### Naming defaults (simplified)
+- The downloader and registry persist a simplified `display_name` and a simplified slug used for identities.
+- CLI list, new downloads, and the Chat Proxy all render the same human-friendly naming by default, e.g. `llama 12.2b (Q4 K M)`.
+- Quantization appears in parentheses when known; backend/format decorations are suppressed in UI-facing outputs.
+
+### Proxy alignment
+The Chat Proxy (`docs/reference/chat-proxy.md`) surfaces the same names to OpenWebUI via `/v1/models` so the UI matches the CLI list. By default, non-installed entries are hidden. If you run the proxy in Docker, either mount HF weights into the container at the same absolute path or relax filtering with `CHAT_PROXY_INCLUDE_NON_INSTALLED=1`.
 
 ### Troubleshooting
 | Symptom | Likely Cause | Resolution |

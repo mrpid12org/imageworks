@@ -1,83 +1,76 @@
 ## OpenWebUI Integration Setup
 
-This guide describes running OpenWebUI alongside the ImageWorks Chat Proxy.
+Run OpenWebUI alongside the ImageWorks Chat Proxy with docker-compose. The proxy is containerized and auto-starts so OpenWebUI always sees a healthy endpoint at `http://chat-proxy:8100/v1`.
 
 ### 1. Prerequisites
-* Docker Desktop (or Linux Docker Engine) with NVIDIA Container Toolkit for GPU acceleration.
-* Chat proxy running locally (default): `imageworks-chat-proxy` on port `8100`.
+* Docker (Linux or Docker Desktop) and NVIDIA Container Toolkit for GPU acceleration (optional).
 
-### 2. Start OpenWebUI via Docker Compose
+### 2. Start services
 
 ```
 docker compose -f docker-compose.openwebui.yml up -d
 ```
 
-Then open: http://localhost:3000
+Open: http://localhost:3000
 
-### 3. Configure OpenWebUI
-In OpenWebUI settings (Admin or Global Settings) set:
-* API Base URL: `http://host.docker.internal:8100/v1` (or `http://localhost:8100/v1` if using `network_mode: host`)
-* API Key: leave blank or `EMPTY` if UI requires a token field.
+### 3. OpenWebUI configuration (via compose env)
+The compose file sets the base URL and disables the Ollama provider by default:
+- `OPENAI_API_BASE_URL=http://chat-proxy:8100/v1`
+- `OPENAI_API_KEY=EMPTY`
+- `ENABLE_OLLAMA_API=false`
+- `OLLAMA_BASE_URLS=` and `OLLAMA_API_CONFIGS=` left blank
+- `RESET_CONFIG_ON_START=true` ensures env values override stale DB settings
 
-Duplicate prevention when using the Chat Proxy:
-- Disable the Ollama provider so models aren’t double-listed from both the proxy and Ollama.
-- In `docker-compose.openwebui.yml`, ensure:
-	- `USE_OLLAMA_DOCKER=false`
-	- No `OLLAMA_BASE_URL` is provided
-- If you later re-enable Ollama, consider filtering backends in the proxy or keep only one provider active in OpenWebUI.
+You typically don’t need to edit settings inside the UI; the environment config is applied on container start.
 
-### 4. GPU Acceleration
-The compose file uses `device_requests` with `capabilities: [gpu]` for NVIDIA. Ensure:
-* `nvidia-smi` works on host.
-* `docker run --gpus all nvidia/cuda:12.2.0-base nvidia-smi` succeeds before launching OpenWebUI.
+### 4. Installed-only model listing
+The proxy excludes non-installed entries by default. If it runs in Docker, it must be able to see your HF weights paths. Two options:
+1) Mount your HF weights at the same absolute path inside the proxy container, e.g.:
+```
+services:
+	chat-proxy:
+		volumes:
+			- /home/you/ai-models/weights:/home/you/ai-models/weights:ro
+```
+2) Or relax filtering by setting `CHAT_PROXY_INCLUDE_NON_INSTALLED=1`.
 
-If GPUs are not detected inside the container, confirm the NVIDIA Container Toolkit installation and that Docker Desktop WSL integration includes your distro.
+### 5. GPU Acceleration
+The compose file requests GPU (`gpus: all`). Ensure:
+* `nvidia-smi` works on host
+* Docker sees GPUs (`docker run --gpus all nvidia/cuda:12.2.0-base nvidia-smi`)
 
-### 5. Networking Notes
-* `host.docker.internal` works on Docker Desktop. On native Linux you may need to replace with the host IP or use `network_mode: host` (Linux only).
-* For external LAN access: adjust compose port mapping (e.g. `0.0.0.0:3000:8080`). Secure with reverse proxy + auth if exposing beyond trusted LAN.
+### 6. Networking notes
+* `openwebui` reaches the proxy by service name `chat-proxy`; no host networking required.
+* To expose OpenWebUI to your LAN, keep the default port mapping `3000:8080` and secure access as needed.
 
-### 6. Environment Variables (Chat Proxy)
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| CHAT_PROXY_HOST | Bind host | 127.0.0.1 |
-| CHAT_PROXY_PORT | Bind port | 8100 |
-| CHAT_PROXY_ENABLE_METRICS | Enable metrics endpoint | false |
-| CHAT_PROXY_LOG_PATH | JSONL log path | logs/chat_proxy.jsonl |
-| CHAT_PROXY_MAX_LOG_BYTES | Rotate threshold | 25MB |
-| CHAT_PROXY_BACKEND_TIMEOUT_MS | Upstream request timeout | 120000 |
-| CHAT_PROXY_STREAM_IDLE_TIMEOUT_MS | Abort idle stream | 60000 |
-| CHAT_PROXY_AUTOSTART_ENABLED | Enable autostart | false |
-| CHAT_PROXY_AUTOSTART_MAP | JSON/map of model->command | (none) |
-| CHAT_PROXY_REQUIRE_TEMPLATE | Enforce template presence | true |
-| CHAT_PROXY_MAX_IMAGE_BYTES | Max decoded image bytes | 6000000 |
-| CHAT_PROXY_DISABLE_TOOL_NORMALIZATION | Skip tool normalization | false |
-| CHAT_PROXY_LOG_PROMPTS | Log raw prompts | false |
-| CHAT_PROXY_SCHEMA_VERSION | Schema version tag | 1 |
+### 7. Proxy environment quick reference
+See `docs/reference/chat-proxy.md` for a full table. Common toggles:
+- `CHAT_PROXY_SUPPRESS_DECORATIONS=1` (default)
+- `CHAT_PROXY_INCLUDE_NON_INSTALLED=0` (default)
+- `CHAT_PROXY_ENABLE_METRICS=0` (optional)
 
-### 7. Updating OpenWebUI
+### 8. Troubleshooting
+| Symptom | Likely Cause | Fix |
+|--------|--------------|-----|
+| Models list is empty in OpenWebUI | Proxy not running / not healthy | `docker compose ps` and check `chat-proxy` is healthy |
+| Only Ollama models appear | Ollama provider still enabled in UI DB | Ensure compose has `ENABLE_OLLAMA_API=false` and `RESET_CONFIG_ON_START=true`; restart container |
+| Fewer (HF) models than expected | Proxy can’t see your HF paths | Add a volume mount at the same absolute path or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` |
+| 404 from proxy | Wrong base URL | Use `http://chat-proxy:8100/v1` inside compose; `http://127.0.0.1:8100/v1` on host |
+
+### 9. Updating OpenWebUI
 ```
 docker compose -f docker-compose.openwebui.yml pull openwebui
 docker compose -f docker-compose.openwebui.yml up -d
 ```
 
-### 8. Future Pinning
+### 10. Future Pinning
 Replace `:latest` with a specific version tag once you settle on a stable baseline.
 
-### 9. Troubleshooting
-| Symptom | Possible Cause | Resolution |
-|---------|----------------|-----------|
-| 404 from chat proxy | Wrong API Base URL | Verify `http://host.docker.internal:8100/v1/models` reachable |
-| No streaming in UI | SSE blocked or proxy disabled streaming | Ensure `stream=true` is passed (OpenWebUI default) |
-| Tool calls not surfaced | Backend emitted legacy function_call | Leave normalization enabled (default) |
-| Large image failure 413 | Exceeds `CHAT_PROXY_MAX_IMAGE_BYTES` | Increase env var or reduce image size |
-| Autostart never triggers | AUTOSTART disabled | Set `CHAT_PROXY_AUTOSTART_ENABLED=1` & provide map |
-
-### 10. Autostart Map Example
+### 11. Autostart Map Example
 ```
 export CHAT_PROXY_AUTOSTART_ENABLED=1
 export CHAT_PROXY_AUTOSTART_MAP='{"llava-13b-q4_k_m":{"command":["ollama","run","llava:13b-q4_k_m"]}}'
 ```
 
-### 11. Security Reminder
+### 12. Security Reminder
 Auth is not yet implemented (Phase 1). Keep bindings on localhost or implement a reverse proxy with basic auth before wide exposure.

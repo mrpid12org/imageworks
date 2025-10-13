@@ -1,5 +1,30 @@
-version: "3.9"
 services:
+  chat-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.chat-proxy
+    container_name: imageworks-chat-proxy
+    restart: unless-stopped
+    environment:
+      - CHAT_PROXY_HOST=0.0.0.0
+      - CHAT_PROXY_PORT=8100
+      - CHAT_PROXY_SUPPRESS_DECORATIONS=1
+      - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+    ports:
+      - "8100:8100"  # Host:Container
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8100/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./models:/models:ro
+      - ./outputs:/outputs
+      # Mount HF weights root at the same absolute path used on host
+      - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
+    networks:
+      - imageworks-net
   openwebui:
     image: ghcr.io/open-webui/open-webui:latest
     container_name: openwebui
@@ -8,17 +33,23 @@ services:
       - "3000:8080"  # Host:Container
     environment:
       # Point OpenWebUI at ImageWorks chat proxy (adjust if proxy runs elsewhere)
-      - OPENAI_API_BASE_URL=http://host.docker.internal:8100/v1
+      - OPENAI_API_BASE_URL=http://chat-proxy:8100/v1
       # Optionally set an API key placeholder if UI demands one
       - OPENAI_API_KEY=EMPTY
       # Disable Ollama provider to avoid duplicate model sources in the UI
-      - USE_OLLAMA_DOCKER=false
-      # Ensure no implicit Ollama base URL is set (prevents auto-enabling provider)
-      # (Do not add OLLAMA_BASE_URL here)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ENABLE_OLLAMA_API=false
+      # Also ensure no Ollama endpoints are pre-configured
+      - OLLAMA_BASE_URLS=
+      - OLLAMA_API_CONFIGS=
+      # Reset config on start so env vars above take precedence over DB defaults
+      - RESET_CONFIG_ON_START=true
+    depends_on:
+      chat-proxy:
+        condition: service_healthy
     volumes:
       - openwebui-data:/app/backend/data
+    networks:
+      - imageworks-net
     # GPU acceleration (NVIDIA). Requires NVIDIA Container Toolkit installed on host.
     gpus: all
     # If using WSL2 and host.docker.internal is unreliable, expose network_mode host (Linux only)
@@ -26,3 +57,7 @@ services:
     # Or define an explicit network shared with proxy
 volumes:
   openwebui-data:
+
+networks:
+  imageworks-net:
+    driver: bridge

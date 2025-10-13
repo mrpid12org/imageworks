@@ -1,0 +1,16 @@
+[Unit]
+Description=ImageWorks Chat Proxy (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/code/imageworks
+Environment=CHAT_PROXY_SUPPRESS_DECORATIONS=1
+Environment=CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+ExecStart=%h/code/imageworks/scripts/start_chat_proxy.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -388,21 +388,54 @@ class PerceptualHashStrategy(SimilarityStrategy):
         else:
             idx = np.argsort(-sims)
 
-        matches: List[StrategyMatch] = []
+        # Optional tie-breaker: when similarities tie, prefer lower mean absolute pixel difference
+        tie_break_scores = {}
+        try:
+            from PIL import Image as _Img
+            import numpy as _np
+
+            def _mae(a: Path, b: Path) -> float:
+                try:
+                    with _Img.open(a) as ia, _Img.open(b) as ib:
+                        ga = _np.asarray(ia.convert("L"), dtype=_np.float32)
+                        gb = _np.asarray(ib.convert("L"), dtype=_np.float32)
+                        h = min(ga.shape[0], gb.shape[0])
+                        w = min(ga.shape[1], gb.shape[1])
+                        if h == 0 or w == 0:
+                            return 1e9
+                        return float(_np.mean(_np.abs(ga[:h, :w] - gb[:h, :w])))
+                except Exception:
+                    return 1e9
+
+            for i in idx.tolist():
+                ref = self._library_refs[i]
+                tie_break_scores[ref] = _mae(candidate, ref)
+        except Exception:
+            # If PIL/NumPy not available or error occurs, skip tie-breaking
+            pass
+
+        # Build result objects and apply stable ordering: similarity desc, then mae asc, then path name
+        items = []
         for i in idx.tolist():
             reference = self._library_refs[i]
             similarity = float(sims[i])
+            mae = tie_break_scores.get(reference, 0.0)
+            items.append((similarity, -mae, str(reference), reference))
+        items.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+
+        matches: List[StrategyMatch] = []
+        for sim, _neg_mae, _key, reference in items[:top_k]:
             matches.append(
                 StrategyMatch(
                     candidate=candidate,
                     reference=reference,
-                    score=similarity,
+                    score=float(sim),
                     strategy=self.name,
-                    reason=f"perceptual hash similarity {similarity:.3f}",
+                    reason=f"perceptual hash similarity {float(sim):.3f}",
                     extra={"hash_size": self.hash_size},
                 )
             )
-        return matches[:top_k]
+        return matches
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -9,6 +9,9 @@ DEFAULT_TEST_PATTERNS: tuple[str, ...] = (
     r"^testmodel(.*)$",
     r"^mini-test(.*)$",
     r"^custom-family(.*)$",
+    # Synthetic/local logical-only/testing variants
+    r"^synthetic-test($|-).*",
+    r"^logical-only-test($|-).*",
     # Canonical explicit test tag: any name containing 'testzzz'
     r"^.*testzzz.*$",
     # Placeholder/demo variants that sometimes acquire suffix tokens (backend/format/quant)

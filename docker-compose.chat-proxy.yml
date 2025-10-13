@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  chat-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.chat-proxy
+    container_name: imageworks-chat-proxy
+    restart: unless-stopped
+    environment:
+      - CHAT_PROXY_HOST=0.0.0.0
+      - CHAT_PROXY_PORT=8100
+      - CHAT_PROXY_SUPPRESS_DECORATIONS=1
+      - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - ./models:/app/models:ro
+      - ./outputs:/app/outputs
+      - ./src:/app/src:ro
+      - ./_staging:/app/_staging
+    command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]

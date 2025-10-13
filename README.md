@@ -17,6 +17,16 @@ All applications share a Python codebase (`src/imageworks`) that targets WSL/Ubu
 
 See [Mono Workflow](docs/domains/mono/mono-workflow.md) for detailed documentation of the complete competition checking process.
 
+### Chat Proxy & OpenWebUI
+ImageWorks includes a lightweight OpenAI-compatible Chat Proxy that presents your unified model registry (Ollama, vLLM, etc.) to OpenWebUI and other OpenAI clients. The proxy:
+- Returns simplified, human-friendly model names (same as the CLI list)
+- Supports text, vision, and tools passthrough with optional light normalization
+- Exposes `/v1/models` and `/v1/chat/completions` endpoints
+
+A docker-compose file (`docker-compose.openwebui.yml`) runs the proxy and OpenWebUI together. By default, the proxy hides non-installed entries; when containerized, mount your HF weights at the same absolute path so “installed-only” checks pass, or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` to relax filtering.
+
+Docs: [Chat Proxy Reference](docs/reference/chat-proxy.md), [OpenWebUI Setup](docs/runbooks/openwebui-setup.md)
+
 ## Project Layout
 
 ```
@@ -57,6 +67,7 @@ See the [Documentation Map](docs/index.md) for the full categorized list. Key en
 - [Color-Narrator Reference](docs/domains/color-narrator/reference.md) - VLM-based color analysis system
 - [vLLM Deployment Guide](docs/runbooks/vllm-deployment-guide.md) - Production AI model deployment
 - [Deterministic Model Serving](docs/architecture/deterministic-model-serving.md) - Hybrid vLLM + Ollama design (deterministic selection, locking, metrics)
+ - [Chat Proxy (OpenAI-compatible)](docs/reference/chat-proxy.md) - Unified model list and chat endpoint
 
 ### Developer Environment
 - [IDE Setup (WSL/VSCode)](docs/guides/ide-setup-wsl-vscode.md) - Development environment configuration

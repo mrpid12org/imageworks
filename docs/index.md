@@ -37,6 +37,7 @@ quickly locate design references, domain guides, and operational procedures.
 
 ## Reference Material
 - [Model Downloader Guide](reference/model-downloader.md)
+- [Chat Proxy (OpenAI-compatible)](reference/chat-proxy.md)
 - [Grounding Duplicate Detection Decisions](analysis/image-similarity-grounding.md)
 
 ## Specifications & Proposals

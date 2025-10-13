@@ -6,7 +6,7 @@ following imageworks conventions.
 """
 
 from pathlib import Path
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List, Dict, Set
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -114,15 +114,21 @@ def _resolve_producer(entry: Any) -> Optional[str]:
     return _derive_producer(
         existing=existing_str,
         hf_id=hf_id,
-        source_provider=entry.get("source_provider")
-        if isinstance(entry, dict)
-        else getattr(entry, "source_provider", None),
-        served_model_id=entry.get("served_model_id")
-        if isinstance(entry, dict)
-        else getattr(entry, "served_model_id", None),
-        download_path=entry.get("download_path")
-        if isinstance(entry, dict)
-        else getattr(entry, "download_path", None),
+        source_provider=(
+            entry.get("source_provider")
+            if isinstance(entry, dict)
+            else getattr(entry, "source_provider", None)
+        ),
+        served_model_id=(
+            entry.get("served_model_id")
+            if isinstance(entry, dict)
+            else getattr(entry, "served_model_id", None)
+        ),
+        download_path=(
+            entry.get("download_path")
+            if isinstance(entry, dict)
+            else getattr(entry, "download_path", None)
+        ),
     )
 
 
@@ -182,8 +188,15 @@ def download_model(
             force_redownload=force,
             interactive=not non_interactive,
         )
+        # Prefer simplified naming for user-facing confirmation
+        try:
+            from imageworks.model_loader.simplified_naming import (
+                simplified_display_for_entry as _simple_disp,
+            )
 
-        display_name = entry.display_name or entry.name
+            display_name = _simple_disp(entry)
+        except Exception:
+            display_name = entry.display_name or entry.name
         rprint(f"✅ [green]Successfully downloaded:[/green] {display_name}")
         if entry.download_path:
             rprint(f"   📁 Files stored at: {entry.download_path}")
@@ -363,6 +376,10 @@ def list_models(
                 dp = None
             if isinstance(dp, str) and dp.startswith("ollama://"):
                 synthetic = True
+            # By default, hide logical-only entries (no physical path or synthetic placeholder) unless --include-logical
+            is_logical = (dp is None) or synthetic
+            if (not include_logical) and is_logical:
+                continue
             # logical_only_flag removed (unused)
             if (not show_deprecated) and getattr(e, "deprecated", False):
                 continue
@@ -591,10 +608,11 @@ def list_models(
             return
 
         table = Table(title="Unified Downloaded Variants")
-        table.add_column("Model", style="cyan")
+        # Make the Model column wider and prevent noisy bracketed suffixes from crowding it
+        table.add_column("Model", style="cyan", min_width=40, overflow="fold")
         if show_internal_names:
             table.add_column("Registry ID", style="white dim")
-        table.add_column("Format", style="magenta")
+        table.add_column("Fmt", style="magenta", width=4)
         table.add_column("Quant", style="magenta")
         table.add_column("Producer", style="green")
         if show_backend:
@@ -610,12 +628,23 @@ def list_models(
         def _format_label(value: Optional[str], fallback: str = "-") -> str:
             if not value:
                 return fallback
+            v = str(value).lower()
+            if v == "safetensors":
+                return "ST"
             return value.upper()
 
         def _format_quant(value: Optional[str]) -> str:
             if not value:
                 return "-"
-            return value.replace("_", " ").replace("-", " ").upper()
+            return str(value).replace("_", " ").replace("-", " ").upper()
+
+        # Simplified naming for display
+        try:
+            from imageworks.model_loader.simplified_naming import (
+                simplified_display_for_entry as _simple_disp,
+            )
+        except Exception:
+            _simple_disp = None  # type: ignore
 
         for e in entries:
             installed = bool(
@@ -623,11 +652,13 @@ def list_models(
             )
             if not installed and e.backend == "ollama":
                 installed = True
-            display = getattr(e, "display_name", None) or e.name
-            fmt_display = _format_label(
-                getattr(e, "download_format", None)
-                or ("gguf" if e.backend == "ollama" else None)
+            # Use simplified naming by default; fall back to stored display/name
+            display = (
+                (_simple_disp(e) if _simple_disp else None)
+                or getattr(e, "display_name", None)
+                or e.name
             )
+            fmt_display = _format_label(getattr(e, "download_format", None))
             quant_display = _format_quant(getattr(e, "quantization", None))
             backend_display = e.backend
             caps_dict = getattr(e, "capabilities", {}) or {}
@@ -1379,6 +1410,128 @@ def show_stats():
         raise typer.Exit(code=1)
 
 
+@app.command("purge-logical-only")
+def purge_logical_only(
+    include_curated: bool = typer.Option(
+        True,
+        "--include-curated/--discovered-only",
+        help="Also remove curated logical-only entries",
+    ),
+    backup: bool = typer.Option(
+        True,
+        "--backup/--no-backup",
+        help="Write timestamped backups of registry fragments",
+    ),
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--apply", help="Show what would be removed without writing"
+    ),
+):
+    """Remove logical-only entries (no download_path or synthetic ollama:// without installed data).
+
+    In layered mode:
+      - Discovered layer: always eligible.
+      - Curated layer: removed only if --include-curated.
+
+    A backup of the JSON fragments is written by default.
+    """
+    try:
+        reg_dir = Path("configs")
+        curated_path = reg_dir / "model_registry.curated.json"
+        discovered_path = reg_dir / "model_registry.discovered.json"
+        removed: list[str] = []
+
+        def _is_logical_only(obj: dict) -> bool:
+            dp = obj.get("download_path")
+            downloaded_at = obj.get("downloaded_at")
+            if dp is None:
+                return True
+            if isinstance(dp, str) and dp.startswith("ollama://") and not downloaded_at:
+                return True
+            return False
+
+        def _load(path: Path) -> list[dict]:
+            if not path.exists():
+                return []
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                return data if isinstance(data, list) else []
+            except Exception:
+                return []
+
+        def _save(path: Path, data: list[dict]):
+            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        curated = _load(curated_path)
+        discovered = _load(discovered_path)
+
+        # Build new lists
+        curated_new: list[dict] = []
+        for e in curated:
+            if include_curated and _is_logical_only(e):
+                removed.append(e.get("name") or "<curated>")
+            else:
+                curated_new.append(e)
+        discovered_new: list[dict] = []
+        for e in discovered:
+            if _is_logical_only(e):
+                removed.append(e.get("name") or "<discovered>")
+            else:
+                discovered_new.append(e)
+
+        if not removed:
+            rprint("🛈 [cyan]No logical-only entries found[/cyan]")
+            return
+        if dry_run:
+            rprint(
+                f"Would remove {len(removed)} logical-only entr{'y' if len(removed)==1 else 'ies'}: "
+                + ", ".join(sorted(removed)[:12])
+                + (" ..." if len(removed) > 12 else "")
+            )
+            return
+        # Backups
+        if backup:
+            from datetime import datetime as _dt
+
+            ts = _dt.utcnow().strftime("%Y%m%d-%H%M%S")
+            if curated_path.exists():
+                curated_path.with_name(
+                    f"model_registry.curated.{ts}.bak.json"
+                ).write_text(curated_path.read_text(encoding="utf-8"), encoding="utf-8")
+            if discovered_path.exists():
+                discovered_path.with_name(
+                    f"model_registry.discovered.{ts}.bak.json"
+                ).write_text(
+                    discovered_path.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+        # Save filtered curated/discovered
+        _save(curated_path, curated_new)
+        _save(discovered_path, discovered_new)
+        # Also rewrite the merged snapshot directly to the filtered union to avoid re-adopting stale entries
+        try:
+            merged_union = {
+                e.get("name"): e
+                for e in curated_new
+                if isinstance(e, dict) and e.get("name")
+            }
+            for e in discovered_new:
+                if isinstance(e, dict) and e.get("name"):
+                    merged_union[e["name"]] = e
+            snapshot_path = reg_dir / "model_registry.json"
+            snapshot_path.write_text(
+                json.dumps(list(merged_union.values()), indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        # Regenerate registry cache from filtered files
+        unified_registry.load_registry(force=True)
+        unified_registry.save_registry()
+        rprint(f"✅ [green]Removed {len(removed)} logical-only entries[/green]")
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Purge failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
 @app.command("verify")
 def verify_models(
     name: Optional[str] = typer.Argument(
@@ -1541,6 +1694,660 @@ def _format_size(size_bytes: int) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} PB"
+
+
+@app.command("preview-simple-slugs")
+def preview_simple_slugs(
+    include_ollama: bool = typer.Option(
+        True, help="Include Ollama entries in the preview"
+    ),
+    include_hf: bool = typer.Option(
+        True, help="Include HF/vLLM entries in the preview"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON mapping"),
+):
+    """Preview simplified slug naming: `<family> <param_size>[-extra]` + quant.
+
+    - HF: family from repo tail; parameter size inferred from family tokens (e.g., 7B/70B) when present.
+    - Ollama: family and parameter_size from `ollama show` (stored in metadata), if available.
+    - Quant is taken from registry (already detected by core logic).
+
+    This does not apply any changes; it surfaces the proposed names and any collisions.
+    """
+    try:
+        reg = unified_registry.load_registry(force=True)
+        rows = []
+        collisions: Dict[str, list[str]] = {}
+
+        # Cache computed parameter sizes per download path to avoid repeated work
+        _param_cache: Dict[str, Optional[str]] = {}
+
+        def _format_param_label(total_params: int) -> str:
+            # Convert to billions and round to one decimal; drop trailing .0
+            if total_params <= 0:
+                return ""
+            val = total_params / 1_000_000_000.0
+            rounded = round(val + 1e-12, 1)
+            if abs(rounded - int(rounded)) < 1e-9:
+                return f"{int(rounded)}B"
+            return f"{rounded:.1f}B"
+
+        def _hf_param_size_label(path: Optional[str]) -> Optional[str]:
+            if not path:
+                return None
+            try:
+                key = str(Path(path).expanduser())
+            except Exception:
+                key = str(path)
+            if key in _param_cache:
+                return _param_cache[key]
+            try:
+                p = Path(path).expanduser()
+                if not p.exists():
+                    _param_cache[key] = None
+                    return None
+                st_files = [f for f in p.rglob("*.safetensors") if f.is_file()]
+                if not st_files:
+                    _param_cache[key] = None
+                    return None
+                try:
+                    from safetensors import safe_open as _safe_open  # type: ignore
+                except Exception:
+                    _param_cache[key] = None
+                    return None
+                total: int = 0
+                for sf in sorted(st_files):
+                    try:
+                        with _safe_open(str(sf), framework="pt", device="cpu") as f:  # type: ignore
+                            for tk in f.keys():
+                                try:
+                                    meta = f.get_tensor_metadata(tk)
+                                    shape = getattr(meta, "shape", None)
+                                    if not shape:
+                                        # Fallback: get tensor (last resort)
+                                        t = f.get_tensor(tk)
+                                        shape = getattr(t, "shape", None)
+                                    if shape:
+                                        n = 1
+                                        for d in shape:
+                                            n *= int(d)
+                                        total += int(n)
+                                except Exception:
+                                    continue
+                    except Exception:
+                        continue
+                label = _format_param_label(total) if total > 0 else None
+                _param_cache[key] = label
+                return label
+            except Exception:
+                _param_cache[key] = None
+                return None
+
+        def _extract_param_size(text: str | None) -> str | None:
+            if not text:
+                return None
+            t = text.strip().lower()
+            # Common forms: 7b, 70b, 405b; also words like "8 billion" are out of scope here
+            import re as _re
+
+            m = _re.search(r"\b(\d{1,3})\s*b\b", t)
+            if m:
+                return f"{m.group(1)}B"
+            return None
+
+        def _propose_name(e) -> tuple[str, str]:
+            backend = e.backend
+            q_raw = getattr(e, "quantization", None)
+            quant = q_raw or ""
+            # Treat 'unknown' as no quant for display/base purposes
+            q_is_valid = bool(quant) and (str(quant).lower() != "unknown")
+            q_label = (
+                quant.replace("_", " ").replace("-", " ").upper() if q_is_valid else ""
+            )
+            family = None
+            param = None
+            # Prefer Ollama metadata when backend=ollama
+            if include_ollama and backend == "ollama":
+                meta = getattr(e, "metadata", {}) or {}
+                # Ollama show family if present
+                family = (
+                    meta.get("ollama_family")
+                    or meta.get("ollama_architecture")
+                    or e.family
+                    or "model"
+                )
+                param = meta.get("ollama_parameter_size") or _extract_param_size(
+                    meta.get("ollama_parameters")
+                )
+            elif include_hf and backend != "ollama":
+                # HF/vLLM: family from repo tail as persisted; try to extract size token like 7B
+                family = e.family or "model"
+                # Prefer computed parameter size from local safetensors when available
+                param = _hf_param_size_label(
+                    getattr(e, "download_path", None)
+                ) or _extract_param_size(family)
+            else:
+                family = e.family or "model"
+            # Normalize family (keep dots and digits for things like llama3.1)
+            import re as _re
+
+            original_family = (family or "").strip().lower()
+            # Remove container & quant tokens BEFORE replacing underscores so we can match full patterns like q4_k_m
+            rm_patterns = [
+                r"\b(gguf|safetensors)\b",
+                r"\bq\d(?:_k(?:_[sml])?|_[01])\b",  # q4_k_m, q5_k_s, q4_0
+                r"\bq\d(?:-k(?:-[sml])?)\b",  # q4-k-m style (if present in family)
+                r"\b(awq|gptq|int4|int8|fp16|bf16|fp8|nf4|mxfp4|mxfp8)\b",
+            ]
+            fam_clean = original_family
+
+            for pat in rm_patterns:
+                fam_clean = _re.sub(pat, " ", fam_clean)
+            fam_clean = _re.sub(r"\s+", " ", fam_clean).strip()
+            fam_norm = fam_clean.replace("@", "-").replace("_", "-").replace("/", "-")
+            fam_norm = _re.sub(r"-+", "-", fam_norm).strip("-")
+            # If hyphenated param like '-7b' remains at end, extract it
+            if not param:
+                m = _re.search(r"-(\d{1,3})b$", fam_norm)
+                if m:
+                    param = f"{m.group(1)}B"
+                    fam_norm = fam_norm[: -len(m.group(0))]
+            # Robust fallback when family collapses to empty or generic
+            if not fam_norm or fam_norm == "model":
+                # Try served_model_id (for Ollama) or old name to recover a base token
+                sid = (
+                    getattr(e, "served_model_id", None)
+                    or getattr(e, "name", None)
+                    or "model"
+                )
+                sid_l = str(sid).lower()
+                base = sid_l.split(":", 1)[0]
+                base = base.replace("@", "-").replace("_", "-").replace("/", "-")
+                base = _re.sub(r"-+", "-", base).strip("-")
+                # Strip again common tokens
+                for pat in rm_patterns:
+                    base = _re.sub(pat, " ", base)
+                base = _re.sub(r"\s+", " ", base).strip().replace(" ", "-")
+                fam_norm = base or "model"
+            if param and param.lower() not in fam_norm:
+                base = f"{fam_norm} {param.lower()}"
+            else:
+                base = fam_norm
+            base_clean = base.strip().strip("-")
+            proposed_disp = f"{base_clean} ({q_label})" if q_label else base_clean
+            # Proposed base: display preview but with underscores instead of spaces, keep parentheses
+            proposed_slug = proposed_disp.replace(" ", "_")
+            # For known testing/demo entries, prepend a unique guard prefix to avoid collisions with real models
+            try:
+                from imageworks.model_loader.testing_filters import (
+                    is_testing_entry as _is_test,
+                )
+
+                if _is_test(getattr(e, "name", ""), e):
+                    guard = "__TESTZZZ__"
+                    proposed_slug = f"{guard}{proposed_slug}"
+                    proposed_disp = f"{guard}{proposed_disp}"
+            except Exception:
+                pass
+            return proposed_slug, proposed_disp
+
+        for name, e in reg.items():
+            if e.backend == "ollama" and not include_ollama:
+                continue
+            if e.backend != "ollama" and not include_hf:
+                continue
+            proposed, display = _propose_name(e)
+            rows.append(
+                {
+                    "old_name": e.name,
+                    "quant": e.quantization,
+                    "family": e.family,
+                    "proposed_slug_base": proposed,
+                    "proposed_display": display,
+                }
+            )
+            collisions.setdefault(proposed, []).append(e.name)
+
+        # Detect collisions
+        collision_list = [k for k, v in collisions.items() if len(v) > 1]
+        if json_output:
+            print(json.dumps({"rows": rows, "collisions": collision_list}, indent=2))
+            return
+        t = Table(title="Simplified Slug Preview")
+        t.add_column("Old Name", style="cyan", overflow="fold")
+        t.add_column("Proposed Base", style="yellow", min_width=54, overflow="fold")
+        t.add_column("Display Preview", style="white", min_width=64, overflow="fold")
+        for r in rows[:400]:  # cap for readability
+            t.add_row(
+                r["old_name"],
+                r["proposed_slug_base"],
+                r["proposed_display"],
+            )
+        console.print(t)
+        if collision_list:
+            rprint(
+                f"⚠️  Potential collisions: {len(collision_list)} bases have multiples"
+            )
+        rprint(f"📊 Previewed {len(rows)} entries")
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Preview failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("apply-simple-slugs")
+def apply_simple_slugs(
+    include_ollama: bool = typer.Option(
+        True, help="Include Ollama entries when applying"
+    ),
+    include_hf: bool = typer.Option(True, help="Include HF/vLLM entries when applying"),
+    disambiguate: str = typer.Option(
+        "backend",
+        help="Strategy to resolve collisions among identical proposed bases",
+        case_sensitive=False,
+    ),
+    rename_slugs: bool = typer.Option(
+        False,
+        "--rename-slugs/--display-only",
+        help="Actually rename entry.name slugs; when off, only updates display_name",
+    ),
+    allow_skip_on_collision: bool = typer.Option(
+        True,
+        "--allow-skip-on-collision/--no-skip-on-collision",
+        help="Skip colliding items that can't be disambiguated instead of failing",
+    ),
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--apply", help="Preview changes without writing (default)"
+    ),
+    backup: bool = typer.Option(
+        True, "--backup/--no-backup", help="Write timestamped backup before modifying"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit JSON summary of changes"
+    ),
+    tests_only: bool = typer.Option(
+        False,
+        "--tests-only",
+        help="Limit changes to testing/demo entries only (identified by testing filters)",
+    ),
+):
+    """Apply the simplified slug naming scheme.
+
+    Behaviour:
+      - Computes the same proposed base/display as preview-simple-slugs.
+      - Resolves collisions by appending a stable disambiguator (backend/format) to the slug base when requested.
+      - Updates display_name for all selected entries.
+      - Optionally renames the entry.name (slug) if --rename-slugs is provided.
+      - Writes a backup before applying unless --no-backup.
+
+    Notes:
+      - Collisions are detected across the selected subset; we avoid introducing duplicate names.
+      - Parentheses are preserved in display; slugs use underscores. Disambiguators are appended as __<token>.
+    """
+    try:
+        reg = unified_registry.load_registry(force=True)
+
+        # Helper: keep naming logic consistent with preview
+        _param_cache: Dict[str, Optional[str]] = {}
+
+        def _format_param_label(total_params: int) -> str:
+            if total_params <= 0:
+                return ""
+            val = total_params / 1_000_000_000.0
+            rounded = round(val + 1e-12, 1)
+            if abs(rounded - int(rounded)) < 1e-9:
+                return f"{int(rounded)}B"
+            return f"{rounded:.1f}B"
+
+        def _hf_param_size_label(path: Optional[str]) -> Optional[str]:
+            if not path:
+                return None
+            try:
+                key = str(Path(path).expanduser())
+            except Exception:
+                key = str(path)
+            if key in _param_cache:
+                return _param_cache[key]
+            try:
+                p = Path(path).expanduser()
+                if not p.exists():
+                    _param_cache[key] = None
+                    return None
+                st_files = [f for f in p.rglob("*.safetensors") if f.is_file()]
+                if not st_files:
+                    _param_cache[key] = None
+                    return None
+                try:
+                    from safetensors import safe_open as _safe_open  # type: ignore
+                except Exception:
+                    _param_cache[key] = None
+                    return None
+                total: int = 0
+                for sf in sorted(st_files):
+                    try:
+                        with _safe_open(str(sf), framework="pt", device="cpu") as f:  # type: ignore
+                            for tk in f.keys():
+                                try:
+                                    meta = f.get_tensor_metadata(tk)
+                                    shape = getattr(meta, "shape", None)
+                                    if not shape:
+                                        t = f.get_tensor(tk)
+                                        shape = getattr(t, "shape", None)
+                                    if shape:
+                                        n = 1
+                                        for d in shape:
+                                            n *= int(d)
+                                        total += int(n)
+                                except Exception:
+                                    continue
+                    except Exception:
+                        continue
+                label = _format_param_label(total) if total > 0 else None
+                _param_cache[key] = label
+                return label
+            except Exception:
+                _param_cache[key] = None
+                return None
+
+        def _extract_param_size(text: str | None) -> str | None:
+            if not text:
+                return None
+            t = text.strip().lower()
+            import re as _re
+
+            m = _re.search(r"\b(\d{1,3})\s*b\b", t)
+            if m:
+                return f"{m.group(1)}B"
+            return None
+
+        def _propose_name(e) -> tuple[str, str]:
+            backend = e.backend
+            q_raw = getattr(e, "quantization", None)
+            quant = q_raw or ""
+            q_is_valid = bool(quant) and (str(quant).lower() != "unknown")
+            q_label = (
+                quant.replace("_", " ").replace("-", " ").upper() if q_is_valid else ""
+            )
+            family = None
+            param = None
+            if include_ollama and backend == "ollama":
+                meta = getattr(e, "metadata", {}) or {}
+                family = (
+                    meta.get("ollama_family")
+                    or meta.get("ollama_architecture")
+                    or e.family
+                    or "model"
+                )
+                param = meta.get("ollama_parameter_size") or _extract_param_size(
+                    meta.get("ollama_parameters")
+                )
+            elif include_hf and backend != "ollama":
+                family = e.family or "model"
+                param = _hf_param_size_label(
+                    getattr(e, "download_path", None)
+                ) or _extract_param_size(family)
+            else:
+                family = e.family or "model"
+            import re as _re
+
+            original_family = (family or "").strip().lower()
+            rm_patterns = [
+                r"\b(gguf|safetensors)\b",
+                r"\bq\d(?:_k(?:_[sml])?|_[01])\b",
+                r"\bq\d(?:-k(?:-[sml])?)\b",
+                r"\b(awq|gptq|int4|int8|fp16|bf16|fp8|nf4|mxfp4|mxfp8)\b",
+            ]
+            fam_clean = original_family
+            for pat in rm_patterns:
+                fam_clean = _re.sub(pat, " ", fam_clean)
+            fam_clean = _re.sub(r"\s+", " ", fam_clean).strip()
+            fam_norm = fam_clean.replace("@", "-").replace("_", "-").replace("/", "-")
+            fam_norm = _re.sub(r"-+", "-", fam_norm).strip("-")
+            if not param:
+                m = _re.search(r"-(\d{1,3})b$", fam_norm)
+                if m:
+                    param = f"{m.group(1)}B"
+                    fam_norm = fam_norm[: -len(m.group(0))]
+            if not fam_norm or fam_norm == "model":
+                sid = (
+                    getattr(e, "served_model_id", None)
+                    or getattr(e, "name", None)
+                    or "model"
+                )
+                sid_l = str(sid).lower()
+                base = sid_l.split(":", 1)[0]
+                base = base.replace("@", "-").replace("_", "-").replace("/", "-")
+                base = _re.sub(r"-+", "-", base).strip("-")
+                for pat in rm_patterns:
+                    base = _re.sub(pat, " ", base)
+                base = _re.sub(r"\s+", " ", base).strip().replace(" ", "-")
+                fam_norm = base or "model"
+            if param and param.lower() not in fam_norm:
+                base = f"{fam_norm} {param.lower()}"
+            else:
+                base = fam_norm
+            base_clean = base.strip().strip("-")
+            proposed_disp = f"{base_clean} ({q_label})" if q_label else base_clean
+            proposed_slug = proposed_disp.replace(" ", "_")
+            # Guard test/demo entries with unique prefix to avoid collisions with real models
+            try:
+                from imageworks.model_loader.testing_filters import (
+                    is_testing_entry as _is_test,
+                )
+
+                if _is_test(getattr(e, "name", ""), e):
+                    guard = "__TESTZZZ__"
+                    proposed_slug = f"{guard}{proposed_slug}"
+                    proposed_disp = f"{guard}{proposed_disp}"
+            except Exception:
+                pass
+            return proposed_slug, proposed_disp
+
+        # Build mapping
+        candidates: List[dict] = []
+        for name, e in reg.items():
+            if e.backend == "ollama" and not include_ollama:
+                continue
+            if e.backend != "ollama" and not include_hf:
+                continue
+            new_base, new_disp = _propose_name(e)
+            candidates.append(
+                {
+                    "old_name": e.name,
+                    "backend": e.backend,
+                    "format": e.download_format,
+                    "quant": e.quantization,
+                    "proposed_base": new_base,
+                    "proposed_display": new_disp,
+                }
+            )
+
+        # Detect collisions by proposed_base
+        groups: Dict[str, List[dict]] = {}
+        for c in candidates:
+            groups.setdefault(c["proposed_base"], []).append(c)
+
+        # Apply disambiguation
+        disambiguate = (disambiguate or "backend").lower()
+        valid_strategies = {"backend", "format", "none"}
+        if disambiguate not in valid_strategies:
+            rprint(f"❌ [red]Invalid disambiguation strategy: {disambiguate}[/red]")
+            raise typer.Exit(code=1)
+
+        final_map: Dict[str, dict] = {}
+        skipped: List[dict] = []
+        for base, items in groups.items():
+            if len(items) == 1:
+                final_map[items[0]["old_name"]] = {
+                    **items[0],
+                    "final_slug": items[0]["proposed_base"],
+                    "final_display": items[0]["proposed_display"],
+                    "collision": False,
+                }
+                continue
+            # Collision
+            if disambiguate == "none":
+                if allow_skip_on_collision:
+                    skipped.extend(items)
+                    continue
+                else:
+                    rprint(
+                        f"❌ [red]Collision for base '{base}' with --no-skip set: {[i['old_name'] for i in items]}[/red]"
+                    )
+                    raise typer.Exit(code=1)
+            for it in items:
+                token = (
+                    (it.get("backend") or "").strip().lower()
+                    if disambiguate == "backend"
+                    else (it.get("format") or "").strip().lower() or "fmt"
+                )
+                # slug suffix uses double underscore separator for clarity
+                final_slug = (
+                    f"{it['proposed_base']}__{token}" if token else it["proposed_base"]
+                )
+                # display: minimalist, append [backend] or [fmt] only on collision
+                suffix_human = token.upper() if token else ""
+                final_display = (
+                    f"{it['proposed_display']} [{suffix_human}]"
+                    if suffix_human
+                    else it["proposed_display"]
+                )
+                final_map[it["old_name"]] = {
+                    **it,
+                    "final_slug": final_slug,
+                    "final_display": final_display,
+                    "collision": True,
+                }
+
+        # Validate against existing names if renaming
+        existing_names: Set[str] = set(reg.keys())
+        rename_ops: List[dict] = []
+        for old, spec in final_map.items():
+            e = reg.get(old)
+            # Limit to tests when requested
+            if tests_only:
+                try:
+                    from imageworks.model_loader.testing_filters import (
+                        is_testing_entry as _is_test,
+                    )
+
+                    if not _is_test(old, e):
+                        continue
+                except Exception:
+                    # If filter unavailable, skip restricting to avoid accidental mass rename
+                    continue
+            new_name = spec["final_slug"] if rename_slugs else old
+            rename_ops.append(
+                {
+                    "old": old,
+                    "new": new_name,
+                    "display": spec["final_display"],
+                }
+            )
+
+        # Ensure no duplicate target names
+        targets = [op["new"] for op in rename_ops]
+        dup_targets: Set[str] = set()
+        seen: Set[str] = set()
+        for t in targets:
+            if t in seen:
+                dup_targets.add(t)
+            seen.add(t)
+        if dup_targets:
+            rprint(f"❌ [red]Would create duplicate names: {sorted(dup_targets)}[/red]")
+            raise typer.Exit(code=1)
+
+        # Ensure target names don't conflict with unrelated existing entries when renaming
+        if rename_slugs:
+            conflicts = [
+                op
+                for op in rename_ops
+                if op["new"] != op["old"] and op["new"] in existing_names
+            ]
+            if conflicts:
+                names = ", ".join(c["new"] for c in conflicts[:10])
+                rprint(
+                    f"❌ [red]Target names already exist in registry (first 10): {names}[/red]"
+                )
+                raise typer.Exit(code=1)
+
+        # Output preview table or JSON
+        if json_output:
+            print(
+                json.dumps(
+                    {
+                        "operations": rename_ops,
+                        "skipped": skipped,
+                        "rename_slugs": rename_slugs,
+                    },
+                    indent=2,
+                )
+            )
+            if dry_run:
+                return
+        else:
+            t = Table(title="Apply Simplified Slugs")
+            t.add_column("Old Name", style="cyan")
+            t.add_column("New Name", style="yellow")
+            t.add_column("New Display", style="white")
+            for op in sorted(rename_ops, key=lambda x: x["old"]):
+                t.add_row(op["old"], op["new"], op["display"])
+            console.print(t)
+            if skipped:
+                rprint(
+                    f"⚠️  Skipped {len(skipped)} colliding entries (use --disambiguate to resolve or --no-skip to fail)"
+                )
+            if dry_run:
+                rprint(
+                    "🛈 [cyan]Dry run: no changes written. Re-run with --apply to persist.[/cyan]"
+                )
+                return
+
+        # Apply changes
+        # Backup merged snapshot before mutation
+        if backup:
+            from datetime import datetime as _dt
+
+            reg_path = Path("configs/model_registry.json")
+            if reg_path.exists():
+                ts = _dt.utcnow().strftime("%Y%m%d-%H%M%S")
+                backup_path = reg_path.with_name(f"model_registry.{ts}.bak.json")
+                try:
+                    backup_path.write_text(
+                        reg_path.read_text(encoding="utf-8"), encoding="utf-8"
+                    )
+                    rprint(f"💾 Backup written: {backup_path.name}")
+                except Exception as exc:  # noqa: BLE001
+                    rprint(f"⚠️  [yellow]Backup failed (continuing): {exc}[/yellow]")
+
+        # Mutate in-memory registry cache
+        # Update display names first
+        for op in rename_ops:
+            e = reg.get(op["old"])
+            if e:
+                e.display_name = op["display"]
+        # Apply renames if requested
+        if rename_slugs:
+            # We must rebuild the dict to avoid key mutation issues during iteration
+            new_reg: Dict[str, Any] = {}
+            for name, e in reg.items():
+                op = next((o for o in rename_ops if o["old"] == name), None)
+                if op and op["new"] != name:
+                    e.name = op["new"]
+                    new_reg[op["new"]] = e
+                else:
+                    new_reg[name] = e
+            # Replace cache content in-place
+            reg.clear()
+            reg.update(new_reg)
+
+        # Persist
+        unified_registry.save_registry()
+        rprint(
+            f"✅ [green]Applied {len(rename_ops)} display update(s){' with slug renames' if rename_slugs else ''}[/green]"
+        )
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Apply failed:[/red] {exc}")
+        raise typer.Exit(code=1)
 
 
 @app.command("scan")
@@ -2002,6 +2809,61 @@ def tidy_empty_dirs(
         )
     except Exception as exc:  # noqa: BLE001
         rprint(f"❌ [red]Tidy failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+
+@app.command("purge-tests")
+def purge_tests(
+    dry_run: bool = typer.Option(
+        True, "--dry-run/--apply", help="Preview only by default; --apply to delete"
+    ),
+    backup: bool = typer.Option(
+        True, "--backup/--no-backup", help="Write registry backups before modifying"
+    ),
+    list_only: bool = typer.Option(
+        False, "--list-only", help="Only list test entries detected; no changes"
+    ),
+):
+    """Remove or list test/demo entries detected by testing filters.
+
+    - With --list-only: prints names of test entries.
+    - With --apply: deletes matching entries from the registry (layered-safe with backups).
+    """
+    try:
+        reg = unified_registry.load_registry(force=True)
+        from imageworks.model_loader.testing_filters import is_testing_entry as _is_test
+
+        tests = [name for name, e in reg.items() if _is_test(name, e)]
+        if not tests:
+            rprint("🛈 [cyan]No test/demo entries found[/cyan]")
+            return
+        if list_only or dry_run:
+            rprint("Test/demo entries detected:")
+            for n in sorted(tests):
+                rprint(f"  • {n}")
+            if dry_run and not list_only:
+                rprint("🛈 [cyan]Dry run: not modifying registry[/cyan]")
+            return
+        # Apply purge
+        if backup:
+            from datetime import datetime as _dt
+
+            merged = Path("configs/model_registry.json")
+            if merged.exists():
+                ts = _dt.utcnow().strftime("%Y%m%d-%H%M%S")
+                b = merged.with_name(f"model_registry.{ts}.bak.json")
+                b.write_text(merged.read_text(encoding="utf-8"), encoding="utf-8")
+                rprint(f"💾 Backup written: {b.name}")
+        from imageworks.model_loader.registry import remove_entry
+
+        removed = 0
+        for n in tests:
+            if remove_entry(n, save=False):
+                removed += 1
+        unified_registry.save_registry()
+        rprint(f"✅ [green]Purged {removed} test/demo entries[/green]")
+    except Exception as exc:  # noqa: BLE001
+        rprint(f"❌ [red]Purge tests failed:[/red] {exc}")
         raise typer.Exit(code=1)
 
 

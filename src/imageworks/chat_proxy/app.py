@@ -98,15 +98,31 @@ async def list_models_api():
             continue
         if not include_testing and is_testing_entry(name, entry):
             continue
-        # Hide non-installed variants for non-Ollama backends to avoid ghost entries
+        # Hide non-installed variants for non-Ollama backends by default; allow override
         has_assets = _path_exists(
             getattr(entry, "download_path", None)
         ) or _path_exists(getattr(entry.backend_config, "model_path", None))
-        if entry.backend != "ollama" and not (has_assets or _has_served_backend(entry)):
-            # Hide entries that neither have local weights nor a configured backend.
+        if (
+            entry.backend != "ollama"
+            and not _cfg.include_non_installed
+            and not (has_assets or _has_served_backend(entry))
+        ):
+            # Hide entries that neither have local weights nor a configured backend when strict mode is on.
             continue
-        display = entry.display_name or entry.name or ""
-        display_id = display or entry.name
+        # Use simplified naming for UI display
+        try:
+            from ..model_loader.simplified_naming import (
+                simplified_display_for_entry as _simple_disp,
+            )
+
+            display = _simple_disp(entry)
+        except Exception:
+            display = entry.display_name or entry.name or ""
+        # When suppress_decorations is enabled, prefer a plain display-id without extra hints
+        if _cfg.suppress_decorations:
+            display_id = display
+        else:
+            display_id = display or entry.name
         if display_id in seen_display_ids:
             # fall back to logical slug if friendly label collides
             display_id = entry.name
@@ -130,6 +146,14 @@ async def list_models_api():
         if entry.chat_template and entry.chat_template.path:
             templates.append(entry.chat_template.path)
             primary_template = entry.chat_template.path
+        # Optionally suppress extra decorations to mirror CLI display strictly
+        fmt_value = getattr(entry, "download_format", None)
+        quant_value = getattr(entry, "quantization", None)
+        backend_value = entry.backend
+        if _cfg.suppress_decorations:
+            fmt_value = None
+            quant_value = None
+            backend_value = None
         data.append(
             {
                 "id": display_id,
@@ -140,9 +164,9 @@ async def list_models_api():
                     "display_id": display_id,
                     "display_name": display or entry.name,
                     "logical_id": name,
-                    "backend": entry.backend,
-                    "format": getattr(entry, "download_format", None),
-                    "quantization": getattr(entry, "quantization", None),
+                    "backend": backend_value,
+                    "format": fmt_value,
+                    "quantization": quant_value,
                     "size_bytes": getattr(entry, "download_size_bytes", None),
                     "capabilities": getattr(entry, "capabilities", {}) or {},
                     "modalities": modalities,

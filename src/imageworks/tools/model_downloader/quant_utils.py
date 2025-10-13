@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 
 _QUANT_PATTERN = re.compile(
-    r"^(q\d(?:_k(?:_m)?)?|int4|int8|fp16|f16|awq|gptq|nf4|fp8)$", re.IGNORECASE
+    r"^(q\d(?:_[01]|_k(?:_[sml])?)?|int4|int8|fp16|f16|bf16|fp32|f32|awq|gptq|nf4|fp8|iq4_xs)$",
+    re.IGNORECASE,
 )
 
 

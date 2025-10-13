@@ -35,6 +35,7 @@ from .models import (
 from .hashing import compute_artifact_hashes
 from .testing_filters import is_testing_name
 from .naming import build_identity
+from .simplified_naming import simplified_slug_for_fields
 import os as _os
 
 
@@ -183,11 +184,20 @@ def _infer_capabilities(name: str) -> Dict[str, bool]:
         ]
     )
     embedding = any(
-        marker in n for marker in ["siglip", "embed", "embedding", "nomic", "text-embedding"]
+        marker in n
+        for marker in ["siglip", "embed", "embedding", "nomic", "text-embedding"]
     )
     audio = any(
         marker in n
-        for marker in ["audio", "whisper", "wav", "vits", "sensevoice", "voice", "speech"]
+        for marker in [
+            "audio",
+            "whisper",
+            "wav",
+            "vits",
+            "sensevoice",
+            "voice",
+            "speech",
+        ]
     )
     reasoning_markers = [
         "reason",
@@ -222,7 +232,9 @@ def _infer_capabilities(name: str) -> Dict[str, bool]:
         ]
     ) or ("qwen" in n and "instruct" in n)
 
-    reasoning = thinking or any(marker in n for marker in ["reason", "reasoning", "logic"])
+    reasoning = thinking or any(
+        marker in n for marker in ["reason", "reasoning", "logic"]
+    )
 
     return {
         "text": text,
@@ -272,7 +284,16 @@ def record_download(
         quantization=quantization,
         display_override=display_name,
     )
-    variant_name = identity.slug
+    # Use simplified slug for canonical naming on fresh imports
+    variant_name = simplified_slug_for_fields(
+        family=family,
+        backend=backend,
+        format_type=format_type,
+        quantization=quantization,
+        metadata=None,
+        download_path=str(Path(path).expanduser()),
+        served_model_id=served_model_id,
+    )
     backend = identity.backend_key
     format_type = identity.format_key
     quantization = identity.quant_key
@@ -372,7 +393,21 @@ def record_download(
             for k, v in extra_metadata.items():
                 if v is not None and k not in entry.metadata:
                     entry.metadata[k] = v
-        entry.display_name = identity.display_name
+        # Prefer simplified naming for display if available
+        try:
+            from .simplified_naming import simplified_display_for_fields as _simple_disp
+
+            entry.display_name = _simple_disp(
+                family=family,
+                backend=backend,
+                format_type=format_type,
+                quantization=quantization,
+                metadata=entry.metadata,
+                download_path=str(p),
+                served_model_id=served_model_id,
+            )
+        except Exception:
+            entry.display_name = identity.display_name
         entry.family = family
         if hf_id:
             aliases = entry.model_aliases or []
@@ -383,8 +418,15 @@ def record_download(
     # Backend reconciliation on update: if an 'unassigned' variant exists for the same
     # (family, format, quant), migrate it to the requested backend instead of duplicating.
     if not existing and backend != "unassigned":
-        unassigned_identity = identity.with_backend("unassigned")
-        unassigned_name = unassigned_identity.slug
+        unassigned_name = simplified_slug_for_fields(
+            family=family,
+            backend="unassigned",
+            format_type=format_type,
+            quantization=quantization,
+            metadata=None,
+            download_path=str(p),
+            served_model_id=served_model_id,
+        )
         candidate = reg.get(unassigned_name)
         if candidate is not None:
             e = candidate
@@ -441,7 +483,23 @@ def record_download(
     capabilities = _infer_capabilities(variant_name)
     entry = RegistryEntry(
         name=variant_name,
-        display_name=identity.display_name,
+        # Seed display_name with simplified naming if helper is available
+        display_name=(
+            __import__(
+                "imageworks.model_loader.simplified_naming",
+                fromlist=["simplified_display_for_fields"],
+            ).simplified_display_for_fields(  # type: ignore[attr-defined]
+                family=family,
+                backend=backend,
+                format_type=format_type,
+                quantization=quantization,
+                metadata={"created_from_download": True},
+                download_path=str(p),
+                served_model_id=served_model_id,
+            )
+            if True
+            else identity.display_name
+        ),
         backend=backend,
         backend_config=BackendConfig(port=0, model_path=str(p), extra_args=[]),
         capabilities=capabilities,
