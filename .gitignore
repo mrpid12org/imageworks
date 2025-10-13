@@ -70,3 +70,4 @@ vllm_server*.log
 .ruff_cache/
 __pycache__/
 .pytest_cache/
+_staging/openwebui-webui.db.bak
