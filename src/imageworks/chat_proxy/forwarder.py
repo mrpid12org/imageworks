@@ -5,6 +5,7 @@ import httpx
 import time
 from typing import Any, AsyncGenerator, Dict
 import base64
+import re
 
 from .config import ProxyConfig
 from .errors import (
@@ -118,38 +119,60 @@ class ChatForwarder:
         return has, total
 
     async def handle_chat(self, payload: dict) -> Dict[str, Any]:
-        model = payload.get("model")
-        if not model:
+        requested_model = payload.get("model")
+        if not requested_model:
             raise err_model_not_found("<empty>")
+        model = str(requested_model)
         # Accept either the logical id or the display id (display_name[-quant])
         try:
             entry = get_entry(model)
         except KeyError:
             # Attempt to resolve by display id -> logical id
             from ..model_loader.registry import load_registry
+            from ..model_loader.simplified_naming import (
+                simplified_display_for_entry as _simple_disp,
+                simplified_slug_for_entry as _simple_slug,
+            )
 
             reg = load_registry()
             resolved = None
+            target_norm = _normalize_label(model)
             # Prioritize exact match on logical name first
             if model in reg:
                 resolved = model
             else:
                 # Fallback to iterating and checking display names
                 for name, e in reg.items():
-                    disp = e.display_name or e.name
-                    if disp == model:
-                        resolved = name
-                        break
-                    if e.quantization:
-                        legacy_disp = f"{disp}-{e.quantization}"
-                        if legacy_disp == model:
+                    candidates: set[str] = set()
+                    disp = getattr(e, "display_name", None) or getattr(e, "name", None)
+                    if disp:
+                        candidates.add(str(disp))
+                    try:
+                        candidates.add(_simple_disp(e))
+                        candidates.add(_simple_slug(e))
+                    except Exception:  # noqa: BLE001
+                        pass
+                    quant = getattr(e, "quantization", None)
+                    if disp and quant:
+                        q_label = str(quant).replace("_", " ").replace("-", " ").upper()
+                        candidates.add(f"{disp} ({q_label})")
+                    # legacy hyphen form display-quantization
+                    if disp and quant:
+                        candidates.add(f"{disp}-{quant}")
+                    for cand in list(candidates):
+                        if not cand:
+                            continue
+                        if target_norm and _normalize_label(cand) == target_norm:
                             resolved = name
                             break
+                    if resolved:
+                        break
             if not resolved:
                 raise err_model_not_found(model)
             entry = get_entry(resolved)
             # Also rewrite the payload model to the logical id so downstream logging is consistent
             payload["model"] = resolved
+            model = resolved
 
         # Capability checks
         has_vision = supports_vision(entry)
@@ -526,3 +549,13 @@ class ChatForwarder:
                 estimated_counts=estimated,
             )
         )
+def _normalize_label(label: Any) -> str:
+    """Return a canonical lowercase token for matching model aliases."""
+
+    if label is None:
+        return ""
+    text = str(label).strip().lower()
+    if not text:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "", text)
+
