@@ -110,7 +110,7 @@ Pick any subset of these; they’re independent.
 ## Practical workflows
 
 - Keep registry aligned with local Ollama:
-  - Run `uv run imageworks-download reset-discovered --backend ollama` to clear additive records before rerunning the importer.
+  - Run `uv run imageworks-loader reset-discovered --backend ollama` to clear additive records before rerunning the importer.
   - Optionally pass `--purge-existing` to the importer for a full rebuild in one shot.
   - Or rely on the proxy-side tag check to hide ghosts from UI while retaining historical entries in the registry (less preferred).
 

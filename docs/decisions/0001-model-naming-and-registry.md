@@ -35,7 +35,7 @@ out the need for pre-write cleaning rather than post-hoc filtering.
    publishes the friendly `display_name` directly and falls back to logical IDs
    only when duplicates appear.
 
-4. **Add maintenance tooling** (`imageworks-download reset-discovered`) to clear
+4. **Add maintenance tooling** (`imageworks-loader reset-discovered`) to clear
    discoverable overlays and allow importer reruns to rebuild the registry from
    scratch without manual JSON edits.
 

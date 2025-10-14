@@ -1,35 +1,35 @@
 [
   {
-    "name": "siglip-large-patch16-384_(FP32)",
-    "display_name": "siglip-large-patch16-384 (FP32)",
+    "name": "qwen2.5-vl-7b-awq",
+    "display_name": "Qwen2.5-VL 7B AWQ",
     "backend": "vllm",
     "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
-      "extra_args": []
+      "port": 8001,
+      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+      "extra_args": [
+        "--max-model-len=4096"
+      ]
     },
     "capabilities": {
       "text": true,
-      "vision": false,
-      "embedding": true,
+      "vision": true,
       "audio": false,
-      "thinking": false,
-      "reasoning": false,
-      "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
       "tts": false,
-      "embed": true,
-      "text-embedding": true,
-      "representation": true,
+      "embedding": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tools": false,
       "tool_use": false,
       "tool-use": false,
       "tool_call": false,
@@ -47,348 +47,8 @@
       "functioncalling": false,
       "toolcalling": false,
       "auto_tool_choice": false,
-      "reason": false,
-      "think": false,
-      "chain_of_thought": false,
-      "cot": false,
-      "reasoner": false,
-      "o1": false,
-      "o3": false,
-      "r1": false,
-      "deepseek": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "f819f2dbe5b5d366711d09e16cc0accc686d15a621082ccb21b2571e9546e92e",
-      "files": [
-        {
-          "path": ".gitattributes",
-          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
-        },
-        {
-          "path": "README.md",
-          "sha256": "771d019af5fc01f21ec91ad7fbc3e2d24d750bb1df3a1e1dd04f060cbd90cd9c"
-        },
-        {
-          "path": "config.json",
-          "sha256": "ddefe38fdfe333d5dbb7d56a247bdc6fe84dbcdb4eafd2f462e05e9b13c532bc"
-        },
-        {
-          "path": "model.safetensors",
-          "sha256": "ab804d2c2c631159f65afa1de27787c5dba90cbfa189f26404de1944d50a18a2"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "f59da2f87c3cd079bd4f8f3037e81b277c60c498e279a8020331f67a5a3157e8"
-        },
-        {
-          "path": "special_tokens_map.json",
-          "sha256": "2b6a1ff67a27e0df9ac0c7d93250fc0d87431c7b366b3d5669217104f9088a26"
-        },
-        {
-          "path": "spiece.model",
-          "sha256": "1e5036bed065526c3c212dfbe288752391797c4bb1a284aa18c9a0b23fcaf8ec"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "c6e405cb7c670d56636a9402c81023a55bc6c3c53d89cf02b92f5c5005bfe920"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "d6423dae508cc3a129d22ea443841c111832a1a73125b8f25ea8736951698bcb"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": null,
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "google/siglip-large-patch16-384"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "google/siglip-large-patch16-384"
-    },
-    "deprecated": false,
-    "family": "siglip-large-patch16-384",
-    "source_provider": "hf",
-    "quantization": "fp32",
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "safetensors",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
-    "download_size_bytes": 2613215888,
-    "download_files": [
-      "preprocessor_config.json",
-      ".gitattributes",
-      "README.md",
-      "spiece.model",
-      "config.json",
-      "model.safetensors",
-      "tokenizer.json",
-      "special_tokens_map.json",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "0bc0136d63c7a51f",
-    "downloaded_at": "2025-10-13T20:26:57.125277+00:00",
-    "last_accessed": "2025-10-13T20:26:57.125277+00:00"
-  },
-  {
-    "name": "qwen2.5-vl-7b-instruct_(BF16)",
-    "display_name": "qwen2.5-vl-7b-instruct (BF16)",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false,
       "thinking": false,
       "reasoning": false,
-      "tools": true,
-      "language": true,
-      "chat": true,
-      "visual": true,
-      "multimodal": true,
-      "mm": true,
-      "image": true,
-      "vl": true,
-      "speech": false,
-      "voice": false,
-      "asr": false,
-      "tts": false,
-      "embed": false,
-      "text-embedding": false,
-      "representation": false,
-      "tool_use": true,
-      "tool-use": true,
-      "tool_call": true,
-      "tool-call": true,
-      "toolcalls": true,
-      "tool_calls": true,
-      "toolchoice": true,
-      "tool_choice": true,
-      "function_call": true,
-      "function-call": true,
-      "function_calls": true,
-      "function_calling": true,
-      "function-calling": true,
-      "function_tools": true,
-      "functioncalling": true,
-      "toolcalling": true,
-      "auto_tool_choice": true,
-      "reason": false,
-      "think": false,
-      "chain_of_thought": false,
-      "cot": false,
-      "reasoner": false,
-      "o1": false,
-      "o3": false,
-      "r1": false,
-      "deepseek": false
-    },
-    "artifacts": {
-      "aggregate_sha256": "eecd46bf2993893229293c93b0600d61a725f21b8051893937ff1c5dd30a9367",
-      "files": [
-        {
-          "path": ".gitattributes",
-          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
-        },
-        {
-          "path": "chat_template.json",
-          "sha256": "ad60d90252ed0b0705ba14e2d0ad0fec0beac1ea955642b54059b36052d8bc96"
-        },
-        {
-          "path": "config.json",
-          "sha256": "77d9ec7321cc572e3579e2c84799c9cadaded63c49ce93b101733349fc330c43"
-        },
-        {
-          "path": "generation_config.json",
-          "sha256": "0a3aea82869fe29f20dc95ccf3e2bcff380eca1f5ad6447a4a4b37110b08e43e"
-        },
-        {
-          "path": "merges.txt",
-          "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
-        },
-        {
-          "path": "model-00001-of-00005.safetensors",
-          "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e"
-        },
-        {
-          "path": "model-00002-of-00005.safetensors",
-          "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024"
-        },
-        {
-          "path": "model-00003-of-00005.safetensors",
-          "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507"
-        },
-        {
-          "path": "model-00004-of-00005.safetensors",
-          "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed"
-        },
-        {
-          "path": "model-00005-of-00005.safetensors",
-          "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67"
-        },
-        {
-          "path": "model.safetensors.index.json",
-          "sha256": "73b333b0b16e5286ddba615d2caebcd495cf7e616f52eb217a81781393d79de9"
-        },
-        {
-          "path": "preprocessor_config.json",
-          "sha256": "f2058c716eef96ccaed1cc1e2d0c08306b62586d535b28d9d08e691b2fab7ca0"
-        },
-        {
-          "path": "tokenizer.json",
-          "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
-        },
-        {
-          "path": "tokenizer_config.json",
-          "sha256": "4abd3520120e266da84c0864fee064d1fb10806f02225911a47253dd38dc5f56"
-        },
-        {
-          "path": "vocab.json",
-          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
-        }
-      ]
-    },
-    "chat_template": {
-      "source": "embedded",
-      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct/chat_template.json",
-      "sha256": null
-    },
-    "version_lock": {
-      "locked": false,
-      "expected_aggregate_sha256": null,
-      "last_verified": null
-    },
-    "performance": {
-      "rolling_samples": 0,
-      "ttft_ms_avg": null,
-      "throughput_toks_per_s_avg": null,
-      "last_sample": null
-    },
-    "probes": {
-      "vision": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "created_from_download": true
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "existing/Qwen2.5-VL-7B-Instruct"
-    ],
-    "roles": [],
-    "license": null,
-    "source": {
-      "huggingface_id": "existing/Qwen2.5-VL-7B-Instruct"
-    },
-    "deprecated": false,
-    "family": "qwen2.5-vl-7b-instruct",
-    "source_provider": "hf",
-    "quantization": "bf16",
-    "backend_alternatives": [],
-    "role_priority": {},
-    "download_format": "safetensors",
-    "download_location": "linux_wsl",
-    "download_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
-    "download_size_bytes": 16595962707,
-    "download_files": [
-      "model-00003-of-00005.safetensors",
-      "preprocessor_config.json",
-      "model.safetensors.index.json",
-      ".gitattributes",
-      "model-00002-of-00005.safetensors",
-      "model-00004-of-00005.safetensors",
-      "generation_config.json",
-      "vocab.json",
-      "config.json",
-      "tokenizer.json",
-      "chat_template.json",
-      "model-00005-of-00005.safetensors",
-      "merges.txt",
-      "model-00001-of-00005.safetensors",
-      "tokenizer_config.json"
-    ],
-    "download_directory_checksum": "1d783bb63d37d961",
-    "downloaded_at": "2025-10-13T20:26:59.047947+00:00",
-    "last_accessed": "2025-10-13T20:26:59.047947+00:00"
-  },
-  {
-    "name": "qwen2.5-vl-7b-instruct_(AWQ)",
-    "display_name": "qwen2.5-vl-7b-instruct (AWQ)",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 0,
-      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
-      "extra_args": []
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false,
-      "thinking": false,
-      "reasoning": false,
-      "tools": true,
-      "language": true,
-      "chat": true,
-      "visual": true,
-      "multimodal": true,
-      "mm": true,
-      "image": true,
-      "vl": true,
-      "speech": false,
-      "voice": false,
-      "asr": false,
-      "tts": false,
-      "embed": false,
-      "text-embedding": false,
-      "representation": false,
-      "tool_use": true,
-      "tool-use": true,
-      "tool_call": true,
-      "tool-call": true,
-      "toolcalls": true,
-      "tool_calls": true,
-      "toolchoice": true,
-      "tool_choice": true,
-      "function_call": true,
-      "function-call": true,
-      "function_calls": true,
-      "function_calling": true,
-      "function-calling": true,
-      "function_tools": true,
-      "functioncalling": true,
-      "toolcalling": true,
-      "auto_tool_choice": true,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -609,16 +269,27 @@
     },
     "profiles_placeholder": null,
     "metadata": {
-      "created_from_download": true
+      "notes": "vLLM Qwen2.5-VL-7B AWQ variant (running on port 8001)"
     },
-    "served_model_id": "None",
+    "served_model_id": "qwen2.5-vl-7b-awq",
     "model_aliases": [
+      "Qwen2.5-VL-7B-AWQ",
+      "qwen2.5-vl-7b-awq",
       "existing/Qwen2.5-VL-7B-Instruct-AWQ"
     ],
-    "roles": [],
-    "license": null,
+    "roles": [
+      "caption",
+      "description",
+      "keywords"
+    ],
+    "license": "Apache-2.0",
     "source": {
-      "huggingface_id": "existing/Qwen2.5-VL-7B-Instruct-AWQ"
+      "huggingface_id": "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ",
+      "format": "safetensors",
+      "path": "~/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct-AWQ",
+      "size_bytes": null,
+      "directory_checksum": null,
+      "files": []
     },
     "deprecated": false,
     "family": "qwen2.5-vl-7b-instruct-awq",
@@ -646,45 +317,231 @@
       "special_tokens_map.json",
       "merges.txt",
       "tokenizer_config.json",
-      ".cache/huggingface/.gitignore",
-      ".cache/huggingface/download/generation_config.json.lock",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.lock",
-      ".cache/huggingface/download/tokenizer.json.metadata",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.lock",
-      ".cache/huggingface/download/chat_template.json.metadata",
-      ".cache/huggingface/download/preprocessor_config.json.metadata",
-      ".cache/huggingface/download/.gitattributes.metadata",
-      ".cache/huggingface/download/config.json.lock",
-      ".cache/huggingface/download/merges.txt.lock",
-      ".cache/huggingface/download/model-00001-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/tokenizer_config.json.metadata",
-      ".cache/huggingface/download/vocab.json.metadata",
-      ".cache/huggingface/download/model-00002-of-00002.safetensors.metadata",
-      ".cache/huggingface/download/special_tokens_map.json.metadata",
-      ".cache/huggingface/download/chat_template.json.lock",
-      ".cache/huggingface/download/preprocessor_config.json.lock",
-      ".cache/huggingface/download/tokenizer_config.json.lock",
-      ".cache/huggingface/download/added_tokens.json.metadata",
-      ".cache/huggingface/download/tokenizer.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.lock",
-      ".cache/huggingface/download/LICENSE.lock",
-      ".cache/huggingface/download/.gitattributes.lock",
-      ".cache/huggingface/download/merges.txt.metadata",
-      ".cache/huggingface/download/generation_config.json.metadata",
-      ".cache/huggingface/download/added_tokens.json.lock",
-      ".cache/huggingface/download/special_tokens_map.json.lock",
-      ".cache/huggingface/download/vocab.json.lock",
-      ".cache/huggingface/download/model.safetensors.index.json.metadata",
-      ".cache/huggingface/download/LICENSE.metadata",
-      ".cache/huggingface/download/config.json.metadata"
+      ".gitignore",
+      "generation_config.json.lock",
+      "model-00002-of-00002.safetensors.lock",
+      "tokenizer.json.metadata",
+      "model-00001-of-00002.safetensors.lock",
+      "chat_template.json.metadata",
+      "preprocessor_config.json.metadata",
+      ".gitattributes.metadata",
+      "config.json.lock",
+      "merges.txt.lock",
+      "model-00001-of-00002.safetensors.metadata",
+      "tokenizer_config.json.metadata",
+      "vocab.json.metadata",
+      "model-00002-of-00002.safetensors.metadata",
+      "special_tokens_map.json.metadata",
+      "chat_template.json.lock",
+      "preprocessor_config.json.lock",
+      "tokenizer_config.json.lock",
+      "added_tokens.json.metadata",
+      "tokenizer.json.lock",
+      "model.safetensors.index.json.lock",
+      "LICENSE.lock",
+      ".gitattributes.lock",
+      "merges.txt.metadata",
+      "generation_config.json.metadata",
+      "added_tokens.json.lock",
+      "special_tokens_map.json.lock",
+      "vocab.json.lock",
+      "model.safetensors.index.json.metadata",
+      "LICENSE.metadata",
+      "config.json.metadata"
     ],
     "download_directory_checksum": "d659ee647a141964",
-    "downloaded_at": "2025-10-13T20:27:14.219910+00:00",
-    "last_accessed": "2025-10-13T20:27:14.219910+00:00"
+    "downloaded_at": "2025-10-07T22:22:55.134329+00:00",
+    "last_accessed": "2025-10-07T22:22:55.134329+00:00"
   },
   {
-    "name": "qwen2.5-coder-7b-instruct_(GPTQ_INT8)",
-    "display_name": "qwen2.5-coder-7b-instruct (GPTQ INT8)",
+    "name": "qwen2.5-vl-7b-instruct-vllm-safetensors",
+    "display_name": "Qwen2.5 VL 7B Instruct (Safetensors, vLLM)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reasoning": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "eecd46bf2993893229293c93b0600d61a725f21b8051893937ff1c5dd30a9367",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "chat_template.json",
+          "sha256": "ad60d90252ed0b0705ba14e2d0ad0fec0beac1ea955642b54059b36052d8bc96"
+        },
+        {
+          "path": "config.json",
+          "sha256": "77d9ec7321cc572e3579e2c84799c9cadaded63c49ce93b101733349fc330c43"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "0a3aea82869fe29f20dc95ccf3e2bcff380eca1f5ad6447a4a4b37110b08e43e"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
+        },
+        {
+          "path": "model-00001-of-00005.safetensors",
+          "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e"
+        },
+        {
+          "path": "model-00002-of-00005.safetensors",
+          "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024"
+        },
+        {
+          "path": "model-00003-of-00005.safetensors",
+          "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507"
+        },
+        {
+          "path": "model-00004-of-00005.safetensors",
+          "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed"
+        },
+        {
+          "path": "model-00005-of-00005.safetensors",
+          "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "73b333b0b16e5286ddba615d2caebcd495cf7e616f52eb217a81781393d79de9"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "f2058c716eef96ccaed1cc1e2d0c08306b62586d535b28d9d08e691b2fab7ca0"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "4abd3520120e266da84c0864fee064d1fb10806f02225911a47253dd38dc5f56"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct/chat_template.json",
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "existing/Qwen2.5-VL-7B-Instruct"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "existing/Qwen2.5-VL-7B-Instruct"
+    },
+    "deprecated": false,
+    "family": "qwen2.5-vl-7b-instruct",
+    "source_provider": "hf",
+    "quantization": "bf16",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/existing/Qwen2.5-VL-7B-Instruct",
+    "download_size_bytes": 16595962707,
+    "download_files": [
+      "model-00003-of-00005.safetensors",
+      "preprocessor_config.json",
+      "model.safetensors.index.json",
+      ".gitattributes",
+      "model-00002-of-00005.safetensors",
+      "model-00004-of-00005.safetensors",
+      "generation_config.json",
+      "vocab.json",
+      "config.json",
+      "tokenizer.json",
+      "chat_template.json",
+      "model-00005-of-00005.safetensors",
+      "merges.txt",
+      "model-00001-of-00005.safetensors",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "1d783bb63d37d961",
+    "downloaded_at": "2025-10-07T22:22:42.544895+00:00",
+    "last_accessed": "2025-10-07T22:22:42.544895+00:00"
+  },
+  {
+    "name": "qwen2.5-coder-7b-instruct-gptq-int8-vllm-safetensors",
+    "display_name": "Qwen2.5 Coder 7B Instruct Gptq Int8 (Safetensors GPTQ, vLLM)",
     "backend": "vllm",
     "backend_config": {
       "port": 0,
@@ -693,19 +550,18 @@
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
       "thinking": false,
-      "reasoning": false,
-      "tools": true,
+      "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -713,23 +569,24 @@
       "embed": false,
       "text-embedding": false,
       "representation": false,
-      "tool_use": true,
-      "tool-use": true,
-      "tool_call": true,
-      "tool-call": true,
-      "toolcalls": true,
-      "tool_calls": true,
-      "toolchoice": true,
-      "tool_choice": true,
-      "function_call": true,
-      "function-call": true,
-      "function_calls": true,
-      "function_calling": true,
-      "function-calling": true,
-      "function_tools": true,
-      "functioncalling": true,
-      "toolcalling": true,
-      "auto_tool_choice": true,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reasoning": false,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -855,12 +712,12 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "0f75b70c214f12d7",
-    "downloaded_at": "2025-10-13T20:27:20.056168+00:00",
-    "last_accessed": "2025-10-13T20:27:20.056168+00:00"
+    "downloaded_at": "2025-10-07T22:23:01.173268+00:00",
+    "last_accessed": "2025-10-07T22:23:01.173268+00:00"
   },
   {
-    "name": "dialogpt-small",
-    "display_name": "dialogpt-small",
+    "name": "dialogpt-small-vllm-safetensors",
+    "display_name": "Dialogpt Small (Safetensors, vLLM)",
     "backend": "vllm",
     "backend_config": {
       "port": 0,
@@ -869,19 +726,18 @@
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
       "thinking": false,
-      "reasoning": false,
       "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -906,6 +762,7 @@
       "functioncalling": false,
       "toolcalling": false,
       "auto_tool_choice": false,
+      "reasoning": false,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -1011,12 +868,12 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "c93b7cf87af7ea9a",
-    "downloaded_at": "2025-10-13T20:27:25.317696+00:00",
-    "last_accessed": "2025-10-13T20:27:25.317696+00:00"
+    "downloaded_at": "2025-10-07T22:23:06.596391+00:00",
+    "last_accessed": "2025-10-07T22:23:06.596391+00:00"
   },
   {
-    "name": "gpt-oss-20b_(MXFP4)",
-    "display_name": "gpt-oss-20b (MXFP4)",
+    "name": "gpt-oss-20b-vllm-safetensors",
+    "display_name": "Gpt Oss 20B (Safetensors, vLLM)",
     "backend": "vllm",
     "backend_config": {
       "port": 0,
@@ -1025,19 +882,18 @@
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
       "thinking": false,
-      "reasoning": false,
       "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -1062,6 +918,7 @@
       "functioncalling": false,
       "toolcalling": false,
       "auto_tool_choice": false,
+      "reasoning": false,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -1181,15 +1038,15 @@
       "special_tokens_map.json",
       "tokenizer_config.json",
       "chat_template.jinja:Zone.Identifier",
-      "logs/vllm_server.log"
+      "vllm_server.log"
     ],
     "download_directory_checksum": "27f2a8598786b347",
-    "downloaded_at": "2025-10-13T20:27:25.732661+00:00",
-    "last_accessed": "2025-10-13T20:27:25.732661+00:00"
+    "downloaded_at": "2025-10-07T22:23:07.024368+00:00",
+    "last_accessed": "2025-10-07T22:23:07.024368+00:00"
   },
   {
-    "name": "codellama-13b-instruct_(AWQ)",
-    "display_name": "codellama-13b-instruct (AWQ)",
+    "name": "codellama-13b-instruct-awq-vllm-safetensors",
+    "display_name": "Codellama 13B Instruct AWQ (Safetensors AWQ, vLLM)",
     "backend": "vllm",
     "backend_config": {
       "port": 0,
@@ -1198,19 +1055,18 @@
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
       "thinking": false,
-      "reasoning": false,
       "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -1235,6 +1091,7 @@
       "functioncalling": false,
       "toolcalling": false,
       "auto_tool_choice": false,
+      "reasoning": false,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -1365,12 +1222,12 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "67ea387ef5cca9a4",
-    "downloaded_at": "2025-10-13T20:27:33.770118+00:00",
-    "last_accessed": "2025-10-13T20:27:33.770118+00:00"
+    "downloaded_at": "2025-10-07T22:23:17.469986+00:00",
+    "last_accessed": "2025-10-07T22:23:17.469986+00:00"
   },
   {
-    "name": "deepseek-coder-6.7b-instruct_(AWQ)",
-    "display_name": "deepseek-coder-6.7b-instruct (AWQ)",
+    "name": "deepseek-coder-6.7b-instruct-awq-vllm-safetensors",
+    "display_name": "Deepseek Coder 6.7b Instruct AWQ (Safetensors AWQ, vLLM)",
     "backend": "vllm",
     "backend_config": {
       "port": 0,
@@ -1379,19 +1236,18 @@
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
-      "thinking": true,
-      "reasoning": true,
-      "tools": true,
+      "thinking": false,
+      "tools": false,
       "language": true,
       "chat": true,
-      "visual": false,
-      "multimodal": false,
-      "mm": false,
-      "image": false,
-      "vl": false,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -1399,32 +1255,33 @@
       "embed": false,
       "text-embedding": false,
       "representation": false,
-      "tool_use": true,
-      "tool-use": true,
-      "tool_call": true,
-      "tool-call": true,
-      "toolcalls": true,
-      "tool_calls": true,
-      "toolchoice": true,
-      "tool_choice": true,
-      "function_call": true,
-      "function-call": true,
-      "function_calls": true,
-      "function_calling": true,
-      "function-calling": true,
-      "function_tools": true,
-      "functioncalling": true,
-      "toolcalling": true,
-      "auto_tool_choice": true,
-      "reason": true,
-      "think": true,
-      "chain_of_thought": true,
-      "cot": true,
-      "reasoner": true,
-      "o1": true,
-      "o3": true,
-      "r1": true,
-      "deepseek": true
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reasoning": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
     },
     "artifacts": {
       "aggregate_sha256": "70d8bdfcebc7c6b0b736d2249e27cc9f3cd97ffc9c35916ca4d6403e107a4ac7",
@@ -1526,8 +1383,179 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "64f0e9b29c11636f",
-    "downloaded_at": "2025-10-13T20:27:37.953539+00:00",
-    "last_accessed": "2025-10-13T20:27:37.953539+00:00"
+    "downloaded_at": "2025-10-07T22:23:21.622455+00:00",
+    "last_accessed": "2025-10-07T22:23:21.622455+00:00"
+  },
+  {
+    "name": "siglip-large-patch16-384-vllm-safetensors",
+    "display_name": "Siglip Large Patch16 384 (Safetensors, vLLM)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": true,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": true,
+      "text-embedding": true,
+      "representation": true,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "f819f2dbe5b5d366711d09e16cc0accc686d15a621082ccb21b2571e9546e92e",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "README.md",
+          "sha256": "771d019af5fc01f21ec91ad7fbc3e2d24d750bb1df3a1e1dd04f060cbd90cd9c"
+        },
+        {
+          "path": "config.json",
+          "sha256": "ddefe38fdfe333d5dbb7d56a247bdc6fe84dbcdb4eafd2f462e05e9b13c532bc"
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "ab804d2c2c631159f65afa1de27787c5dba90cbfa189f26404de1944d50a18a2"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "f59da2f87c3cd079bd4f8f3037e81b277c60c498e279a8020331f67a5a3157e8"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "2b6a1ff67a27e0df9ac0c7d93250fc0d87431c7b366b3d5669217104f9088a26"
+        },
+        {
+          "path": "spiece.model",
+          "sha256": "1e5036bed065526c3c212dfbe288752391797c4bb1a284aa18c9a0b23fcaf8ec"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "c6e405cb7c670d56636a9402c81023a55bc6c3c53d89cf02b92f5c5005bfe920"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "d6423dae508cc3a129d22ea443841c111832a1a73125b8f25ea8736951698bcb"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "readme_file": "README.md",
+      "readme_sha256": "771d019af5fc01f21ec91ad7fbc3e2d24d750bb1df3a1e1dd04f060cbd90cd9c",
+      "readme_signals": {
+        "license_hint": "apache-2.0"
+      },
+      "producer": "google",
+      "model_type": "zero-shot-image-classification",
+      "library": "transformers",
+      "files_downloaded": 9,
+      "verified_complete": true,
+      "has_chat_template": false,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [],
+      "embedded_chat_template_preview": null,
+      "branch": "main"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "google/siglip-large-patch16-384"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "google/siglip-large-patch16-384"
+    },
+    "deprecated": false,
+    "family": "siglip-large-patch16-384",
+    "source_provider": "hf",
+    "quantization": "fp32",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
+    "download_size_bytes": 2613215888,
+    "download_files": [
+      "preprocessor_config.json",
+      ".gitattributes",
+      "README.md",
+      "spiece.model",
+      "config.json",
+      "model.safetensors",
+      "tokenizer.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "0bc0136d63c7a51f",
+    "downloaded_at": "2025-10-08T10:43:54.485116+00:00",
+    "last_accessed": "2025-10-08T10:43:54.485116+00:00"
   },
   {
     "name": "qwen2.5-coder-7b-instruct_(Q4_K_M)",
@@ -1608,13 +1636,7 @@
       "last_sample": null
     },
     "probes": {
-      "vision": {
-        "vision_ok": true,
-        "timestamp": "2025-10-13T20:27:47.147124+00:00",
-        "probe_version": "1",
-        "latency_ms": 6668,
-        "notes": "auto-probe:ollama"
-      }
+      "vision": null
     },
     "profiles_placeholder": null,
     "metadata": {
@@ -1649,8 +1671,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:27:40.476574+00:00",
-    "last_accessed": "2025-10-13T20:27:40.476574+00:00"
+    "downloaded_at": "2025-10-13T10:57:36.845232+00:00",
+    "last_accessed": "2025-10-13T10:57:36.845232+00:00"
   },
   {
     "name": "deepseek-coder-6.7b-instruct_(Q4_0)",
@@ -1733,9 +1755,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-13T20:27:51.192984+00:00",
+        "timestamp": "2025-10-13T10:57:50.385390+00:00",
         "probe_version": "1",
-        "latency_ms": 4030,
+        "latency_ms": 7513,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1770,8 +1792,8 @@
     "download_size_bytes": 4080218931,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:27:47.160210+00:00",
-    "last_accessed": "2025-10-13T20:27:47.160210+00:00"
+    "downloaded_at": "2025-10-13T10:57:42.869267+00:00",
+    "last_accessed": "2025-10-13T10:57:42.869267+00:00"
   },
   {
     "name": "llava_7b_(Q4_0)",
@@ -1852,13 +1874,7 @@
       "last_sample": null
     },
     "probes": {
-      "vision": {
-        "vision_ok": true,
-        "timestamp": "2025-10-13T20:27:56.384811+00:00",
-        "probe_version": "1",
-        "latency_ms": 5174,
-        "notes": "auto-probe:ollama"
-      }
+      "vision": null
     },
     "profiles_placeholder": null,
     "metadata": {
@@ -1892,8 +1908,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:27:51.207613+00:00",
-    "last_accessed": "2025-10-13T20:27:51.207613+00:00"
+    "downloaded_at": "2025-10-13T10:57:50.397404+00:00",
+    "last_accessed": "2025-10-13T10:57:50.397404+00:00"
   },
   {
     "name": "seamon67-gemma3-abliterated_27b_(Q4_K_M)",
@@ -2008,8 +2024,8 @@
     "download_size_bytes": 18253611008,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:27:56.457531+00:00",
-    "last_accessed": "2025-10-13T20:27:56.457531+00:00"
+    "downloaded_at": "2025-10-13T10:57:56.477254+00:00",
+    "last_accessed": "2025-10-13T10:57:56.477254+00:00"
   },
   {
     "name": "qwen2.5vl_7b_(Q4_K_M)",
@@ -2124,8 +2140,8 @@
     "download_size_bytes": 6442450944,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:28:02.502579+00:00",
-    "last_accessed": "2025-10-13T20:28:02.502579+00:00"
+    "downloaded_at": "2025-10-13T10:58:02.520498+00:00",
+    "last_accessed": "2025-10-13T10:58:02.520498+00:00"
   },
   {
     "name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1_(Q6_K)",
@@ -2240,8 +2256,8 @@
     "download_size_bytes": 7086696038,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:28:08.549875+00:00",
-    "last_accessed": "2025-10-13T20:28:08.549875+00:00"
+    "downloaded_at": "2025-10-13T10:58:05.326214+00:00",
+    "last_accessed": "2025-10-13T10:58:05.326214+00:00"
   },
   {
     "name": "pixtral-local-latest_(Q4_K_M)",
@@ -2356,8 +2372,8 @@
     "download_size_bytes": 8912057139,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:28:14.589854+00:00",
-    "last_accessed": "2025-10-13T20:28:14.589854+00:00"
+    "downloaded_at": "2025-10-13T10:58:11.369471+00:00",
+    "last_accessed": "2025-10-13T10:58:11.369471+00:00"
   },
   {
     "name": "llama3.1-local-latest_(Q5_K_M)",
@@ -2431,7 +2447,7 @@
     "download_size_bytes": 6120328396,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-13T20:28:22.575287+00:00",
-    "last_accessed": "2025-10-13T20:28:22.575287+00:00"
+    "downloaded_at": "2025-10-13T10:58:19.306062+00:00",
+    "last_accessed": "2025-10-13T10:58:19.306062+00:00"
   }
 ]

@@ -6,10 +6,13 @@ services:
     container_name: imageworks-chat-proxy
     restart: unless-stopped
     environment:
-      - CHAT_PROXY_HOST=0.0.0.0
-      - CHAT_PROXY_PORT=8100
-      - CHAT_PROXY_SUPPRESS_DECORATIONS=1
-      - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+      CHAT_PROXY_AUTOSTART_ENABLED: "true"
+      CHAT_PROXY_AUTOSTART_MAP: |
+        {"qwen2.5-vl-7b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-vl-7b-instruct_(AWQ)"]}, "deepseek-coder-6.7b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "deepseek-coder-6.7b-instruct_(AWQ)"]}, "codellama-13b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "codellama-13b-instruct_(AWQ)"]}, "gpt-oss-20b_(MXFP4)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "gpt-oss-20b_(MXFP4)"]}, "dialogpt-small": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "dialogpt-small"]}, "qwen2.5-coder-7b-instruct_(GPTQ_INT8)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-coder-7b-instruct_(GPTQ_INT8)"]}, "qwen2.5-vl-7b-instruct_(BF16)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-vl-7b-instruct_(BF16)"]}, "siglip-large-patch16-384_(FP32)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "siglip-large-patch16-384_(FP32)"]}}
+      CHAT_PROXY_HOST: "0.0.0.0"
+      CHAT_PROXY_PORT: "8100"
+      CHAT_PROXY_SUPPRESS_DECORATIONS: "1"
+      CHAT_PROXY_INCLUDE_NON_INSTALLED: "0"
     ports:
       - "8100:8100"  # Host:Container
     healthcheck:

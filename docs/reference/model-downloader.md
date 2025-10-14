@@ -271,19 +271,123 @@ Normalization update:
 The importer now normalizes names by replacing `/` and spaces with `-`, collapsing repeated dashes, while preserving underscores inside quant tokens (e.g. `Q6_K` -> `q6_k`).
 
 ### Backfilling Legacy Ollama Entries (Option A)
-### Undeprecating / Normalizing Ollama Entries
+### `prune-duplicates`
 
-If earlier placeholder or partially imported Ollama entries are marked deprecated (and thus hidden) you can clear their deprecated flags and normalize synthetic paths:
+Removes stale duplicate variants keeping the richest metadata per (family, backend, format, quant).
+
+**Usage:**
 
 ```bash
-imageworks-download undeprecate-ollama --dry-run -v   # preview
-imageworks-download undeprecate-ollama -v            # apply
+imageworks-download prune-duplicates [OPTIONS]
 ```
 
-Behaviour:
-* Clears `deprecated` where `backend=ollama`
-* Normalizes `download_path` to `ollama://<served_model_id|name>` for consistency
-* Idempotent (re-running when clean produces no changes)
+**Options:**
+
+- `--dry-run`: Show what would be removed without writing.
+- `--verbose`, `-v`: Show detailed decisions.
+- `--backend TEXT`: Limit to backend (e.g. ollama).
+
+### `restore-ollama`
+
+Restores missing Ollama entries from the latest backup (or specified file).
+
+**Usage:**
+
+```bash
+imageworks-download restore-ollama [OPTIONS]
+```
+
+**Options:**
+
+- `--backup PATH`: Specific backup file to restore from (model_registry*.bak.json).
+- `--dry-run`: Show what would be restored.
+- `--include-deprecated`: Also restore entries that were deprecated in backup.
+
+### `reset-discovered`
+
+Removes discovered layer entries for a backend so they can be freshly re-imported.
+
+**Usage:**
+
+```bash
+imageworks-download reset-discovered [OPTIONS]
+```
+
+**Options:**
+
+- `--backend TEXT`: Backend to reset (e.g. ollama, vllm, all).
+- `--dry-run`: Show what would be removed.
+- `--backup / --no-backup`: Create a timestamped backup before modifying.
+
+### `purge-hf`
+
+Removes entries whose download_path is under the given weights root (default ~/ai-models/weights).
+
+**Usage:**
+
+```bash
+imageworks-download purge-hf [OPTIONS]
+```
+
+**Options:**
+
+- `--dry-run`: Show what would be removed without writing.
+- `--weights-root PATH`: Root path whose descendants are considered HF-sourced.
+- `--backend TEXT`: Optional backend filter (e.g. vllm).
+
+### `purge-logical-only`
+
+Removes logical-only entries (no download_path or synthetic ollama:// without installed data).
+
+**Usage:**
+
+```bash
+imageworks-download purge-logical-only [OPTIONS]
+```
+
+**Options:**
+
+- `--include-curated / --discovered-only`: Also remove curated logical-only entries.
+- `--backup / --no-backup`: Write timestamped backups of registry fragments.
+- `--dry-run / --apply`: Show what would be removed without writing.
+
+### `preview-simple-slugs`
+
+Previews simplified slug naming: `<family> <param_size>[-extra]` + quant.
+
+**Usage:**
+
+```bash
+imageworks-download preview-simple-slugs [OPTIONS]
+```
+
+**Options:**
+
+- `--include-ollama`: Include Ollama entries in the preview.
+- `--include-hf`: Include HF/vLLM entries in the preview.
+- `--json`: Emit JSON mapping.
+
+### `apply-simple-slugs`
+
+Applies the simplified slug naming scheme.
+
+**Usage:**
+
+```bash
+imageworks-download apply-simple-slugs [OPTIONS]
+```
+
+**Options:**
+
+- `--include-ollama`: Include Ollama entries when applying.
+- `--include-hf`: Include HF/vLLM entries when applying.
+- `--disambiguate TEXT`: Strategy to resolve collisions among identical proposed bases.
+- `--rename-slugs / --display-only`: Actually rename entry.name slugs; when off, only updates display_name.
+- `--allow-skip-on-collision / --no-skip-on-collision`: Skip colliding items that can't be disambiguated instead of failing.
+- `--dry-run / --apply`: Preview changes without writing (default).
+- `--backup / --no-backup`: Write timestamped backup before modifying.
+- `--json`: Emit JSON summary of changes.
+- `--tests-only`: Limit changes to testing/demo entries only (identified by testing filters).
 
 
 If you previously created logical Ollama entries (e.g. via manual edits or earlier imports) they may lack `download_path` and thus not appear in `imageworks-download list` (which enumerates entries with download metadata). Populate synthetic paths so they show up:
@@ -666,8 +770,16 @@ imageworks-download list [OPTIONS]
 Options:
   --format, -f TEXT      Filter by format
   --location, -l TEXT    Filter by location
+  --backend, -b TEXT     Filter by backend
+  --show-deprecated      Include deprecated entries in the listing
   --details, -d          Show detailed information
   --json                 Output in JSON format
+  --include-logical      Also include logical entries without download metadata
+  --dedupe               Condense rows by family/backend/format/quant (optional)
+  --show-internal-names  Include internal variant name column for debugging
+  --show-backend         Include backend column (hidden by default)
+  --show-installed       Include installed column (hidden by default)
+  --include-testing      Include testing/demo placeholder models (hidden by default)
 ```
 
 **Examples:**
@@ -711,9 +823,8 @@ Remove models from registry and optionally delete files.
 imageworks-download remove MODEL_NAME [OPTIONS]
 
 Options:
-  --format, -f TEXT      Specific format to remove
-  --location, -l TEXT    Specific location to remove from
   --delete-files         Also delete the model files from disk
+  --purge                Remove the entire entry instead of just clearing download metadata
   --force               Don't ask for confirmation
 ```
 
@@ -817,6 +928,27 @@ models = downloader.list_models(
     format_filter="awq",
     location_filter="linux_wsl"
 )
+```
+
+**`remove_model(model_name, **kwargs)`**
+Remove a model from the registry and optionally delete files.
+
+```python
+downloader.remove_model("my-model", delete_files=True)
+```
+
+**`verify_model(model_name)`**
+Verify the integrity of a downloaded model.
+
+```python
+is_valid = downloader.verify_model("my-model")
+```
+
+**`get_stats()`**
+Get download statistics.
+
+```python
+stats = downloader.get_stats()
 ```
 
 **Unified Removal / Purge (CLI)**

@@ -30,6 +30,7 @@ class ProxyConfig:
     stream_idle_timeout_ms: int = 60_000
     autostart_enabled: bool = False
     autostart_map_raw: Optional[str] = None
+    autostart_grace_period_s: int = 120
     require_template: bool = True
     max_image_bytes: int = 6_000_000
     disable_tool_normalization: bool = False
@@ -52,6 +53,9 @@ class ProxyConfig:
             ),
             autostart_enabled=_get_bool("CHAT_PROXY_AUTOSTART_ENABLED", False),
             autostart_map_raw=os.environ.get("CHAT_PROXY_AUTOSTART_MAP"),
+            autostart_grace_period_s=_get_int(
+                "CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S", 120
+            ),
             require_template=_get_bool("CHAT_PROXY_REQUIRE_TEMPLATE", True),
             max_image_bytes=_get_int("CHAT_PROXY_MAX_IMAGE_BYTES", 6_000_000),
             disable_tool_normalization=_get_bool(

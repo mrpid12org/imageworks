@@ -130,19 +130,21 @@ class ChatForwarder:
 
             reg = load_registry()
             resolved = None
-            for name, e in reg.items():
-                disp = e.display_name or e.name
-                if disp == model:
-                    resolved = name
-                    break
-                if e.quantization:
-                    legacy_disp = f"{disp}-{e.quantization}"
-                    if legacy_disp == model:
+            # Prioritize exact match on logical name first
+            if model in reg:
+                resolved = model
+            else:
+                # Fallback to iterating and checking display names
+                for name, e in reg.items():
+                    disp = e.display_name or e.name
+                    if disp == model:
                         resolved = name
                         break
-                if e.name == model:
-                    resolved = name
-                    break
+                    if e.quantization:
+                        legacy_disp = f"{disp}-{e.quantization}"
+                        if legacy_disp == model:
+                            resolved = name
+                            break
             if not resolved:
                 raise err_model_not_found(model)
             entry = get_entry(resolved)
@@ -205,7 +207,7 @@ class ChatForwarder:
             if self.cfg.autostart_enabled:
                 if await self.autostart.ensure_started(model):
                     # wait grace
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(self.cfg.autostart_grace_period_s)
                     if await self._probe(base_url):
                         started = True
                 if not started:

@@ -105,7 +105,7 @@ Importer: `scripts/import_ollama_models.py`
 - Fallback plaintext parser for older CLI output.
 - `served_model_id` retains colon-annotated identifier.
 - Synthetic path mapping if store not located.
-Backfill: `imageworks-download backfill-ollama-paths` populates `download_path` for previously logical-only entries.
+Backfill: `imageworks-loader rebuild-ollama` populates `download_path` for previously logical-only entries.
 
 ## 6. Hashing & Integrity
 In `hashing.py`:
