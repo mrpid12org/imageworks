@@ -106,13 +106,21 @@ def sync_downloader(
             new_entries.append(modified)
             updated += 1
         else:
-            # Create skeleton entry (requires manual backend completion later)
+            # Determine backend and port
+            backend = "vllm"
+            port = 8000
+            # If format is gguf or model_path looks like ollama, use ollama
+            if (fmt and fmt.lower() == "gguf") or (
+                model_path and model_path.startswith("ollama:")
+            ):
+                backend = "ollama"
+                port = 11434
             entry = RegistryEntry(
                 name=logical_name,
                 display_name=hf_id.split("/")[-1] if hf_id else logical_name,
-                backend="vllm",  # default guess; user can edit later
+                backend=backend,
                 backend_config=BackendConfig(
-                    port=0, model_path=model_path or "", extra_args=[]
+                    port=port, model_path=model_path or "", extra_args=[]
                 ),
                 capabilities={
                     "text": True,
