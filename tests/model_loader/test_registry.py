@@ -129,3 +129,57 @@ def test_select_ollama_backend(tmp_path: Path, monkeypatch):
     sel = select_model("qwen2.5-vl-7b-gguf-q4", require_capabilities=["vision"])
     assert sel.backend == "ollama"
     assert sel.endpoint_url.endswith(":11434/v1")
+
+
+def test_select_model_respects_host_override(tmp_path: Path, monkeypatch):
+    sample = [
+        {
+            "name": "custom-host",
+            "backend": "vllm",
+            "backend_config": {
+                "port": 8126,
+                "model_path": "/m",
+                "host": "host.docker.internal",
+            },
+            "capabilities": {"vision": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", None)
+    registry.load_registry(path, force=True)
+
+    sel = select_model("custom-host")
+    assert sel.endpoint_url.startswith("http://host.docker.internal:8126")
+
+
+def test_select_model_respects_base_url_override(tmp_path: Path, monkeypatch):
+    sample = [
+        {
+            "name": "custom-base",
+            "backend": "vllm",
+            "backend_config": {
+                "port": 0,
+                "model_path": "/m",
+                "base_url": "https://example.local/v1",
+            },
+            "capabilities": {"vision": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample))
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", None)
+    registry.load_registry(path, force=True)
+
+    sel = select_model("custom-base")
+    assert sel.endpoint_url == "https://example.local/v1"

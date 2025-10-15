@@ -136,6 +136,16 @@ def _download_identity(entry: RegistryEntry) -> Tuple[str, str, str] | None:
     return _build_download_identity(entry.backend, entry.download_path, checksum)
 
 
+def _clean_optional_str(value: object | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        text = str(value).strip()
+    except Exception:  # noqa: BLE001
+        return None
+    return text or None
+
+
 def _classify_legacy(raw_entries: list[dict]) -> tuple[list[dict], list[dict]]:
     """Split legacy unified entries into (curated, discovered) lists."""
     curated: list[dict] = []
@@ -368,6 +378,9 @@ def _parse_entry(raw: dict) -> RegistryEntry:
 
     raw_caps = raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
 
+    host_override = _clean_optional_str(backend_cfg.get("host"))
+    base_url_override = _clean_optional_str(backend_cfg.get("base_url"))
+
     entry = RegistryEntry(
         name=str(raw["name"]).strip(),
         display_name=str(raw.get("display_name") or raw.get("name") or "").strip()
@@ -377,6 +390,8 @@ def _parse_entry(raw: dict) -> RegistryEntry:
             port=int(backend_cfg.get("port", 0)),
             model_path=str(backend_cfg.get("model_path", "")),
             extra_args=list(backend_cfg.get("extra_args", []) or []),
+            host=host_override,
+            base_url=base_url_override,
         ),
         capabilities=normalize_capabilities(raw_caps),
         artifacts=Artifacts(
@@ -540,16 +555,27 @@ def find_by_download_identity(
     return None
 
 
+def _serialize_backend_config(cfg: BackendConfig) -> dict:
+    data = {
+        "port": cfg.port,
+        "model_path": cfg.model_path,
+        "extra_args": cfg.extra_args,
+    }
+    host = _clean_optional_str(getattr(cfg, "host", None))
+    if host:
+        data["host"] = host
+    base_url = _clean_optional_str(getattr(cfg, "base_url", None))
+    if base_url:
+        data["base_url"] = base_url
+    return data
+
+
 def _serialize_entry(entry: RegistryEntry) -> dict:
     return {
         "name": entry.name,
         "display_name": entry.display_name,
         "backend": entry.backend,
-        "backend_config": {
-            "port": entry.backend_config.port,
-            "model_path": entry.backend_config.model_path,
-            "extra_args": entry.backend_config.extra_args,
-        },
+        "backend_config": _serialize_backend_config(entry.backend_config),
         "capabilities": entry.capabilities,
         "artifacts": {
             "aggregate_sha256": entry.artifacts.aggregate_sha256,
