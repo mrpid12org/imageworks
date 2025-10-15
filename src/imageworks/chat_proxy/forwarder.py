@@ -257,18 +257,31 @@ class ChatForwarder:
                 )
 
                 async def event_gen() -> AsyncGenerator[bytes, None]:
+                    import logging
+
                     nonlocal first_token_at, collected_tokens, estimated
+                    logger = logging.getLogger("ollama-stream")
                     # If upstream is non-stream (image payload), do one-shot post and re-emit as SSE
                     if opayload.get("stream") is False:
+                        logger.info("[Ollama] Non-streaming POST to %s", url)
                         resp = await self.client.post(url, json=opayload)
+                        logger.info("[Ollama] Response status: %s", resp.status_code)
                         if resp.status_code >= 400:
+                            logger.error(
+                                "[Ollama] Backend unavailable: %s", resp.text[:200]
+                            )
                             raise err_backend_unavailable(model, hint=resp.text[:200])
                         try:
                             import json as _json
 
                             obj = resp.json()
-                        except Exception:
+                        except Exception as e:
                             txt = await resp.aread()
+                            logger.error(
+                                "[Ollama] Exception parsing JSON: %s, raw: %s",
+                                e,
+                                txt[:200],
+                            )
                             raise err_backend_unavailable(
                                 model, hint=txt.decode(errors="ignore")[:200]
                             )
@@ -290,22 +303,35 @@ class ChatForwarder:
                                 ],
                             }
                             out = _json.dumps(oai, ensure_ascii=False)
+                            logger.info(
+                                "[Ollama] Yielding non-stream chunk: %s", out[:200]
+                            )
                             yield f"data: {out}\n\n".encode()
                         # Terminate stream
+                        logger.info("[Ollama] Yielding [DONE] for non-stream")
                         yield b"data: [DONE]\n\n"
                         return
                     # Else stream upstream and convert
                     done = False
                     try:
+                        logger.info("[Ollama] Streaming POST to %s", url)
                         async with self.client.stream(
                             "POST", url, json=opayload
                         ) as resp:
+                            logger.info(
+                                "[Ollama] Streaming response status: %s",
+                                resp.status_code,
+                            )
                             if resp.status_code >= 400:
                                 data = await resp.aread()
+                                logger.error(
+                                    "[Ollama] Backend unavailable: %s", data[:200]
+                                )
                                 raise err_backend_unavailable(
                                     model, hint=data.decode(errors="ignore")[:200]
                                 )
                             async for line in resp.aiter_lines():
+                                logger.info("[Ollama] Got line: %r", line)
                                 if not line:
                                     continue
                                 # Accept both SSE 'data: <json>' and plain JSONL lines from Ollama
@@ -314,9 +340,11 @@ class ChatForwarder:
                                     if line.startswith("data:")
                                     else line.strip()
                                 )
+                                logger.info("[Ollama] Parsed raw: %r", raw)
                                 if not raw:
                                     continue
                                 if raw == "[DONE]":
+                                    logger.info("[Ollama] Yielding [DONE] from stream")
                                     yield b"data: [DONE]\n\n"
                                     done = True
                                     break
@@ -325,6 +353,9 @@ class ChatForwarder:
 
                                     obj = _json.loads(raw)
                                     if obj.get("done") is True:
+                                        logger.info(
+                                            "[Ollama] Yielding [DONE] from JSON chunk"
+                                        )
                                         yield b"data: [DONE]\n\n"
                                         done = True
                                         break
@@ -348,12 +379,28 @@ class ChatForwarder:
                                         ],
                                     }
                                     out = _json.dumps(oai, ensure_ascii=False)
+                                    logger.info(
+                                        "[Ollama] Yielding stream chunk: %s", out[:200]
+                                    )
                                     yield f"data: {out}\n\n".encode()
-                                except Exception:
+                                except Exception as e:
+                                    logger.error(
+                                        "[Ollama] Exception parsing stream chunk: %s, raw: %r",
+                                        e,
+                                        raw,
+                                    )
                                     # Unknown data; pass through as generic SSE data
                                     yield f"data: {raw}\n\n".encode()
+                    except Exception as e:
+                        logger.error(
+                            "[Ollama] Exception in streaming block: %s",
+                            e,
+                            exc_info=True,
+                        )
+                        raise
                     finally:
                         if not done:
+                            logger.info("[Ollama] Forcing [DONE] at stream end")
                             # Ensure well-formed termination for clients expecting a final marker
                             yield b"data: [DONE]\n\n"
 

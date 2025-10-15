@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import time
-import inspect
-
+import logging
 import os
+import inspect
+import time
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-
 from .config import ProxyConfig
 from .metrics import MetricsAggregator
 from .autostart import AutostartManager
@@ -18,6 +17,8 @@ from .errors import ProxyError
 from ..model_loader.registry import load_registry, list_models, get_entry
 from ..model_loader.testing_filters import is_testing_entry
 
+logging.basicConfig(level=logging.INFO)
+
 
 _cfg = ProxyConfig.load()
 _metrics = MetricsAggregator()
@@ -25,7 +26,23 @@ _autostart = AutostartManager(_cfg.autostart_map_raw)
 _logger = JsonlLogger(_cfg.log_path, _cfg.max_log_bytes)
 _forwarder = ChatForwarder(_cfg, _metrics, _autostart, _logger)
 
+
 app = FastAPI(title="ImageWorks Chat Proxy", version="0.1")
+
+
+# Temporary debug endpoint to dump the in-memory registry
+@app.get("/v1/debug/registry")
+async def debug_registry():
+    from ..model_loader.registry import _REGISTRY_CACHE, load_registry
+
+    if _REGISTRY_CACHE is None:
+        load_registry()
+    # Only return name and display_name for brevity
+    out = {
+        k: {"display_name": getattr(v, "display_name", None)}
+        for k, v in _REGISTRY_CACHE.items()
+    }
+    return JSONResponse(content=out)
 
 
 # Track registry file modification time to auto-reload on change
@@ -92,8 +109,12 @@ async def list_models_api():
     }
     seen_display_ids: set[str] = set()
 
+    logging.info("[DEBUG] All model names and display_names in registry:")
     for name in list_models():
         entry = get_entry(name)
+        logging.info(
+            f"[DEBUG] {name} | display_name={getattr(entry, 'display_name', None)}"
+        )
         if getattr(entry, "deprecated", False):
             continue
         if not include_testing and is_testing_entry(name, entry):

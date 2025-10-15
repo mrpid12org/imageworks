@@ -21,3 +21,4 @@ services:
       - ./src:/app/src:ro
       - ./_staging:/app/_staging
     command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    network_mode: host

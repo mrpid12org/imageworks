@@ -152,8 +152,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "0bc0136d63c7a51f",
-    "downloaded_at": "2025-10-15T14:04:51.302407+00:00",
-    "last_accessed": "2025-10-15T14:04:51.302407+00:00"
+    "downloaded_at": "2025-10-13T20:26:57.125277+00:00",
+    "last_accessed": "2025-10-13T20:26:57.125277+00:00"
   },
   {
     "name": "qwen2.5-vl-7b-instruct_(BF16)",
@@ -338,8 +338,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "1d783bb63d37d961",
-    "downloaded_at": "2025-10-15T14:04:53.385317+00:00",
-    "last_accessed": "2025-10-15T14:04:53.385317+00:00"
+    "downloaded_at": "2025-10-13T20:26:59.047947+00:00",
+    "last_accessed": "2025-10-13T20:26:59.047947+00:00"
   },
   {
     "name": "qwen2.5-vl-7b-instruct_(AWQ)",
@@ -679,8 +679,8 @@
       ".cache/huggingface/download/config.json.metadata"
     ],
     "download_directory_checksum": "d659ee647a141964",
-    "downloaded_at": "2025-10-15T14:05:07.640186+00:00",
-    "last_accessed": "2025-10-15T14:05:07.640186+00:00"
+    "downloaded_at": "2025-10-13T20:27:14.219910+00:00",
+    "last_accessed": "2025-10-13T20:27:14.219910+00:00"
   },
   {
     "name": "qwen2.5-coder-7b-instruct_(GPTQ_INT8)",
@@ -855,8 +855,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "0f75b70c214f12d7",
-    "downloaded_at": "2025-10-15T14:05:13.582593+00:00",
-    "last_accessed": "2025-10-15T14:05:13.582593+00:00"
+    "downloaded_at": "2025-10-13T20:27:20.056168+00:00",
+    "last_accessed": "2025-10-13T20:27:20.056168+00:00"
   },
   {
     "name": "dialogpt-small",
@@ -1011,8 +1011,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "c93b7cf87af7ea9a",
-    "downloaded_at": "2025-10-15T14:05:18.375438+00:00",
-    "last_accessed": "2025-10-15T14:05:18.375438+00:00"
+    "downloaded_at": "2025-10-13T20:27:25.317696+00:00",
+    "last_accessed": "2025-10-13T20:27:25.317696+00:00"
   },
   {
     "name": "gpt-oss-20b_(MXFP4)",
@@ -1184,8 +1184,8 @@
       "logs/vllm_server.log"
     ],
     "download_directory_checksum": "27f2a8598786b347",
-    "downloaded_at": "2025-10-15T14:05:18.857009+00:00",
-    "last_accessed": "2025-10-15T14:05:18.857009+00:00"
+    "downloaded_at": "2025-10-13T20:27:25.732661+00:00",
+    "last_accessed": "2025-10-13T20:27:25.732661+00:00"
   },
   {
     "name": "codellama-13b-instruct_(AWQ)",
@@ -1365,8 +1365,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "67ea387ef5cca9a4",
-    "downloaded_at": "2025-10-15T14:05:28.005167+00:00",
-    "last_accessed": "2025-10-15T14:05:28.005167+00:00"
+    "downloaded_at": "2025-10-13T20:27:33.770118+00:00",
+    "last_accessed": "2025-10-13T20:27:33.770118+00:00"
   },
   {
     "name": "deepseek-coder-6.7b-instruct_(AWQ)",
@@ -1526,8 +1526,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "64f0e9b29c11636f",
-    "downloaded_at": "2025-10-15T14:05:32.661969+00:00",
-    "last_accessed": "2025-10-15T14:05:32.661969+00:00"
+    "downloaded_at": "2025-10-13T20:27:37.953539+00:00",
+    "last_accessed": "2025-10-13T20:27:37.953539+00:00"
   },
   {
     "name": "qwen2.5-coder-7b-instruct_(Q4_K_M)",
@@ -1610,9 +1610,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-15T14:05:41.263028+00:00",
+        "timestamp": "2025-10-13T20:27:47.147124+00:00",
         "probe_version": "1",
-        "latency_ms": 5727,
+        "latency_ms": 6668,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1649,8 +1649,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:05:35.533071+00:00",
-    "last_accessed": "2025-10-15T14:05:35.533071+00:00"
+    "downloaded_at": "2025-10-13T20:27:40.476574+00:00",
+    "last_accessed": "2025-10-13T20:27:40.476574+00:00"
   },
   {
     "name": "deepseek-coder-6.7b-instruct_(Q4_0)",
@@ -1733,9 +1733,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-15T14:05:44.817203+00:00",
+        "timestamp": "2025-10-13T20:27:51.192984+00:00",
         "probe_version": "1",
-        "latency_ms": 3538,
+        "latency_ms": 4030,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1770,8 +1770,8 @@
     "download_size_bytes": 4080218931,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:05:41.277058+00:00",
-    "last_accessed": "2025-10-15T14:05:41.277058+00:00"
+    "downloaded_at": "2025-10-13T20:27:47.160210+00:00",
+    "last_accessed": "2025-10-13T20:27:47.160210+00:00"
   },
   {
     "name": "llava_7b_(Q4_0)",
@@ -1854,9 +1854,9 @@
     "probes": {
       "vision": {
         "vision_ok": true,
-        "timestamp": "2025-10-15T14:05:50.675915+00:00",
+        "timestamp": "2025-10-13T20:27:56.384811+00:00",
         "probe_version": "1",
-        "latency_ms": 5843,
+        "latency_ms": 5174,
         "notes": "auto-probe:ollama"
       }
     },
@@ -1892,8 +1892,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:05:44.830009+00:00",
-    "last_accessed": "2025-10-15T14:05:44.830009+00:00"
+    "downloaded_at": "2025-10-13T20:27:51.207613+00:00",
+    "last_accessed": "2025-10-13T20:27:51.207613+00:00"
   },
   {
     "name": "seamon67-gemma3-abliterated_27b_(Q4_K_M)",
@@ -2008,8 +2008,8 @@
     "download_size_bytes": 18253611008,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:05:50.753267+00:00",
-    "last_accessed": "2025-10-15T14:05:50.753267+00:00"
+    "downloaded_at": "2025-10-13T20:27:56.457531+00:00",
+    "last_accessed": "2025-10-13T20:27:56.457531+00:00"
   },
   {
     "name": "qwen2.5vl_7b_(Q4_K_M)",
@@ -2124,8 +2124,8 @@
     "download_size_bytes": 6442450944,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:05:56.799172+00:00",
-    "last_accessed": "2025-10-15T14:05:56.799172+00:00"
+    "downloaded_at": "2025-10-13T20:28:02.502579+00:00",
+    "last_accessed": "2025-10-13T20:28:02.502579+00:00"
   },
   {
     "name": "hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1_(Q6_K)",
@@ -2240,8 +2240,8 @@
     "download_size_bytes": 7086696038,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:06:02.853387+00:00",
-    "last_accessed": "2025-10-15T14:06:02.853387+00:00"
+    "downloaded_at": "2025-10-13T20:28:08.549875+00:00",
+    "last_accessed": "2025-10-13T20:28:08.549875+00:00"
   },
   {
     "name": "pixtral-local-latest_(Q4_K_M)",
@@ -2356,8 +2356,8 @@
     "download_size_bytes": 8912057139,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:06:08.899657+00:00",
-    "last_accessed": "2025-10-15T14:06:08.899657+00:00"
+    "downloaded_at": "2025-10-13T20:28:14.589854+00:00",
+    "last_accessed": "2025-10-13T20:28:14.589854+00:00"
   },
   {
     "name": "llama3.1-local-latest_(Q5_K_M)",
@@ -2375,7 +2375,47 @@
       "audio": false,
       "thinking": false,
       "reasoning": false,
-      "tools": false
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
     },
     "artifacts": {
       "aggregate_sha256": "",
@@ -2431,7 +2471,709 @@
     "download_size_bytes": 6120328396,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-15T14:06:14.037396+00:00",
-    "last_accessed": "2025-10-15T14:06:14.037396+00:00"
+    "downloaded_at": "2025-10-13T20:28:22.575287+00:00",
+    "last_accessed": "2025-10-13T20:28:22.575287+00:00"
+  },
+  {
+    "name": "synthetic-test-ollama-gguf",
+    "display_name": "siglip-large-patch16-384 (FP32)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": true,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": true,
+      "text-embedding": true,
+      "representation": true,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "f819f2dbe5b5d366711d09e16cc0accc686d15a621082ccb21b2571e9546e92e",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "README.md",
+          "sha256": "771d019af5fc01f21ec91ad7fbc3e2d24d750bb1df3a1e1dd04f060cbd90cd9c"
+        },
+        {
+          "path": "config.json",
+          "sha256": "ddefe38fdfe333d5dbb7d56a247bdc6fe84dbcdb4eafd2f462e05e9b13c532bc"
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "ab804d2c2c631159f65afa1de27787c5dba90cbfa189f26404de1944d50a18a2"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "f59da2f87c3cd079bd4f8f3037e81b277c60c498e279a8020331f67a5a3157e8"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "2b6a1ff67a27e0df9ac0c7d93250fc0d87431c7b366b3d5669217104f9088a26"
+        },
+        {
+          "path": "spiece.model",
+          "sha256": "1e5036bed065526c3c212dfbe288752391797c4bb1a284aa18c9a0b23fcaf8ec"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "c6e405cb7c670d56636a9402c81023a55bc6c3c53d89cf02b92f5c5005bfe920"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "d6423dae508cc3a129d22ea443841c111832a1a73125b8f25ea8736951698bcb"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "google/siglip-large-patch16-384"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "google/siglip-large-patch16-384"
+    },
+    "deprecated": false,
+    "family": "siglip-large-patch16-384",
+    "source_provider": "hf",
+    "quantization": "fp32",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama://None",
+    "download_size_bytes": 2613215888,
+    "download_files": [
+      "preprocessor_config.json",
+      ".gitattributes",
+      "README.md",
+      "spiece.model",
+      "config.json",
+      "model.safetensors",
+      "tokenizer.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "0bc0136d63c7a51f",
+    "downloaded_at": "2025-10-13T20:26:57.125277+00:00",
+    "last_accessed": "2025-10-13T20:26:57.125277+00:00"
+  },
+  {
+    "name": "r",
+    "display_name": "r",
+    "backend": "unassigned",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-0/test_template_promotion_and_ha0/modelA",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "c9bfdd07805d3b893873ad9be99c4e99dbdec5253942b4811a11b54d9577df64",
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+        },
+        {
+          "path": "config.json",
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/tmp/pytest-of-stewa/pytest-0/test_template_promotion_and_ha0/modelA/chat_template.jinja",
+      "sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "producer": "o",
+      "model_type": "causal",
+      "library": "transformers",
+      "files_downloaded": 0,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [
+        "chat_template.jinja"
+      ],
+      "embedded_chat_template_preview": null,
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "286302cde0ada789a80544b160fb9b43fb307cbb6e0cac1f0cb0fbe90e3db127"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "o/r"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "o/r"
+    },
+    "deprecated": false,
+    "family": "r",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "custom",
+    "download_path": "/tmp/pytest-of-stewa/pytest-0/test_template_promotion_and_ha0/modelA",
+    "download_size_bytes": 0,
+    "download_files": [],
+    "download_directory_checksum": "ed5744268598fdc0",
+    "downloaded_at": "2025-10-15T13:18:13.473683+00:00",
+    "last_accessed": "2025-10-15T13:18:13.473683+00:00"
+  },
+  {
+    "name": "custom-family-x",
+    "display_name": "custom-family-x",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-0/test_family_override_and_serve0/dummy",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "bd44021af3dbd31be052ecd5ee335815423cc266ae67dd047a8fa2bc1c77b082",
+      "files": [
+        {
+          "path": "weights.bin",
+          "sha256": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "original:name:tag",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "custom-family-x",
+    "source_provider": "ollama",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/pytest-of-stewa/pytest-0/test_family_override_and_serve0/dummy",
+    "download_size_bytes": 3,
+    "download_files": [
+      "weights.bin"
+    ],
+    "download_directory_checksum": "7bab2dcff2fa110a",
+    "downloaded_at": "2025-10-15T13:18:13.490446+00:00",
+    "last_accessed": "2025-10-15T13:18:13.490446+00:00"
+  },
+  {
+    "name": "mini-test-latest",
+    "display_name": "mini-test-latest",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "ollama:/mini-test:latest",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_family": null,
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": null,
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": null,
+      "ollama_license": null
+    },
+    "served_model_id": "mini-test:latest",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "mini-test-latest",
+    "source_provider": "ollama",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/mini-test:latest",
+    "download_size_bytes": 1024,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-15T13:18:14.049870+00:00",
+    "last_accessed": "2025-10-15T13:18:14.049870+00:00"
+  },
+  {
+    "name": "testmodel_(Q4_K)",
+    "display_name": "testmodel (Q4 K)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 0,
+      "model_path": "ollama:/testmodel:Q4_K",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_family": null,
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": null,
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": null,
+      "ollama_license": null
+    },
+    "served_model_id": "testmodel:Q4_K",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "testmodel",
+    "source_provider": "ollama",
+    "quantization": "q4_k",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/testmodel:Q4_K",
+    "download_size_bytes": 2048,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-15T13:18:14.058540+00:00",
+    "last_accessed": "2025-10-15T13:18:14.058540+00:00"
+  },
+  {
+    "name": "model",
+    "display_name": "model",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 0,
+      "model_path": "/tmp/pytest-of-stewa/pytest-0/test_scan_skip_testing_placeho0/owner/model-awq",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false
+    },
+    "artifacts": {
+      "aggregate_sha256": "30805b96d0ff6f5894e9e61e1327d421d4e68048e8ae26b624a5bf704fb5efbb",
+      "files": [
+        {
+          "path": "weights.gguf",
+          "sha256": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": null,
+    "model_aliases": [
+      "owner/model-awq"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "owner/model-awq"
+    },
+    "deprecated": false,
+    "family": "model-awq",
+    "source_provider": "hf",
+    "quantization": null,
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "/tmp/pytest-of-stewa/pytest-0/test_scan_skip_testing_placeho0/owner/model-awq",
+    "download_size_bytes": 3,
+    "download_files": [
+      "weights.gguf"
+    ],
+    "download_directory_checksum": "6617ef3ffb9fd854",
+    "downloaded_at": "2025-10-15T13:18:14.068082+00:00",
+    "last_accessed": "2025-10-15T13:18:14.068082+00:00"
   }
 ]

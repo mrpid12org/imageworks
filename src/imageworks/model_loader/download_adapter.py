@@ -393,21 +393,24 @@ def record_download(
             for k, v in extra_metadata.items():
                 if v is not None and k not in entry.metadata:
                     entry.metadata[k] = v
-        # Prefer simplified naming for display if available
-        try:
-            from .simplified_naming import simplified_display_for_fields as _simple_disp
+        # Only set display_name if not already set (curated) or if explicitly requested
+        if not getattr(entry, "display_name", None):
+            try:
+                from .simplified_naming import (
+                    simplified_display_for_fields as _simple_disp,
+                )
 
-            entry.display_name = _simple_disp(
-                family=family,
-                backend=backend,
-                format_type=format_type,
-                quantization=quantization,
-                metadata=entry.metadata,
-                download_path=str(p),
-                served_model_id=served_model_id,
-            )
-        except Exception:
-            entry.display_name = identity.display_name
+                entry.display_name = _simple_disp(
+                    family=family,
+                    backend=backend,
+                    format_type=format_type,
+                    quantization=quantization,
+                    metadata=entry.metadata,
+                    download_path=str(p),
+                    served_model_id=served_model_id,
+                )
+            except Exception:
+                entry.display_name = identity.display_name
         entry.family = family
         if hf_id:
             aliases = entry.model_aliases or []
