@@ -109,22 +109,13 @@ async def list_models_api():
         ):
             # Hide entries that neither have local weights nor a configured backend when strict mode is on.
             continue
-        # Use simplified naming for UI display
-        try:
-            from ..model_loader.simplified_naming import (
-                simplified_display_for_entry as _simple_disp,
-            )
-
-            display = _simple_disp(entry)
-        except Exception:
-            display = entry.display_name or entry.name or ""
-        # When suppress_decorations is enabled, prefer a plain display-id without extra hints
+        # Use registry display_name for UI display
+        display = entry.display_name or entry.name or ""
         if _cfg.suppress_decorations:
             display_id = display
         else:
             display_id = display or entry.name
         if display_id in seen_display_ids:
-            # fall back to logical slug if friendly label collides
             display_id = entry.name
         if display_id in seen_display_ids:
             display_id = f"{entry.name}-{entry.backend}"

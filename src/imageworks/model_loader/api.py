@@ -60,13 +60,8 @@ async def api_list_models():
     result: List[ModelSummary] = []
     for name in list_models():
         entry = get_entry(name)
-        # Prefer simplified naming for API consumers (optional field)
-        try:
-            from .simplified_naming import simplified_display_for_entry as _simple_disp
-
-            disp = _simple_disp(entry)
-        except Exception:
-            disp = entry.display_name or entry.name
+        # Use registry display_name for API consumers
+        disp = entry.display_name or entry.name
         result.append(
             ModelSummary(
                 name=name,

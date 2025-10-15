@@ -129,10 +129,8 @@ class ChatForwarder:
         except KeyError:
             # Attempt to resolve by display id -> logical id
             from ..model_loader.registry import load_registry
-            from ..model_loader.simplified_naming import (
-                simplified_display_for_entry as _simple_disp,
-                simplified_slug_for_entry as _simple_slug,
-            )
+
+            # No need to import simplified_display_for_entry for display name resolution
 
             reg = load_registry()
             resolved = None
@@ -147,11 +145,7 @@ class ChatForwarder:
                     disp = getattr(e, "display_name", None) or getattr(e, "name", None)
                     if disp:
                         candidates.add(str(disp))
-                    try:
-                        candidates.add(_simple_disp(e))
-                        candidates.add(_simple_slug(e))
-                    except Exception:  # noqa: BLE001
-                        pass
+                    # Do not use simplified display/slug; only use display_name, name, and quant forms
                     quant = getattr(e, "quantization", None)
                     if disp and quant:
                         q_label = str(quant).replace("_", " ").replace("-", " ").upper()
@@ -549,6 +543,8 @@ class ChatForwarder:
                 estimated_counts=estimated,
             )
         )
+
+
 def _normalize_label(label: Any) -> str:
     """Return a canonical lowercase token for matching model aliases."""
 
@@ -558,4 +554,3 @@ def _normalize_label(label: Any) -> str:
     if not text:
         return ""
     return re.sub(r"[^a-z0-9]+", "", text)
-

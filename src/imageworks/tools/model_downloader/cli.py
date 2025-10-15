@@ -188,15 +188,8 @@ def download_model(
             force_redownload=force,
             interactive=not non_interactive,
         )
-        # Prefer simplified naming for user-facing confirmation
-        try:
-            from imageworks.model_loader.simplified_naming import (
-                simplified_display_for_entry as _simple_disp,
-            )
-
-            display_name = _simple_disp(entry)
-        except Exception:
-            display_name = entry.display_name or entry.name
+        # Use registry display_name for user-facing confirmation
+        display_name = entry.display_name or entry.name
         rprint(f"✅ [green]Successfully downloaded:[/green] {display_name}")
         if entry.download_path:
             rprint(f"   📁 Files stored at: {entry.download_path}")
@@ -638,26 +631,14 @@ def list_models(
                 return "-"
             return str(value).replace("_", " ").replace("-", " ").upper()
 
-        # Simplified naming for display
-        try:
-            from imageworks.model_loader.simplified_naming import (
-                simplified_display_for_entry as _simple_disp,
-            )
-        except Exception:
-            _simple_disp = None  # type: ignore
-
         for e in entries:
             installed = bool(
                 e.download_path and Path(e.download_path).expanduser().exists()
             )
             if not installed and e.backend == "ollama":
                 installed = True
-            # Use simplified naming by default; fall back to stored display/name
-            display = (
-                (_simple_disp(e) if _simple_disp else None)
-                or getattr(e, "display_name", None)
-                or e.name
-            )
+            # Use registry display_name by default; fall back to name
+            display = getattr(e, "display_name", None) or e.name
             fmt_display = _format_label(getattr(e, "download_format", None))
             quant_display = _format_quant(getattr(e, "quantization", None))
             backend_display = e.backend
