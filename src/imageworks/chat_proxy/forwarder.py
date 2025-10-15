@@ -118,6 +118,48 @@ class ChatForwarder:
                             total = max(total, 1)
         return has, total
 
+    def _resolve_backend_base(self, entry) -> tuple[str, str]:
+        cfg = getattr(entry, "backend_config", None)
+        base_override_raw = getattr(cfg, "base_url", None) if cfg else None
+        base_override = None
+        if isinstance(base_override_raw, str):
+            stripped = base_override_raw.strip()
+            if stripped:
+                base_override = stripped.rstrip("/")
+        host_raw = getattr(cfg, "host", None) if cfg else None
+        host_override: str | None = None
+        if isinstance(host_raw, str):
+            stripped_host = host_raw.strip()
+            if stripped_host:
+                host_override = stripped_host
+        default_port = 8000
+        if getattr(entry, "backend", "") == "ollama":
+            default_port = 11434
+        elif getattr(entry, "backend", "") == "lmdeploy":
+            default_port = 24001
+        elif getattr(entry, "backend", "") == "triton":
+            default_port = 9000
+        port = getattr(cfg, "port", None) if cfg else None
+        if not isinstance(port, int) or port <= 0:
+            port = default_port
+
+        backend = getattr(entry, "backend", "")
+
+        if base_override:
+            base_url = base_override
+        elif host_override and host_override.startswith(("http://", "https://")):
+            base_url = host_override.rstrip("/")
+        else:
+            host = host_override or "127.0.0.1"
+            if backend == "ollama":
+                base_url = f"http://{host}:{port}"
+            else:
+                base_url = f"http://{host}:{port}/v1"
+
+        base_url = base_url.rstrip("/")
+        api_path = "/api/chat" if backend == "ollama" else "/chat/completions"
+        return base_url, api_path
+
     async def handle_chat(self, payload: dict) -> Dict[str, Any]:
         requested_model = payload.get("model")
         if not requested_model:
@@ -191,22 +233,8 @@ class ChatForwarder:
             served = None
         backend_id = served or entry.name
         # Backend-specific base URL and API path
-        if entry.backend == "ollama":
-            port = entry.backend_config.port or 11434
-            # Prefer IPv4 loopback to avoid ::1 vs 0.0.0.0 mismatch
-            base_url = f"http://127.0.0.1:{port}"
-            api_path = "/api/chat"
-        else:
-            # Sensible defaults if port not set in registry
-            default_port = 8000
-            if entry.backend == "lmdeploy":
-                default_port = 24001
-            elif entry.backend == "triton":
-                default_port = 9000
-            port = entry.backend_config.port or default_port
-            # Prefer IPv4 loopback to avoid ::1 vs 0.0.0.0 mismatch
-            base_url = f"http://127.0.0.1:{port}/v1"
-            api_path = "/chat/completions"
+        base_url, api_path = self._resolve_backend_base(entry)
+        if entry.backend != "ollama":
             # For OpenAI-compatible backends (vLLM, LMDeploy, Triton), the upstream expects the
             # concrete served model name, which may differ from our logical model id. Rewrite the
             # outgoing payload's model to the backend_id we computed above.

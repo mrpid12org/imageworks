@@ -114,6 +114,8 @@ class BackendConfig:
     port: int
     model_path: str
     extra_args: List[str] = field(default_factory=list)
+    host: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 @dataclass

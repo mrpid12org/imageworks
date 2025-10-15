@@ -114,6 +114,31 @@ PY
 - **Scaling Requests** – Tune `--max-num-seqs` and `max_concurrent_requests` (client-side) to balance throughput and latency.
 - **Upgrades** – Validate new vLLM releases in a separate environment; compatibility across minor versions is good but not guaranteed.
 
+### Networking from Docker / WSL
+
+When the chat proxy runs inside Docker (bridge network) or WSL2, loopback addresses inside the container do **not** refer to the
+host operating system. Configure the registry entry for vLLM (and other OpenAI-compatible backends) with an explicit
+`backend_config.host` or `backend_config.base_url` so the proxy can reach the server:
+
+```json
+{
+  "name": "qwen2.5-vl-7b-instruct_(BF16)",
+  "backend": "vllm",
+  "backend_config": {
+    "host": "host.docker.internal",
+    "port": 8000,
+    "base_url": "http://host.docker.internal:8000/v1"
+  },
+  "served_model_id": "qwen2.5-vl-7b-instruct"
+}
+```
+
+- Use `host.docker.internal` for Windows/macOS Docker Desktop and recent WSL2 builds. For Linux hosts, substitute the actual LAN
+  address or the gateway IP advertised by Docker (`ip route | grep default`).
+- `backend_config.host` is sufficient for on-host deployments (the proxy will append `/v1`). Specify `base_url` only when the
+  backend is exposed behind an alternate path or TLS terminator.
+- Ollama continues to default to `http://127.0.0.1:11434`; override `host` if the daemon is bound elsewhere.
+
 ## Troubleshooting
 
 | Symptom | Diagnosis | Mitigation |

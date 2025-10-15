@@ -15,6 +15,47 @@ class CapabilityError(RuntimeError):
     pass
 
 
+def _resolve_endpoint(entry) -> str:
+    cfg = getattr(entry, "backend_config", None)
+    base_override = None
+    if cfg is not None:
+        raw_base = getattr(cfg, "base_url", None)
+        if isinstance(raw_base, str):
+            stripped = raw_base.strip()
+            if stripped:
+                base_override = stripped.rstrip("/")
+    host_override = None
+    if cfg is not None:
+        raw_host = getattr(cfg, "host", None)
+        if isinstance(raw_host, str):
+            stripped_host = raw_host.strip()
+            if stripped_host:
+                host_override = stripped_host
+
+    backend = getattr(entry, "backend", "")
+    default_port = 8000
+    if backend == "ollama":
+        default_port = 11434
+    elif backend == "lmdeploy":
+        default_port = 24001
+    elif backend == "triton":
+        default_port = 9000
+
+    port = getattr(cfg, "port", None) if cfg is not None else None
+    if not isinstance(port, int) or port <= 0:
+        port = default_port
+
+    if base_override:
+        endpoint = base_override
+    elif host_override and host_override.startswith(("http://", "https://")):
+        endpoint = host_override.rstrip("/")
+    else:
+        host = host_override or "localhost"
+        endpoint = f"http://{host}:{port}/v1"
+
+    return endpoint.rstrip("/")
+
+
 def select_model(
     name: str, *, require_capabilities: Optional[List[str]] = None
 ) -> SelectedModel:
@@ -36,10 +77,7 @@ def select_model(
 
     # Endpoint synthesis differs slightly by backend; for now vllm/lmdeploy/ollama all expose OpenAI-compatible /v1.
     # Future backends could branch here if they require a proxy path.
-    if entry.backend in {"vllm", "lmdeploy", "ollama"}:
-        endpoint = f"http://localhost:{entry.backend_config.port}/v1"
-    else:
-        endpoint = f"http://localhost:{entry.backend_config.port}/v1"
+    endpoint = _resolve_endpoint(entry)
 
     logger.info(
         "model_select",

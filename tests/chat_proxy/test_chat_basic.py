@@ -225,5 +225,138 @@ def test_chat_autostart_uses_resolved_id(monkeypatch):
 
     assert r.status_code == 200
     assert autostart_calls == [entry.name]
-    # ensure probe retried until success
     assert probe_calls["count"] >= 2
+
+
+def test_chat_forwarder_uses_backend_host_override(monkeypatch):
+    from imageworks.chat_proxy import forwarder
+
+    class DummyEntry:
+        name = "llava"
+        display_name = "llava"
+        quantization = None
+        backend = "vllm"
+        probes = type("P", (), {"vision": None})
+        chat_template = type("T", (), {"path": "templates/chat.jinja"})
+        backend_config = type(
+            "cfg", (), {"port": 12346, "host": "host.docker.internal"}
+        )
+        served_model_id = None
+
+    entry = DummyEntry()
+
+    monkeypatch.setattr(app_module, "get_entry", lambda name: entry, raising=True)
+    monkeypatch.setattr(forwarder_module, "get_entry", lambda name: entry, raising=True)
+
+    captured: dict[str, str] = {}
+
+    async def fake_probe(self, base_url):
+        captured["probe_base"] = base_url
+        return True
+
+    async def fake_post(self, url, json=None):  # noqa: A002
+        captured["post_url"] = url
+
+        class Resp:
+            status_code = 200
+
+            def json(self_inner):
+                return {
+                    "id": "resp-host",
+                    "object": "chat.completion",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Host"},
+                        }
+                    ],
+                    "created": 1,
+                    "model": "llava",
+                }
+
+        return Resp()
+
+    monkeypatch.setattr(forwarder.ChatForwarder, "_probe", fake_probe)
+    monkeypatch.setattr(forwarder.httpx.AsyncClient, "post", fake_post)
+
+    client = TestClient(app)
+    resp = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "llava",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["probe_base"].startswith("http://host.docker.internal:12346")
+    assert captured["post_url"].startswith(
+        "http://host.docker.internal:12346/v1/chat/completions"
+    )
+
+
+def test_chat_forwarder_uses_base_url_override(monkeypatch):
+    from imageworks.chat_proxy import forwarder
+
+    class DummyEntry:
+        name = "llava"
+        display_name = "llava"
+        quantization = None
+        backend = "vllm"
+        probes = type("P", (), {"vision": None})
+        chat_template = type("T", (), {"path": "templates/chat.jinja"})
+        backend_config = type(
+            "cfg", (), {"port": 0, "base_url": "https://example.local/v1"}
+        )
+        served_model_id = None
+
+    entry = DummyEntry()
+
+    monkeypatch.setattr(app_module, "get_entry", lambda name: entry, raising=True)
+    monkeypatch.setattr(forwarder_module, "get_entry", lambda name: entry, raising=True)
+
+    captured: dict[str, str] = {}
+
+    async def fake_probe(self, base_url):
+        captured["probe_base"] = base_url
+        return True
+
+    async def fake_post(self, url, json=None):  # noqa: A002
+        captured["post_url"] = url
+
+        class Resp:
+            status_code = 200
+
+            def json(self_inner):
+                return {
+                    "id": "resp-base",
+                    "object": "chat.completion",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Base"},
+                        }
+                    ],
+                    "created": 1,
+                    "model": "llava",
+                }
+
+        return Resp()
+
+    monkeypatch.setattr(forwarder.ChatForwarder, "_probe", fake_probe)
+    monkeypatch.setattr(forwarder.httpx.AsyncClient, "post", fake_post)
+
+    client = TestClient(app)
+    resp = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "llava",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["probe_base"] == "https://example.local/v1"
+    assert captured["post_url"].startswith(
+        "https://example.local/v1/chat/completions"
+    )
