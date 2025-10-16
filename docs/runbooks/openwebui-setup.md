@@ -21,6 +21,11 @@ The compose file sets the base URL and disables the Ollama provider by default:
 - `OLLAMA_BASE_URLS=` and `OLLAMA_API_CONFIGS=` left blank
 - `RESET_CONFIG_ON_START=true` ensures env values override stale DB settings
 
+The bundle includes a sample `CHAT_PROXY_AUTOSTART_MAP` in the proxy service
+definition to illustrate the format. Autostart remains disabled
+(`CHAT_PROXY_AUTOSTART_ENABLED="false"`). Update or trim the map before turning
+autostart on so only locally available models are referenced.
+
 You typically don’t need to edit settings inside the UI; the environment config is applied on container start.
 
 ### 4. Installed-only model listing

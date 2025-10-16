@@ -72,3 +72,4 @@ __pycache__/
 .pytest_cache/
 _staging/openwebui-webui.db.bak
 _staging/chat_templates/
+/home/

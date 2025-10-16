@@ -165,7 +165,7 @@ uv run imageworks-personal-tagger run \
   --description-role description
 ```
 
-If you change the served model (e.g. `qwen2.5-vl-7b-awq` → `qwen2.5-vl`) simply update `configs/model_registry.json` and re-lock hashes. Only use legacy explicit flags for rapid experiments; they will be removed after the migration window.
+If you change the served model (e.g. `qwen2.5-vl-7b-awq` → `qwen2.5-vl`) update the layered registry (`configs/model_registry.curated.json` / `.discovered.json`) and re-lock hashes. The merged snapshot (`model_registry.json`) is regenerated automatically. Only use legacy explicit flags for rapid experiments; they will be removed after the migration window.
 
 ### Preflight Checks
 The Personal Tagger now performs an optional preflight (enabled by default) that validates:

@@ -35,6 +35,23 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 | CHAT_PROXY_BACKEND_TIMEOUT_MS | Upstream request timeout | 120000 |
 | CHAT_PROXY_STREAM_IDLE_TIMEOUT_MS | Streaming idle cutoff | 60000 |
 | CHAT_PROXY_LOG_PATH | JSONL chat log (rotates by size) | logs/chat_proxy.jsonl |
+| CHAT_PROXY_MAX_LOG_BYTES | Log rotation threshold in bytes | 25000000 |
+| CHAT_PROXY_DISABLE_TOOL_NORMALIZATION | Pass through backend tool payloads unchanged | 0 |
+| CHAT_PROXY_LOG_PROMPTS | Include prompt payloads in JSONL log | 0 |
+| CHAT_PROXY_SCHEMA_VERSION | Schema version advertised in models list | 1 |
+| CHAT_PROXY_AUTOSTART_ENABLED | Enable backend autostart commands | 0 |
+| CHAT_PROXY_AUTOSTART_MAP | JSON map of logical model → command | *(unset)* |
+| CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S | Delay before the proxy marks autostart failures | 120 |
+
+### Logging & autostart
+- Requests are appended to `CHAT_PROXY_LOG_PATH` in JSONL format. When the file
+  exceeds `CHAT_PROXY_MAX_LOG_BYTES` it is truncated and restarted. Set
+  `CHAT_PROXY_LOG_PROMPTS=1` to include full prompt payloads (disabled by
+  default).
+- Autostart is optional. Enable it with `CHAT_PROXY_AUTOSTART_ENABLED=1` and
+  supply `CHAT_PROXY_AUTOSTART_MAP` (JSON mapping logical model names to shell
+  commands). The proxy waits `CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S` seconds
+  before reporting a startup failure.
 
 ### Docker Compose usage
 

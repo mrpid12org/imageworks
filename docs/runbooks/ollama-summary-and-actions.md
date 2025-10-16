@@ -6,7 +6,9 @@ This document summarizes the evolution of Ollama model integration into the unif
 ### Key Integration Points
 
 1.  **Unified Registry**: All models, regardless of source (HuggingFace, Ollama),
-    are tracked in `configs/model_registry.json`.
+    are tracked in the layered registry (`configs/model_registry.curated.json`
+    + `model_registry.discovered.json`, merged into `model_registry.json` for
+    compatibility).
 2.  **Ollama Importer**: The script `scripts/import_ollama_models.py` is the
     canonical way to ingest locally-pulled Ollama models.
 3.  **Logical Entries**: Imported Ollama models are treated as "logical" entries.

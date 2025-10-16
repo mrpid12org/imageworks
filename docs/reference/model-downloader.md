@@ -58,7 +58,12 @@ imageworks-download stats
 ```
 
 ### Unified Registry & Variant Names
-All downloads are recorded in a single deterministic registry: `configs/model_registry.json`.
+All downloads land in the layered deterministic registry under `configs/`:
+
+- `model_registry.curated.json` – stable hand-managed entries
+- `model_registry.discovered.json` – dynamic overlay written by tooling
+- `model_registry.json` – auto-generated merged snapshot (do not hand-edit)
+
 Variant names follow the pattern `<family>-<backend>-<format>-<quant>` (see Variant Naming Convention section below). These names are what you pass to commands like `remove`, `verify`, or future serving selectors.
 
 ### Listing Variants
@@ -186,7 +191,7 @@ Prune entries whose `download_path` no longer exists:
 ```bash
 imageworks-download normalize-formats --rebuild --prune-missing --apply
 ```
-Mark (rather than remove) missing entries as deprecated (default if not pruning). A timestamped backup of `configs/model_registry.json` is written unless `--no-backup` is supplied.
+Mark (rather than remove) missing entries as deprecated (default if not pruning). A timestamped backup of the merged snapshot (`configs/model_registry.json`) is written unless `--no-backup` is supplied.
 
 Diff display columns:
 - `download_format:old→new`
@@ -559,7 +564,7 @@ Bulk removal examples
 
 Tips
 - If a variant is assigned to a role you still use, prefer removing only the files (`--delete-files`) and keep the logical entry so role resolution doesn’t break. You can re-point it later to a different download.
-- A timestamped backup of `configs/model_registry.json` is written by most write operations; you can also copy it manually before large batch changes.
+- A timestamped backup of the merged snapshot (`configs/model_registry.json`) is written by most write operations; you can also copy it manually before large batch changes.
 
 ### Statistics
 Summarize counts & total size:
@@ -598,7 +603,7 @@ The Chat Proxy (`docs/reference/chat-proxy.md`) surfaces the same names to OpenW
 ### Troubleshooting
 | Symptom | Likely Cause | Resolution |
 |---------|--------------|-----------|
-| `imageworks-download list` empty | No downloads yet or removed metadata | Download a model or verify registry path (`configs/model_registry.json`). |
+| `imageworks-download list` empty | No downloads yet or removed metadata | Download a model or verify that the merged snapshot (`configs/model_registry.json`) and layered files exist. |
 | Variant shows `✗` in Inst column | Path missing (deleted/moved) | Re-download or run `verify --fix-missing` to clear download fields. |
 | `aria2c not found` | aria2c not installed | Install via `sudo apt install aria2` or `brew install aria2`. |
 | Removal failed (not found) | Wrong variant name | Use `list` / `--json` to confirm exact name. |
@@ -1124,7 +1129,7 @@ imageworks-download download "qwen-vl/Qwen2.5-VL-7B-Instruct-AWQ"
 # (Optional) Fetch an alternative model to compare for description role
 imageworks-download download "llava-hf/llava-v1.6-mistral-7b-hf"
 
-# Update / add entries in configs/model_registry.json assigning roles, then verify & (optionally) lock
+# Update / add entries in the curated/discovered registry fragments assigning roles, then verify & (optionally) lock
 uv run imageworks-model-registry verify qwen2.5-vl-7b-awq --lock
 
 # Start serving backend(s) (example vLLM helper referencing registry paths)
@@ -1185,7 +1190,7 @@ Use `uv run imageworks-model-registry verify <name> --lock` after adding new fil
 
 **Registry corruption**
 - Run `imageworks-download verify --fix-missing` to clean up missing download paths
-- Hard reset: edit `configs/model_registry.json` directly (single unified registry) then re-run `imageworks-model-registry verify <name>`
+- Hard reset: rebuild the discovered overlay (`configs/model_registry.discovered.json`) from downloads or curated data, then reload (`load_registry(force=True)`). Avoid editing the merged snapshot directly; adjust `model_registry.curated.json` for baseline changes.
 
 ### Debug Mode
 
