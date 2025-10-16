@@ -1,48 +1,48 @@
-import subprocess
 import json
 from pathlib import Path
 
-REG_PATH = Path("configs/model_registry.json")
+
+def _load(registry_path: Path):
+    return json.loads(registry_path.read_text(encoding="utf-8"))
 
 
-def _load():
-    return json.loads(REG_PATH.read_text())
-
-
-def test_import_ollama_models_dry_run_normalization():
-    # Run dry-run; should not mutate registry
-    before = REG_PATH.read_text()
-    proc = subprocess.run(
-        ["uv", "run", "python", "scripts/import_ollama_models.py", "--dry-run"],
-        capture_output=True,
-        text=True,
-    )
-    assert proc.returncode == 0, proc.stderr
-    after = REG_PATH.read_text()
-    assert before == after, "Dry-run must not modify registry"
-    out = proc.stdout.lower()
-    # Expect slash-containing model normalized: hf.co/... path becomes hyphenated family
-    # Normalization now replaces '/' with '-' so expect hyphenated form
-    assert (
-        "variant_family=hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1-gguf"
-        in out.replace("\n", " ")
-    ), out
-    # Ensure quant token preserved underscores (q6_k) not converted to dashes
-    assert "quant=q6_k" in out, out
-
-
-def test_import_ollama_models_real_insert(monkeypatch):
-    # Monkeypatch subprocess to simulate minimal two-model list to keep test fast
+def test_import_ollama_models_dry_run_normalization(isolated_configs_dir, capsys):
     import scripts.import_ollama_models as imod
 
-    class DummyProc:  # minimal object with attrs
-        def __init__(self, stdout):
+    # Use bundled fallback sample to avoid shelling out to real ollama
+    models = [dict(item) for item in imod._FALLBACK_SAMPLE_MODELS]
+    reg_path = isolated_configs_dir / "model_registry.json"
+    before = reg_path.read_text(encoding="utf-8")
+    count = imod.import_models(
+        models,
+        backend="ollama",
+        location="linux_wsl",
+        dry_run=True,
+        deprecate_placeholders=False,
+        purge=False,
+    )
+    assert count == len(models)
+    captured = capsys.readouterr().out.lower()
+    assert (
+        "variant_family=hf.co-mradermacher-l3.1-dark-reasoning-lewdplay-evo-hermes-r1-uncensored-8b-i1-gguf"
+        in captured.replace("\n", " ")
+    )
+    assert "quant=q6_k" in captured
+    # Dry run must not mutate registry copy
+    after = reg_path.read_text(encoding="utf-8")
+    assert before == after
+
+
+def test_import_ollama_models_real_insert(monkeypatch, isolated_configs_dir):
+    import scripts.import_ollama_models as imod
+
+    class DummyProc:
+        def __init__(self, stdout: str):
             self.stdout = stdout
             self.returncode = 0
 
     def fake_run(args, capture_output=True, text=True, check=False):  # noqa: D401
         if args[:3] == ["ollama", "list", "--format"]:
-            # Provide JSON format list with two entries
             payload = json.dumps(
                 [
                     {"name": "mini-test:latest", "size": 1024},
@@ -50,12 +50,11 @@ def test_import_ollama_models_real_insert(monkeypatch):
                 ]
             )
             return DummyProc(payload)
-        raise subprocess.CalledProcessError(returncode=1, cmd=args)
+        raise FileNotFoundError("ollama binary not available")
 
     monkeypatch.setattr(imod.subprocess, "run", fake_run)
-    # Call list_ollama_models to get fabricated list, then import
     models = imod.list_ollama_models()
-    imod.import_models(
+    imported = imod.import_models(
         models,
         backend="ollama",
         location="linux_wsl",
@@ -63,8 +62,8 @@ def test_import_ollama_models_real_insert(monkeypatch):
         deprecate_placeholders=False,
         purge=False,
     )
-    reg = _load()
+    assert imported == 2
+    reg = _load(isolated_configs_dir / "model_registry.json")
     names = {e["name"] for e in reg}
-    # Expected variant names under Strategy A
-    assert "mini-test-latest-ollama-gguf" in names
-    assert "testmodel-ollama-gguf-q4_k" in names
+    assert "mini-test-latest" in names
+    assert "testmodel_(Q4_K)" in names

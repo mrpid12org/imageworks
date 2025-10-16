@@ -1,64 +1,60 @@
 import json
-import pathlib
-import subprocess
+import pytest
+from pathlib import Path
 
-REG = pathlib.Path("configs/model_registry.json")
+from typer.testing import CliRunner
+
+from imageworks.tools.model_downloader.cli import app as downloader_app
+
+runner = CliRunner()
 
 
-def _load():
-    return json.loads(REG.read_text())
+def _load(snapshot: Path):
+    return json.loads(snapshot.read_text(encoding="utf-8"))
 
 
-def test_backfill_ollama_paths_dry_run_and_apply():
-    data = _load()
-    # Synthesize a logical-only ollama entry (if none exists) by cloning first non-ollama entry
+def test_backfill_ollama_paths_dry_run_and_apply(isolated_configs_dir, monkeypatch):
+    monkeypatch.chdir(isolated_configs_dir.parent)
+    snapshot = isolated_configs_dir / "model_registry.json"
+    data = _load(snapshot)
+    logical_name = "synthetic-test-ollama-gguf"
     has_candidate = any(
         e for e in data if e.get("backend") == "ollama" and not e.get("download_path")
     )
     if not has_candidate:
-        # Duplicate first entry as synthetic logical ollama entry
         if not data:
-            return  # nothing to do
+            pytest.skip("registry snapshot empty")
         base = data[0].copy()
-        base["name"] = "synthetic-test-ollama-gguf"
-        base["backend"] = "ollama"
-        base["download_path"] = None
-        base["download_format"] = None
-        base["download_location"] = None
+        base.update(
+            {
+                "name": logical_name,
+                "backend": "ollama",
+                "download_path": None,
+                "download_format": None,
+                "download_location": None,
+                "served_model_id": logical_name.replace("-", ":"),
+            }
+        )
         data.append(base)
-        REG.write_text(json.dumps(data, indent=2))
-    # Snapshot before dry run
-    before = REG.read_text()
-    proc = subprocess.run(
-        [
-            "uv",
-            "run",
-            "imageworks-download",
-            "backfill-ollama-paths",
-            "--dry-run",
-            "-v",
-        ],
-        capture_output=True,
-        text=True,
+        snapshot.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    before = snapshot.read_text(encoding="utf-8")
+    dry = runner.invoke(
+        downloader_app,
+        ["backfill-ollama-paths", "--dry-run", "--verbose"],
     )
-    assert proc.returncode == 0, proc.stderr
-    after_dry = REG.read_text()
-    assert before == after_dry, "Dry run must not modify registry"
-    # Apply
-    proc2 = subprocess.run(
-        ["uv", "run", "imageworks-download", "backfill-ollama-paths"],
-        capture_output=True,
-        text=True,
-    )
-    assert proc2.returncode == 0, proc2.stderr
-    updated = _load()
+    assert dry.exit_code == 0, dry.stdout
+    assert snapshot.read_text(encoding="utf-8") == before
+
+    result = runner.invoke(downloader_app, ["backfill-ollama-paths"])
+    assert result.exit_code == 0, result.stdout
+    updated = _load(snapshot)
     matches = [
         e
         for e in updated
-        if e.get("backend") == "ollama"
-        and e.get("name").startswith("synthetic-test-ollama-gguf")
+        if e.get("backend") == "ollama" and e.get("name") == logical_name
     ]
-    if matches:
-        for m in matches:
-            assert m.get("download_path"), "download_path should be populated"
-            assert m.get("download_format") == "gguf", "download_format should be gguf"
+    assert matches, "Synthetic logical Ollama entry missing after backfill"
+    for entry in matches:
+        assert entry.get("download_path"), "download_path should be populated"
+        assert entry.get("download_format") == "gguf"

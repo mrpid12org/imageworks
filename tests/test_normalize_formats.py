@@ -1,17 +1,15 @@
-from pathlib import Path
-import subprocess
+from typer.testing import CliRunner
 
-REG_PATH = Path("configs/model_registry.json")
+from imageworks.tools.model_downloader.cli import app as downloader_app
+
+runner = CliRunner()
 
 
-def test_normalize_formats_dry_run():
-    # Run dry-run normalize (should not modify file hash)
-    original = REG_PATH.read_text(encoding="utf-8")
-    proc = subprocess.run(
-        ["uv", "run", "imageworks-download", "normalize-formats", "--dry-run"],
-        capture_output=True,
-        text=True,
-    )
-    assert proc.returncode == 0, proc.stderr
-    after = REG_PATH.read_text(encoding="utf-8")
+def test_normalize_formats_dry_run(isolated_configs_dir, monkeypatch):
+    monkeypatch.chdir(isolated_configs_dir.parent)
+    reg_path = isolated_configs_dir / "model_registry.json"
+    original = reg_path.read_text(encoding="utf-8")
+    result = runner.invoke(downloader_app, ["normalize-formats", "--dry-run"])
+    assert result.exit_code == 0, result.stdout
+    after = reg_path.read_text(encoding="utf-8")
     assert original == after, "Dry run should not modify registry"

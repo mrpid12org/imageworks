@@ -5,16 +5,16 @@ import pytest
 from imageworks.model_loader.download_adapter import record_download, ImportSkipped
 
 
-def test_scan_skip_testing_placeholder(tmp_path: Path):
+def test_scan_skip_testing_placeholder(tmp_path: Path, isolated_configs_dir):
     # Create a dummy directory to simulate a model repo path
-    d = tmp_path / "owner" / "model-awq"
+    d = tmp_path / "owner" / "testzzz-model"
     d.mkdir(parents=True)
     (d / "weights.gguf").write_bytes(b"123")
 
     # With hf_id ending in 'model-awq', the variant name should match testing filters
     with pytest.raises(ImportSkipped):
         record_download(
-            hf_id="owner/model-awq",
+            hf_id="owner/testzzz-model",
             backend="vllm",
             format_type="gguf",
             quantization=None,
