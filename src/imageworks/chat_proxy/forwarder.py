@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import httpx
-import time
-from typing import Any, AsyncGenerator, Dict
 import base64
 import re
+import time
+from typing import Any, AsyncGenerator, Dict
+from urllib.parse import urlsplit, urlunsplit
+
+import httpx
 
 from .config import ProxyConfig
 from .errors import (
@@ -132,6 +134,7 @@ class ChatForwarder:
             stripped_host = host_raw.strip()
             if stripped_host:
                 host_override = stripped_host
+        alias = (self.cfg.loopback_alias or "").strip()
         default_port = 8000
         if getattr(entry, "backend", "") == "ollama":
             default_port = 11434
@@ -145,12 +148,18 @@ class ChatForwarder:
 
         backend = getattr(entry, "backend", "")
 
+        if alias:
+            base_override = self._alias_loopback(base_override, alias)
+            host_override = self._alias_loopback(host_override, alias)
+
         if base_override:
             base_url = base_override
         elif host_override and host_override.startswith(("http://", "https://")):
             base_url = host_override.rstrip("/")
         else:
             host = host_override or "127.0.0.1"
+            if alias and host.strip().lower() in {"127.0.0.1", "localhost", "::1"}:
+                host = alias
             if backend == "ollama":
                 base_url = f"http://{host}:{port}"
             else:
@@ -159,6 +168,45 @@ class ChatForwarder:
         base_url = base_url.rstrip("/")
         api_path = "/api/chat" if backend == "ollama" else "/chat/completions"
         return base_url, api_path
+
+    @staticmethod
+    def _alias_loopback(value: str | None, alias: str) -> str | None:
+        if not value:
+            return value
+        alias_clean = alias.strip()
+        if not alias_clean:
+            return value
+        loopbacks = {"127.0.0.1", "localhost", "::1"}
+        if "://" in value:
+            try:
+                parsed = urlsplit(value)
+            except ValueError:
+                return value
+            hostname = parsed.hostname
+            if not hostname or hostname.lower() not in loopbacks:
+                return value
+            netloc = alias_clean
+            if parsed.port and ":" not in alias_clean.split("]")[-1]:
+                netloc = f"{alias_clean}:{parsed.port}"
+            if parsed.username or parsed.password:
+                creds = parsed.username or ""
+                if parsed.password:
+                    creds += f":{parsed.password}"
+                netloc = f"{creds}@{netloc}"
+            return urlunsplit(parsed._replace(netloc=netloc))
+        # Treat as host[:port]
+        try:
+            parsed = urlsplit(f"scheme://{value}")
+        except ValueError:
+            return value
+        host = parsed.hostname
+        if not host or host.lower() not in loopbacks:
+            return value
+        port = parsed.port
+        result = alias_clean
+        if port and ":" not in alias_clean.split("]")[-1]:
+            result = f"{alias_clean}:{port}"
+        return result
 
     async def handle_chat(self, payload: dict) -> Dict[str, Any]:
         requested_model = payload.get("model")

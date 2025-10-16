@@ -38,6 +38,7 @@ class ProxyConfig:
     schema_version: int = 1
     suppress_decorations: bool = True
     include_non_installed: bool = False
+    loopback_alias: Optional[str] = None
 
     @classmethod
     def load(cls) -> "ProxyConfig":
@@ -65,4 +66,5 @@ class ProxyConfig:
             schema_version=_get_int("CHAT_PROXY_SCHEMA_VERSION", 1),
             suppress_decorations=_get_bool("CHAT_PROXY_SUPPRESS_DECORATIONS", True),
             include_non_installed=_get_bool("CHAT_PROXY_INCLUDE_NON_INSTALLED", False),
+            loopback_alias=os.environ.get("CHAT_PROXY_LOOPBACK_ALIAS"),
         )

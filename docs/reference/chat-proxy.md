@@ -28,6 +28,7 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 | CHAT_PROXY_PORT | Listen port | 8100 |
 | CHAT_PROXY_SUPPRESS_DECORATIONS | Hide backend/format/quant fields in models output | 1 |
 | CHAT_PROXY_INCLUDE_NON_INSTALLED | Include entries without visible files | 0 |
+| CHAT_PROXY_LOOPBACK_ALIAS | Replace localhost targets in backend URLs (e.g. `host.docker.internal`) | *(unset)* |
 | CHAT_PROXY_ENABLE_METRICS | Enable `/v1/metrics` | 0 |
 | CHAT_PROXY_REQUIRE_TEMPLATE | Enforce presence of chat template | 1 |
 | CHAT_PROXY_MAX_IMAGE_BYTES | Max decoded image size | 6000000 |
@@ -50,11 +51,14 @@ services:
       - CHAT_PROXY_PORT=8100
       - CHAT_PROXY_SUPPRESS_DECORATIONS=1
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+      - CHAT_PROXY_LOOPBACK_ALIAS=host.docker.internal
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8100/v1/health"]
     volumes:
       # Mount HF weights into the container at the same absolute path so installed-only checks pass
       - /home/you/ai-models/weights:/home/you/ai-models/weights:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
 
   openwebui:
     image: ghcr.io/open-webui/open-webui:latest

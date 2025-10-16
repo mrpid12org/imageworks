@@ -6,13 +6,14 @@ services:
     container_name: imageworks-chat-proxy
     restart: unless-stopped
     environment:
-      CHAT_PROXY_AUTOSTART_ENABLED: "true"
+      CHAT_PROXY_AUTOSTART_ENABLED: "false"
       CHAT_PROXY_AUTOSTART_MAP: |
-        {"qwen2.5-vl-7b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-vl-7b-instruct_(AWQ)"]}, "deepseek-coder-6.7b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "deepseek-coder-6.7b-instruct_(AWQ)"]}, "codellama-13b-instruct_(AWQ)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "codellama-13b-instruct_(AWQ)"]}, "gpt-oss-20b_(MXFP4)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "gpt-oss-20b_(MXFP4)"]}, "dialogpt-small": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "dialogpt-small"]}, "qwen2.5-coder-7b-instruct_(GPTQ_INT8)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-coder-7b-instruct_(GPTQ_INT8)"]}, "qwen2.5-vl-7b-instruct_(BF16)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "qwen2.5-vl-7b-instruct_(BF16)"]}, "siglip-large-patch16-384_(FP32)": {"command": ["python", "scripts/start_vllm_server.py", "--model-name", "siglip-large-patch16-384_(FP32)"]}}
+        {"qwen2.5-vl-7b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-vl-7b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-qwen2_5-vl-7b-instruct__AWQ_.log"]},"deepseek-coder-6.7b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","deepseek-coder-6.7b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-deepseek-coder-6_7b-instruct__AWQ_.log"]},"codellama-13b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","codellama-13b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-codellama-13b-instruct__AWQ_.log"]},"gpt-oss-20b_(MXFP4)":{"command":["python","scripts/start_vllm_server.py","--model-name","gpt-oss-20b_(MXFP4)","--background","--log-file","/app/logs/autostart-gpt-oss-20b__MXFP4_.log"]},"dialogpt-small":{"command":["python","scripts/start_vllm_server.py","--model-name","dialogpt-small","--background","--log-file","/app/logs/autostart-dialogpt-small.log"]},"qwen2.5-coder-7b-instruct_(GPTQ_INT8)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-coder-7b-instruct_(GPTQ_INT8)","--background","--log-file","/app/logs/autostart-qwen2_5-coder-7b-instruct__GPTQ_INT8_.log"]},"qwen2.5-vl-7b-instruct_(BF16)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-vl-7b-instruct_(BF16)","--background","--log-file","/app/logs/autostart-qwen2_5-vl-7b-instruct__BF16_.log"]},"siglip-large-patch16-384_(FP32)":{"command":["python","scripts/start_vllm_server.py","--model-name","siglip-large-patch16-384_(FP32)","--background","--log-file","/app/logs/autostart-siglip-large-patch16-384__FP32_.log"]}}
       CHAT_PROXY_HOST: "0.0.0.0"
       CHAT_PROXY_PORT: "8100"
       CHAT_PROXY_SUPPRESS_DECORATIONS: "1"
       CHAT_PROXY_INCLUDE_NON_INSTALLED: "0"
+      CHAT_PROXY_LOOPBACK_ALIAS: "host.docker.internal"
     ports:
       - "8100:8100"  # Host:Container
     healthcheck:
@@ -22,10 +23,16 @@ services:
       retries: 10
     volumes:
       - ./configs:/app/configs:ro
+      - ./logs:/app/logs
       - ./models:/models:ro
       - ./outputs:/outputs
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./_staging:/app/_staging
       # Mount HF weights root at the same absolute path used on host
       - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - imageworks-net
   openwebui:

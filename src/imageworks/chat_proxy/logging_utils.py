@@ -13,7 +13,14 @@ class JsonlLogger:
         self.path = path
         self.max_bytes = max_bytes
         self.retention_days = retention_days
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # Respect relative paths while avoiding mkdir("") when only a filename is provided.
+        log_dir = os.path.dirname(path)
+        if log_dir:
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except Exception:  # noqa: BLE001
+                # Fallback: best-effort when directory creation fails (e.g., read-only volume).
+                pass
 
     def _rotate_if_needed(self):
         try:

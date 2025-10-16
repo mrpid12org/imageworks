@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   chat-proxy:
     build:
@@ -11,6 +10,7 @@ services:
       - CHAT_PROXY_PORT=8100
       - CHAT_PROXY_SUPPRESS_DECORATIONS=1
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+      - CHAT_PROXY_LOOPBACK_ALIAS=host.docker.internal
     ports:
       - "8100:8100"
     volumes:
@@ -19,6 +19,9 @@ services:
       - ./models:/app/models:ro
       - ./outputs:/app/outputs
       - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
       - ./_staging:/app/_staging
+      - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]
-    network_mode: host

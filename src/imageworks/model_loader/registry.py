@@ -59,6 +59,56 @@ _REGISTRY_PATH: Path | None = None  # Path to merged snapshot (back-compat singl
 _CURATED_NAMES: Set[str] = set()  # Names originating from curated layer (pre overlay)
 _SINGLE_FILE_MODE: bool = False  # Explicit path (legacy/simple) loading
 
+_TEMPLATE_CACHE_ENV = "IMAGEWORKS_TEMPLATE_CACHE_DIR"
+_DEFAULT_TEMPLATE_CACHE = Path("_staging") / "chat_templates"
+
+
+def _extract_tokenizer_chat_template(entry: RegistryEntry) -> None:
+    """If a tokenizer_config.json contains a 'chat_template', persist it for reuse."""
+
+    if not entry.chat_template or entry.chat_template.path:
+        return
+    if not entry.download_path:
+        return
+
+    tokenizer_path = Path(entry.download_path) / "tokenizer_config.json"
+    if not tokenizer_path.exists():
+        return
+
+    try:
+        data = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    template = data.get("chat_template")
+    if not template or "{{" not in template or "}}" not in template:
+        return
+
+    cache_dir = Path(os.environ.get(_TEMPLATE_CACHE_ENV, _DEFAULT_TEMPLATE_CACHE))
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return
+
+    tpl_path = cache_dir / f"{entry.name}.jinja"
+
+    if not tpl_path.exists():
+        try:
+            tpl_path.write_text(template, encoding="utf-8")
+        except Exception:
+            return
+    try:
+        content = tpl_path.read_text(encoding="utf-8")
+    except Exception:
+        return
+
+    entry.chat_template.source = "extracted"
+    entry.chat_template.path = str(tpl_path.resolve())
+    try:
+        entry.chat_template.sha256 = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    except Exception:
+        entry.chat_template.sha256 = None
+
 
 def _registry_dir() -> Path:
     return Path(os.environ.get("IMAGEWORKS_REGISTRY_DIR", "configs"))
@@ -376,7 +426,9 @@ def _parse_entry(raw: dict) -> RegistryEntry:
     perf_cfg = raw.get("performance", {})
     probes_cfg = raw.get("probes", {})
 
-    raw_caps = raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
+    raw_caps = (
+        raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
+    )
 
     host_override = _clean_optional_str(backend_cfg.get("host"))
     base_url_override = _clean_optional_str(backend_cfg.get("base_url"))
@@ -518,12 +570,14 @@ def _parse_entry(raw: dict) -> RegistryEntry:
                     entry.chat_template.source = "external"
                     entry.chat_template.path = str(tpl)
                     entry.chat_template.sha256 = sha
-                    try:
-                        entry.metadata["primary_chat_template_file"] = tpl.name
-                        if sha:
-                            entry.metadata["primary_chat_template_sha256"] = sha
-                    except Exception:
-                        pass
+            try:
+                entry.metadata["primary_chat_template_file"] = tpl.name
+                if sha:
+                    entry.metadata["primary_chat_template_sha256"] = sha
+            except Exception:
+                pass
+        # Last resort: extract inline tokenizer chat_template if present.
+        _extract_tokenizer_chat_template(entry)
     except Exception:
         # Non-fatal enrichment; ignore if anything unexpected occurs
         pass

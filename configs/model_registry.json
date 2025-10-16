@@ -687,7 +687,7 @@
     "display_name": "qwen2.5-coder-7b-instruct (GPTQ INT8)",
     "backend": "vllm",
     "backend_config": {
-      "port": 0,
+      "port": 8000,
       "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-Coder-7B-Instruct-GPTQ-Int8",
       "extra_args": []
     },

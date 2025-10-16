@@ -1,8 +1,16 @@
+import asyncio
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 from imageworks.chat_proxy.app import app
 from imageworks.chat_proxy import app as app_module
 from imageworks.chat_proxy import forwarder as forwarder_module
 import imageworks.model_loader.registry as registry_module
+from imageworks.chat_proxy.config import ProxyConfig
+from imageworks.chat_proxy.autostart import AutostartManager
+from imageworks.chat_proxy.metrics import MetricsAggregator
+from imageworks.chat_proxy.logging_utils import JsonlLogger
+from imageworks.chat_proxy.forwarder import ChatForwarder
 
 
 def test_chat_basic(monkeypatch):
@@ -357,6 +365,32 @@ def test_chat_forwarder_uses_base_url_override(monkeypatch):
 
     assert resp.status_code == 200
     assert captured["probe_base"] == "https://example.local/v1"
-    assert captured["post_url"].startswith(
-        "https://example.local/v1/chat/completions"
+    assert captured["post_url"].startswith("https://example.local/v1/chat/completions")
+
+
+def test_loopback_alias_rewrites_localhost(tmp_path):
+    cfg = ProxyConfig(loopback_alias="host.docker.internal")
+    metrics = MetricsAggregator()
+    autostart = AutostartManager(None)
+    logger = JsonlLogger(str(tmp_path / "proxy.log"))
+    forwarder = ChatForwarder(cfg, metrics, autostart, logger)
+    entry = SimpleNamespace(
+        backend="vllm",
+        backend_config=SimpleNamespace(host="127.0.0.1", port=9001, base_url=None),
     )
+
+    base_url, api_path = forwarder._resolve_backend_base(entry)
+    assert base_url == "http://host.docker.internal:9001/v1"
+    assert api_path == "/chat/completions"
+
+    entry2 = SimpleNamespace(
+        backend="ollama",
+        backend_config=SimpleNamespace(
+            host=None, port=11434, base_url="http://127.0.0.1:11434/api"
+        ),
+    )
+    base_url2, api_path2 = forwarder._resolve_backend_base(entry2)
+    assert base_url2 == "http://host.docker.internal:11434/api"
+    assert api_path2 == "/api/chat"
+
+    asyncio.run(forwarder.client.aclose())

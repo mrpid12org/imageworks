@@ -128,9 +128,11 @@ def build_command(args: argparse.Namespace) -> List[str]:
                 if chat_format_value is None:
                     command.extend(["--chat-template-content-format", "openai"])
 
-                if "--return-tokens-as-token-ids" not in forwarded and _extract_option_value(
-                    forwarded, "--return-tokens-as-token-ids"
-                ) is None:
+                if (
+                    "--return-tokens-as-token-ids" not in forwarded
+                    and _extract_option_value(forwarded, "--return-tokens-as-token-ids")
+                    is None
+                ):
                     command.append("--return-tokens-as-token-ids")
 
                 tokenizer_mode = _extract_option_value(forwarded, "--tokenizer-mode")
@@ -156,12 +158,23 @@ def start_server() -> None:
         ),
     )
     parser.add_argument(
+        "--model-name",
+        dest="registry_name",
+        default=None,
+        help=(
+            "Registry entry name. When provided, the script will resolve the model "
+            "path, chat template, served name, and preferred port from the registry."
+        ),
+    )
+    default_served_name = DEFAULT_SERVED_MODEL_NAME
+    parser.add_argument(
         "--served-model-name",
-        default=DEFAULT_SERVED_MODEL_NAME,
+        default=default_served_name,
         help="Model name exposed through the OpenAI API",
     )
     parser.add_argument("--host", default="0.0.0.0", help="Host interface")
-    parser.add_argument("--port", type=int, default=8000, help="Server port")
+    default_port = 8000
+    parser.add_argument("--port", type=int, default=default_port, help="Server port")
     parser.add_argument(
         "--tensor-parallel-size",
         type=int,
@@ -257,6 +270,44 @@ def start_server() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.registry_name:
+        try:
+            from imageworks.model_loader.registry import load_registry
+
+            reg = load_registry()
+            entry = reg[args.registry_name]
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write(
+                f"[registry-resolve] Failed to load entry '{args.registry_name}': {exc}\n"
+            )
+            sys.exit(1)
+
+        backend_cfg = getattr(entry, "backend_config", None)
+        candidate_model = None
+        if backend_cfg and getattr(backend_cfg, "model_path", None):
+            candidate_model = backend_cfg.model_path
+        if not candidate_model:
+            candidate_model = getattr(entry, "download_path", None)
+        if candidate_model and not args.model:
+            args.model = candidate_model
+
+        served = getattr(entry, "served_model_id", None)
+        if isinstance(served, str) and served.strip().lower() == "none":
+            served = None
+        if not args.served_model_name or args.served_model_name == default_served_name:
+            args.served_model_name = served or entry.name
+
+        preferred_port = None
+        if backend_cfg and isinstance(getattr(backend_cfg, "port", None), int):
+            port_value = backend_cfg.port
+            if port_value and port_value > 0:
+                preferred_port = port_value
+        if (args.port is None or args.port == default_port) and preferred_port:
+            args.port = preferred_port
+
+        if entry.chat_template and entry.chat_template.path and not args.chat_template:
+            args.chat_template = entry.chat_template.path
 
     # Best-effort auto detection for common LLaVA models lacking an embedded chat template.
     # Prefer packaged template over CWD; fallback to CWD if provided explicitly.

@@ -183,3 +183,43 @@ def test_select_model_respects_base_url_override(tmp_path: Path, monkeypatch):
 
     sel = select_model("custom-base")
     assert sel.endpoint_url == "https://example.local/v1"
+
+
+def test_tokenizer_chat_template_extraction(tmp_path: Path, monkeypatch):
+    weights_dir = tmp_path / "weights"
+    weights_dir.mkdir()
+    tokenizer_cfg = {
+        "chat_template": "<s>{% for m in messages %}{{ m.content }}{% endfor %}</s>"
+    }
+    (weights_dir / "tokenizer_config.json").write_text(
+        json.dumps(tokenizer_cfg), encoding="utf-8"
+    )
+
+    sample = [
+        {
+            "name": "qwen-demo",
+            "backend": "vllm",
+            "backend_config": {"port": 8000, "model_path": str(weights_dir)},
+            "capabilities": {"text": True},
+            "artifacts": {"aggregate_sha256": "", "files": []},
+            "chat_template": {"source": "embedded"},
+            "version_lock": {"locked": False},
+            "performance": {"rolling_samples": 0},
+            "probes": {},
+            "download_path": str(weights_dir),
+            "download_files": ["tokenizer_config.json"],
+        }
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(sample), encoding="utf-8")
+
+    cache_dir = tmp_path / "templates"
+    monkeypatch.setenv("IMAGEWORKS_TEMPLATE_CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(registry, "_REGISTRY_CACHE", None)
+
+    loaded = registry.load_registry(path, force=True)
+    entry = loaded["qwen-demo"]
+    assert entry.chat_template.path
+    tpl_file = Path(entry.chat_template.path)
+    assert tpl_file.exists()
+    assert tpl_file.read_text(encoding="utf-8") == tokenizer_cfg["chat_template"]
