@@ -45,6 +45,7 @@ from .models import (
     Artifacts,
     BackendConfig,
     ChatTemplate,
+    GenerationDefaults,
     PerformanceLastSample,
     PerformanceSummary,
     Probes,
@@ -126,11 +127,29 @@ def _merged_snapshot_path() -> Path:
     return _registry_dir() / "model_registry.json"
 
 
+_DYNAMIC_KEYS = {
+    "download_format",
+    "download_location",
+    "download_path",
+    "download_size_bytes",
+    "download_files",
+    "download_directory_checksum",
+    "downloaded_at",
+    "last_accessed",
+    "artifacts",
+    "performance",
+    "probes",
+    "version_lock",
+}
+
+
 def _is_dynamic(entry: RegistryEntry) -> bool:
     """Return True if the entry contains dynamic / runtime-managed fields.
 
     This triggers writing the entry into the discovered overlay even if it originated curated.
     """
+    if entry.metadata.get("registry_layer") == "curated":
+        return False
     if entry.metadata.get("created_from_download"):
         return True
     dynamic_attr_presence = any(
@@ -145,6 +164,27 @@ def _is_dynamic(entry: RegistryEntry) -> bool:
         ]
     )
     return dynamic_attr_presence
+
+
+def _strip_dynamic_fields_for_curated(data: dict) -> dict:
+    overlay = {k: v for k, v in data.items() if k not in _DYNAMIC_KEYS}
+    metadata = overlay.get("metadata") or {}
+    metadata.pop("created_from_download", None)
+    metadata["registry_layer"] = metadata.get("registry_layer", "curated")
+    overlay["metadata"] = metadata
+    return overlay
+
+
+def _merge_entry_dicts(base: dict, overlay: dict) -> dict:
+    result = json.loads(json.dumps(base))
+    for key, value in overlay.items():
+        if value is None:
+            continue
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _merge_entry_dicts(result.get(key, {}), value)
+        else:
+            result[key] = value
+    return result
 
 
 def _normalize_download_path(path: str | None) -> str | None:
@@ -194,6 +234,42 @@ def _clean_optional_str(value: object | None) -> str | None:
     except Exception:  # noqa: BLE001
         return None
     return text or None
+
+
+def _optional_int(value: object | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):  # noqa: BLE001
+        return None
+
+
+def _optional_float(value: object | None) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):  # noqa: BLE001
+        return None
+
+
+def _string_list(values: object | None) -> list[str]:
+    if not values:
+        return []
+    result: list[str] = []
+    if isinstance(values, (list, tuple, set)):
+        iterable = values
+    else:
+        iterable = [values]
+    for item in iterable:
+        if item is None:
+            continue
+        try:
+            result.append(str(item))
+        except Exception:  # noqa: BLE001
+            continue
+    return result
 
 
 def _classify_legacy(raw_entries: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -287,20 +363,23 @@ def _adopt_snapshot_additions(
 def _merge_layered_fragments(
     curated_raw: list[dict], discovered_raw: list[dict]
 ) -> tuple[list[dict], Set[str]]:
-    name_index: dict[str, dict] = {}
+    merged: dict[str, dict] = {}
+    for raw in discovered_raw:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        merged[name] = raw
     curated_names: Set[str] = set()
     for raw in curated_raw:
         name = str(raw.get("name") or "").strip()
         if not name:
             continue
-        name_index[name] = raw
         curated_names.add(name)
-    for raw in discovered_raw:
-        name = str(raw.get("name") or "").strip()
-        if not name:
-            continue
-        name_index[name] = raw
-    return list(name_index.values()), curated_names
+        if name in merged:
+            merged[name] = _merge_entry_dicts(merged[name], raw)
+        else:
+            merged[name] = raw
+    return list(merged.values()), curated_names
 
 
 def _parse_merged_entries(
@@ -425,6 +504,7 @@ def _parse_entry(raw: dict) -> RegistryEntry:
     version_lock_cfg = raw.get("version_lock", {})
     perf_cfg = raw.get("performance", {})
     probes_cfg = raw.get("probes", {})
+    gen_cfg = raw.get("generation_defaults", {}) or {}
 
     raw_caps = (
         raw.get("capabilities") if isinstance(raw.get("capabilities"), dict) else {}
@@ -495,6 +575,16 @@ def _parse_entry(raw: dict) -> RegistryEntry:
         ),
         profiles_placeholder=raw.get("profiles_placeholder"),
         metadata=dict(raw.get("metadata", {})),
+        generation_defaults=GenerationDefaults(
+            max_tokens=_optional_int(gen_cfg.get("max_tokens")),
+            temperature=_optional_float(gen_cfg.get("temperature")),
+            top_p=_optional_float(gen_cfg.get("top_p")),
+            top_k=_optional_int(gen_cfg.get("top_k")),
+            frequency_penalty=_optional_float(gen_cfg.get("frequency_penalty")),
+            presence_penalty=_optional_float(gen_cfg.get("presence_penalty")),
+            stop_sequences=_string_list(gen_cfg.get("stop_sequences")),
+            context_window=_optional_int(gen_cfg.get("context_window")),
+        ),
         served_model_id=str(raw.get("served_model_id", "")).strip() or None,
         model_aliases=[str(a).strip() for a in raw.get("model_aliases", []) if a],
         roles=[str(r).strip() for r in raw.get("roles", []) if r],
@@ -624,6 +714,27 @@ def _serialize_backend_config(cfg: BackendConfig) -> dict:
     return data
 
 
+def _serialize_generation_defaults(settings: GenerationDefaults) -> dict:
+    data: dict[str, object] = {}
+    if settings.max_tokens is not None:
+        data["max_tokens"] = settings.max_tokens
+    if settings.temperature is not None:
+        data["temperature"] = settings.temperature
+    if settings.top_p is not None:
+        data["top_p"] = settings.top_p
+    if settings.top_k is not None:
+        data["top_k"] = settings.top_k
+    if settings.frequency_penalty is not None:
+        data["frequency_penalty"] = settings.frequency_penalty
+    if settings.presence_penalty is not None:
+        data["presence_penalty"] = settings.presence_penalty
+    if settings.stop_sequences:
+        data["stop_sequences"] = list(settings.stop_sequences)
+    if settings.context_window is not None:
+        data["context_window"] = settings.context_window
+    return data
+
+
 def _serialize_entry(entry: RegistryEntry) -> dict:
     return {
         "name": entry.name,
@@ -631,6 +742,9 @@ def _serialize_entry(entry: RegistryEntry) -> dict:
         "backend": entry.backend,
         "backend_config": _serialize_backend_config(entry.backend_config),
         "capabilities": entry.capabilities,
+        "generation_defaults": _serialize_generation_defaults(
+            entry.generation_defaults
+        ),
         "artifacts": {
             "aggregate_sha256": entry.artifacts.aggregate_sha256,
             "files": [
@@ -731,32 +845,52 @@ def save_registry(path: Path | None = None) -> Path:
             curated_raw = json.loads(curated_file.read_text())
         except Exception:  # noqa: BLE001
             curated_raw = []
-    curated_name_set = {e.get("name") for e in curated_raw if isinstance(e, dict)}
+    curated_map: dict[str, dict] = {}
+    for raw in curated_raw:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        curated_map[name] = _strip_dynamic_fields_for_curated(raw)
 
     discovered_out: list[dict] = []
     for entry in _REGISTRY_CACHE.values():
-        if entry.name not in curated_name_set or _is_dynamic(entry):
-            data = _serialize_entry(entry)
-            # Policy: only curated layer controls deprecation. If an entry is NOT in curated
-            # and marked deprecated, clear the flag unless a curated entry with same name
-            # exists and is deprecated (shadow override case).
-            if data.get("deprecated") and data["name"] not in curated_name_set:
-                data["deprecated"] = False
-            discovered_out.append(data)
+        data = _serialize_entry(entry)
+        layer = entry.metadata.get("registry_layer")
+        if layer == "curated":
+            curated_map[data["name"]] = _strip_dynamic_fields_for_curated(data)
+        elif layer == "discovered":
+            curated_map.pop(data["name"], None)
+        elif data["name"] in curated_map and not _is_dynamic(entry):
+            curated_map[data["name"]] = _strip_dynamic_fields_for_curated(
+                curated_map[data["name"]]
+            )
+
+        discovered_copy = json.loads(json.dumps(data))
+        meta = discovered_copy.get("metadata") or {}
+        meta.pop("registry_layer", None)
+        discovered_copy["metadata"] = meta
+        if (
+            discovered_copy.get("deprecated")
+            and discovered_copy["name"] not in curated_map
+        ):
+            discovered_copy["deprecated"] = False
+        discovered_out.append(discovered_copy)
 
     discovered_file.parent.mkdir(parents=True, exist_ok=True)
     dtmp = discovered_file.with_suffix(".tmp")
     dtmp.write_text(json.dumps(discovered_out, indent=2) + "\n")
     dtmp.replace(discovered_file)
 
-    name_index: dict[str, dict] = {
-        e["name"]: e for e in curated_raw if isinstance(e, dict) and e.get("name")
-    }
+    curated_out = sorted(curated_map.values(), key=lambda e: e.get("name", ""))
+    ctmp = curated_file.with_suffix(".tmp")
+    ctmp.write_text(json.dumps(curated_out, indent=2) + "\n")
+    ctmp.replace(curated_file)
+
+    name_index: dict[str, dict] = {e["name"]: e for e in curated_out}
     for raw in discovered_out:
         name_index[raw["name"]] = raw
-    merged_raw = list(name_index.values())
     mtmp = merged_snapshot.with_suffix(".tmp")
-    mtmp.write_text(json.dumps(merged_raw, indent=2) + "\n")
+    mtmp.write_text(json.dumps(list(name_index.values()), indent=2) + "\n")
     mtmp.replace(merged_snapshot)
     _REGISTRY_PATH = merged_snapshot
     return merged_snapshot

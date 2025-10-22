@@ -15,12 +15,14 @@ from .models import (
     BackendConfig,
     Artifacts,
     ChatTemplate,
+    GenerationDefaults,
     VersionLock,
     PerformanceSummary,
     Probes,
 )
 
 from .hashing import compute_artifact_hashes, hash_file
+from .backend_summary import emit_backend_summary
 
 app = typer.Typer(help="Model registry maintenance commands")
 
@@ -142,6 +144,7 @@ def sync_downloader(
                 probes=Probes(vision=None),
                 profiles_placeholder=None,
                 metadata={"notes": "Imported from downloader"},
+                generation_defaults=GenerationDefaults(),
                 served_model_id=None,
                 model_aliases=[hf_id] if hf_id else [],
                 roles=[],
@@ -791,10 +794,22 @@ def list_roles(
         typer.echo(line)
 
 
+@app.command("show-backends")
+def show_backends(
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit backend summary as JSON instead of a table"
+    )
+):
+    """Show backend connectivity details for registry entries."""
+
+    emit_backend_summary(json_output)
+
+
 __all__ = [
     "get_typer_app",
     "regenerate_discovered",
     "sync_downloader",
     "verify",
     "list_roles",
+    "show_backends",
 ]

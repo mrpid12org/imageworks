@@ -19,6 +19,23 @@ def _get_int(name: str, default: int) -> int:
         return default
 
 
+def _get_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+def _get_optional_int(name: str) -> int | None:
+    val = os.environ.get(name)
+    if val is None or val == "":
+        return None
+    try:
+        return int(val)
+    except ValueError:
+        return None
+
+
 @dataclass
 class ProxyConfig:
     host: str = "127.0.0.1"
@@ -28,7 +45,7 @@ class ProxyConfig:
     max_log_bytes: int = 25_000_000
     backend_timeout_ms: int = 120_000
     stream_idle_timeout_ms: int = 60_000
-    autostart_enabled: bool = False
+    autostart_enabled: bool = True
     autostart_map_raw: Optional[str] = None
     autostart_grace_period_s: int = 120
     require_template: bool = True
@@ -39,6 +56,14 @@ class ProxyConfig:
     suppress_decorations: bool = True
     include_non_installed: bool = False
     loopback_alias: Optional[str] = None
+    vllm_single_port: bool = True
+    vllm_port: int = 24_001
+    vllm_state_path: str = "_staging/active_vllm.json"
+    vllm_start_timeout_s: int = 180
+    vllm_stop_timeout_s: int = 30
+    vllm_health_timeout_s: int = 120
+    vllm_gpu_memory_utilization: float = 0.75
+    vllm_max_model_len: int | None = None
 
     @classmethod
     def load(cls) -> "ProxyConfig":
@@ -52,7 +77,7 @@ class ProxyConfig:
             stream_idle_timeout_ms=_get_int(
                 "CHAT_PROXY_STREAM_IDLE_TIMEOUT_MS", 60_000
             ),
-            autostart_enabled=_get_bool("CHAT_PROXY_AUTOSTART_ENABLED", False),
+            autostart_enabled=_get_bool("CHAT_PROXY_AUTOSTART_ENABLED", True),
             autostart_map_raw=os.environ.get("CHAT_PROXY_AUTOSTART_MAP"),
             autostart_grace_period_s=_get_int(
                 "CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S", 120
@@ -67,4 +92,16 @@ class ProxyConfig:
             suppress_decorations=_get_bool("CHAT_PROXY_SUPPRESS_DECORATIONS", True),
             include_non_installed=_get_bool("CHAT_PROXY_INCLUDE_NON_INSTALLED", False),
             loopback_alias=os.environ.get("CHAT_PROXY_LOOPBACK_ALIAS"),
+            vllm_single_port=_get_bool("CHAT_PROXY_VLLM_SINGLE_PORT", True),
+            vllm_port=_get_int("CHAT_PROXY_VLLM_PORT", 24_001),
+            vllm_state_path=os.environ.get(
+                "CHAT_PROXY_VLLM_STATE_PATH", "_staging/active_vllm.json"
+            ),
+            vllm_start_timeout_s=_get_int("CHAT_PROXY_VLLM_START_TIMEOUT_S", 180),
+            vllm_stop_timeout_s=_get_int("CHAT_PROXY_VLLM_STOP_TIMEOUT_S", 30),
+            vllm_health_timeout_s=_get_int("CHAT_PROXY_VLLM_HEALTH_TIMEOUT_S", 120),
+            vllm_gpu_memory_utilization=_get_float(
+                "CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION", 0.75
+            ),
+            vllm_max_model_len=_get_optional_int("CHAT_PROXY_VLLM_MAX_MODEL_LEN"),
         )

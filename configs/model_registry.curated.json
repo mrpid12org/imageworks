@@ -1,1 +1,95 @@
-[]
+[
+  {
+    "name": "gpt-oss-20b_(MXFP4)",
+    "display_name": "gpt-oss-20b (MXFP4)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b",
+      "extra_args": [
+        "--gpu-memory-utilization",
+        "0.75",
+        "--max-model-len",
+        "12000",
+        "--kv-cache-memory",
+        "600000000"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {},
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b/chat_template.jinja",
+      "sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146"
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146",
+      "registry_layer": "curated"
+    },
+    "served_model_id": "gpt-oss-20b_(MXFP4)",
+    "model_aliases": [
+      "openai/gpt-oss-20b"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "openai/gpt-oss-20b"
+    },
+    "deprecated": false,
+    "family": "gpt-oss-20b",
+    "source_provider": "hf",
+    "quantization": "mxfp4",
+    "backend_alternatives": [],
+    "role_priority": {}
+  }
+]

@@ -1,29 +1,41 @@
-FROM python:3.12-slim
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app/src
 
 WORKDIR /app
 
-# Install minimal system deps for healthcheck and TLS
+# Install Python and build prerequisites
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        build-essential \
+        git \
+        ninja-build \
+        pkg-config \
+        ca-certificates \
+        curl \
+    && python3 -m pip install --upgrade pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install runtime-only lightweight Python deps; avoid heavy ML stacks
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir fastapi uvicorn[standard] httpx pydantic
+# Install runtime dependencies including vLLM GPU stack
+RUN python3 -m pip install --no-cache-dir \
+        "fastapi" \
+        "uvicorn[standard]" \
+        "httpx" \
+        "pydantic" \
+        "vllm[vision]==0.11.0" \
+        "qwen-vl-utils"
 
-# Copy only the required source subpackages and runtime configs
+# Copy required source and configs
 COPY src/imageworks/chat_proxy /app/src/imageworks/chat_proxy
 COPY src/imageworks/model_loader /app/src/imageworks/model_loader
 COPY configs /app/configs
 
-# Ensure package root is importable
-ENV PYTHONPATH=/app/src
-
-# Default env: bind on all interfaces in container; simplified names; installed-only
+# Default env overrides for container usage
 ENV CHAT_PROXY_HOST=0.0.0.0 \
     CHAT_PROXY_PORT=8100 \
     CHAT_PROXY_SUPPRESS_DECORATIONS=1 \
@@ -31,4 +43,4 @@ ENV CHAT_PROXY_HOST=0.0.0.0 \
 
 EXPOSE 8100
 
-CMD ["python", "-m", "imageworks.chat_proxy.app"]
+CMD ["python3", "-m", "imageworks.chat_proxy.app"]

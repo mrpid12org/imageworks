@@ -8,6 +8,20 @@ from typing import List, Optional
 from .registry import get_entry, load_registry
 from .models import SelectedModel, normalize_capabilities
 
+DEFAULT_BACKEND_PORTS = {
+    "vllm": 24001,
+    "ollama": 11434,
+    "lmdeploy": 24001,
+    "triton": 9000,
+}
+
+
+def default_backend_port(backend: str) -> int:
+    """Return default port for known backends."""
+
+    return DEFAULT_BACKEND_PORTS.get(backend, 8000)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,13 +47,7 @@ def _resolve_endpoint(entry) -> str:
                 host_override = stripped_host
 
     backend = getattr(entry, "backend", "")
-    default_port = 8000
-    if backend == "ollama":
-        default_port = 11434
-    elif backend == "lmdeploy":
-        default_port = 24001
-    elif backend == "triton":
-        default_port = 9000
+    default_port = default_backend_port(backend)
 
     port = getattr(cfg, "port", None) if cfg is not None else None
     if not isinstance(port, int) or port <= 0:
@@ -68,7 +76,9 @@ def select_model(
 
     if require_capabilities:
         missing = [
-            cap for cap in require_capabilities if not capabilities.get(cap.strip().lower(), False)
+            cap
+            for cap in require_capabilities
+            if not capabilities.get(cap.strip().lower(), False)
         ]
         if missing:
             raise CapabilityError(
@@ -99,4 +109,4 @@ def select_model(
     )
 
 
-__all__ = ["select_model", "CapabilityError", "load_registry"]
+__all__ = ["select_model", "CapabilityError", "load_registry", "default_backend_port"]

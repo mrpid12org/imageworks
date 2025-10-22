@@ -44,3 +44,12 @@ def test_cli_verify(tmp_path: Path):
     res = runner.invoke(models_app, ["verify", "cli-model"])  # noqa: S603
     # verify may fail if no files present but should still exit 0 (best-effort); adjust if logic changes
     assert res.exit_code == 0
+
+
+def test_cli_show_backends_json(tmp_path: Path):
+    _write_registry(tmp_path)
+    res = runner.invoke(models_app, ["show-backends", "--json"])  # noqa: S603
+    assert res.exit_code == 0
+    payload = json.loads(res.stdout)
+    assert payload[0]["name"] == "cli-model"
+    assert payload[0]["port"] == 9009

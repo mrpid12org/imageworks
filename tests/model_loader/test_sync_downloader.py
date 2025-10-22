@@ -91,3 +91,11 @@ def test_legacy_registry_removed():
         raise AssertionError(
             "Legacy model_registry unexpectedly importable without error"
         )
+
+
+def test_show_backends_command(isolated_configs_dir):
+    res = runner.invoke(sync_app, ["show-backends", "--json"])
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert isinstance(payload, list)
+    assert payload, "Expected at least one registry entry"

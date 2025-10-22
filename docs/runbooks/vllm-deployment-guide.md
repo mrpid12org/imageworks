@@ -17,6 +17,13 @@ This guide captures the practical steps and lessons from hosting vision-language
 - NVIDIA driver supporting **CUDA 12.8** or later
 - Python tooling managed via `uv`
 - `vllm` `>=0.4` installed in the project environment (`uv sync` handles this)
+  *(or rebuild the CUDA-enabled `Dockerfile.chat-proxy` image which now bundles
+  `vllm[vision]` alongside the chat proxy).*
+- Leave a buffer of GPU memory when running inside Docker. The chat proxy’s
+  orchestrator defaults to `CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION=0.75`; lower
+  it further if you are tight on VRAM (e.g., 16 GB cards running AWQ models),
+  and cap the maximum sequence length with `CHAT_PROXY_VLLM_MAX_MODEL_LEN`
+  (commonly `8192`) to avoid huge cache allocations during startup.
 - Network access for model downloads (unless weights are pre-cached)
 
 ## Model Selection

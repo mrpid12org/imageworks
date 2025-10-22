@@ -85,7 +85,9 @@ def normalize_capabilities(raw: Optional[Dict[str, Any]]) -> CapabilityMapping:
 
     result: CapabilityMapping = dict(cleaned)
     for canonical, synonyms in _CAPABILITY_SYNONYMS.items():
-        value = any(cleaned.get(_normalize_capability_key(alias), False) for alias in synonyms)
+        value = any(
+            cleaned.get(_normalize_capability_key(alias), False) for alias in synonyms
+        )
         result[canonical] = value
         for alias in synonyms:
             alias_key = _normalize_capability_key(alias)
@@ -138,6 +140,18 @@ class ChatTemplate:
 
 
 @dataclass
+class GenerationDefaults:
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    stop_sequences: List[str] = field(default_factory=list)
+    context_window: Optional[int] = None
+
+
+@dataclass
 class VersionLock:
     locked: bool
     expected_aggregate_sha256: Optional[str]
@@ -187,6 +201,7 @@ class RegistryEntry:
     probes: Probes
     profiles_placeholder: Optional[Any]
     metadata: Dict[str, Any] = field(default_factory=dict)
+    generation_defaults: GenerationDefaults = field(default_factory=GenerationDefaults)
     served_model_id: Optional[str] = (
         None  # actual identifier required by backend (e.g. Ollama tag with colon)
     )
@@ -255,6 +270,7 @@ __all__ = [
     "ArtifactFile",
     "Artifacts",
     "ChatTemplate",
+    "GenerationDefaults",
     "VersionLock",
     "PerformanceLastSample",
     "PerformanceSummary",

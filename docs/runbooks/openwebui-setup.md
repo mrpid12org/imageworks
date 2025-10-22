@@ -8,6 +8,7 @@ Run OpenWebUI alongside the ImageWorks Chat Proxy with docker-compose. The proxy
 ### 2. Start services
 
 ```
+docker compose -f docker-compose.openwebui.yml build chat-proxy
 docker compose -f docker-compose.openwebui.yml up -d
 ```
 
@@ -21,11 +22,23 @@ The compose file sets the base URL and disables the Ollama provider by default:
 - `OLLAMA_BASE_URLS=` and `OLLAMA_API_CONFIGS=` left blank
 - `RESET_CONFIG_ON_START=true` ensures env values override stale DB settings
 
-The bundle includes a sample `CHAT_PROXY_AUTOSTART_MAP` in the proxy service
-definition to illustrate the format. Autostart remains disabled
-(`CHAT_PROXY_AUTOSTART_ENABLED="false"`). Update or trim the map before turning
-autostart on so only locally available models are referenced.
+The proxy container bundles `vllm[vision]` so the single-port orchestrator can
+launch models internally. GPU access (`gpus: all`) is required; ensure the
+NVIDIA Container Toolkit is installed. Weight directories are bind-mounted at
+the same absolute paths used on the host (`/home/you/ai-models/weights`) so
+registry entries continue to resolve correctly.
 
+Single-port orchestration is enabled by default
+(`CHAT_PROXY_VLLM_SINGLE_PORT=1`). Switching models from OpenWebUI stops the
+running vLLM process, starts the requested entry, and resumes the conversation
+once `/v1/health` reports ready. You can pre-warm or stop models manually with
+`uv run imageworks-loader activate-model <logical_name>` or
+`uv run imageworks-loader activate-model --stop`. Set
+`CHAT_PROXY_VLLM_SINGLE_PORT=0` if you prefer to manage vLLM outside the
+container. On 16 GB GPUs, consider lowering
+`CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION` (e.g., to `0.7`) and overriding
+`CHAT_PROXY_VLLM_MAX_MODEL_LEN` (e.g., `8192`) so the orchestrator fits larger
+models without long initialization or OOM retries.
 You typically don’t need to edit settings inside the UI; the environment config is applied on container start.
 
 ### 4. Installed-only model listing
@@ -40,9 +53,9 @@ services:
 2) Or relax filtering by setting `CHAT_PROXY_INCLUDE_NON_INSTALLED=1`.
 
 ### 5. GPU Acceleration
-The compose file requests GPU (`gpus: all`). Ensure:
-* `nvidia-smi` works on host
-* Docker sees GPUs (`docker run --gpus all nvidia/cuda:12.2.0-base nvidia-smi`)
+Both `chat-proxy` and `openwebui` request GPU access (`gpus: all`). Ensure:
+* `nvidia-smi` works on the host
+* Docker sees GPUs (`docker run --gpus all nvidia/cuda:12.8.0-base nvidia-smi`)
 
 ### 6. Networking notes
 * `openwebui` reaches the proxy by service name `chat-proxy`; no host networking required.
@@ -53,6 +66,7 @@ See `docs/reference/chat-proxy.md` for a full table. Common toggles:
 - `CHAT_PROXY_SUPPRESS_DECORATIONS=1` (default)
 - `CHAT_PROXY_INCLUDE_NON_INSTALLED=0` (default)
 - `CHAT_PROXY_ENABLE_METRICS=0` (optional)
+- `CHAT_PROXY_VLLM_SINGLE_PORT=1` (default single active vLLM instance)
 
 ### 8. Troubleshooting
 | Symptom | Likely Cause | Fix |

@@ -42,6 +42,14 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 | CHAT_PROXY_AUTOSTART_ENABLED | Enable backend autostart commands | 0 |
 | CHAT_PROXY_AUTOSTART_MAP | JSON map of logical model → command | *(unset)* |
 | CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S | Delay before the proxy marks autostart failures | 120 |
+| CHAT_PROXY_VLLM_SINGLE_PORT | Enable single active vLLM orchestration | 1 |
+| CHAT_PROXY_VLLM_PORT | Canonical vLLM port when orchestration is enabled | 24001 |
+| CHAT_PROXY_VLLM_STATE_PATH | Metadata file tracking the active vLLM instance | `_staging/active_vllm.json` |
+| CHAT_PROXY_VLLM_START_TIMEOUT_S | Time budget (seconds) for vLLM startup + health | 180 |
+| CHAT_PROXY_VLLM_STOP_TIMEOUT_S | Graceful shutdown timeout before SIGKILL | 30 |
+| CHAT_PROXY_VLLM_HEALTH_TIMEOUT_S | Per-request timeout when polling vLLM health | 120 |
+| CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION | Fraction of GPU memory vLLM should claim when launched by the orchestrator | 0.75 |
+| CHAT_PROXY_VLLM_MAX_MODEL_LEN | Override max sequence length passed to vLLM (`--max-model-len`) | *(unset)* |
 
 ### Logging & autostart
 - Requests are appended to `CHAT_PROXY_LOG_PATH` in JSONL format. When the file
@@ -51,7 +59,36 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 - Autostart is optional. Enable it with `CHAT_PROXY_AUTOSTART_ENABLED=1` and
   supply `CHAT_PROXY_AUTOSTART_MAP` (JSON mapping logical model names to shell
   commands). The proxy waits `CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S` seconds
-  before reporting a startup failure.
+  before reporting a startup failure. When single-port orchestration is enabled
+  the proxy ignores autostart commands for vLLM entries and instead asks the
+  orchestrator to switch the active model.
+
+### Single-port vLLM orchestration
+- With `CHAT_PROXY_VLLM_SINGLE_PORT=1` (default) the proxy keeps at most one
+  vLLM instance alive. Switching models automatically stops the running process,
+  starts the requested entry on `CHAT_PROXY_VLLM_PORT`, and waits for
+  `/v1/health` before forwarding user traffic.
+- The orchestrator persists its state in `CHAT_PROXY_VLLM_STATE_PATH`
+  (`active_vllm.json` under `_staging/` by default). If the backing process
+  exits unexpectedly the state file is cleared on the next request.
+- You can trigger manual switches without hitting the API:
+  `uv run imageworks-loader activate-model <logical_name>` starts that entry,
+  `uv run imageworks-loader activate-model --stop` shuts everything down, and
+  `uv run imageworks-loader current-model` reports the active metadata.
+
+### Dockerized deployment
+- `Dockerfile.chat-proxy` now targets `nvidia/cuda:12.8-runtime-ubuntu22.04`
+  and bundles `vllm[vision]` alongside the proxy so the orchestrator can launch
+  models inside the container. Rebuild with `docker compose build chat-proxy`
+  after dependency updates.
+- Grant GPU access to the container (`gpus: all` in compose or
+  `NVIDIA_VISIBLE_DEVICES=all`) and ensure the NVIDIA Container Toolkit is
+  installed on the host.
+- Mount your model weights into the container at the same absolute path used on
+  the host so `start_vllm_server.py` resolves entries correctly.
+- To fall back to a host-managed vLLM process, set
+  `CHAT_PROXY_VLLM_SINGLE_PORT=0` (for example by exporting the environment
+  variable before invoking `docker compose up`).
 
 ### Docker Compose usage
 

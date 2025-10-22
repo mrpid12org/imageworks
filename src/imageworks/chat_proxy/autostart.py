@@ -5,11 +5,21 @@ import json
 import subprocess
 from typing import Dict, List, Optional
 
+from .config import ProxyConfig
+from .vllm_manager import VllmManager, VllmActivationError
+
 
 class AutostartManager:
-    def __init__(self, raw_map: Optional[str]):
+    def __init__(
+        self,
+        raw_map: Optional[str],
+        cfg: Optional[ProxyConfig] = None,
+        vllm_manager: VllmManager | None = None,
+    ):
         self.lock_map: Dict[str, asyncio.Lock] = {}
         self.start_map: Dict[str, Dict[str, List[str]]] = {}
+        self.cfg = cfg
+        self.vllm_manager = vllm_manager
         if raw_map:
             try:
                 self.start_map = json.loads(raw_map)
@@ -21,7 +31,21 @@ class AutostartManager:
             self.lock_map[model] = asyncio.Lock()
         return self.lock_map[model]
 
-    async def ensure_started(self, model: str) -> bool:
+    async def ensure_started(self, model: str, entry) -> bool:
+        if (
+            self.cfg
+            and self.cfg.vllm_single_port
+            and getattr(entry, "backend", None) == "vllm"
+            and self.vllm_manager
+        ):
+            try:
+                await self.vllm_manager.activate(entry)
+                return True
+            except VllmActivationError:
+                raise
+            except Exception:  # noqa: BLE001
+                return False
+
         cfg = self.start_map.get(model)
         if not cfg:
             return False

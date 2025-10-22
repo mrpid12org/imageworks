@@ -1,0 +1,26 @@
+{%- set bos = '<s>' -%}
+{%- set eos = '</s>' -%}
+{%- set dialogue = messages | list -%}
+{%- if dialogue and dialogue[0]['role'] == 'system' -%}
+  {%- set system_prompt = dialogue[0]['content'] | trim -%}
+  {%- set dialogue = dialogue[1:] -%}
+{%- else -%}
+  {%- set system_prompt = 'You are a helpful assistant.' -%}
+{%- endif -%}
+{%- if not dialogue or dialogue[0]['role'] != 'user' -%}
+  {{ raise_exception('Conversation must start with a user message.') }}
+{%- endif -%}
+{%- set first_user = dialogue[0]['content'] | trim -%}
+{%- set dialogue = dialogue[1:] -%}
+{{ bos }}[INST]{{ ' <<SYS>>
+' + system_prompt + '
+<</SYS>>
+
+' if system_prompt else '' }}{{ first_user }} [/INST]
+{%- for message in dialogue -%}
+  {%- if message['role'] == 'assistant' -%}
+    {{ ' ' + (message['content'] | trim) + ' ' + eos }}
+  {%- elif message['role'] == 'user' -%}
+    {{ bos }}[INST] {{ message['content'] | trim }} [/INST]
+  {%- endif -%}
+{%- endfor -%}

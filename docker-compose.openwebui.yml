@@ -6,14 +6,18 @@ services:
     container_name: imageworks-chat-proxy
     restart: unless-stopped
     environment:
-      CHAT_PROXY_AUTOSTART_ENABLED: "false"
-      CHAT_PROXY_AUTOSTART_MAP: |
-        {"qwen2.5-vl-7b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-vl-7b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-qwen2_5-vl-7b-instruct__AWQ_.log"]},"deepseek-coder-6.7b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","deepseek-coder-6.7b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-deepseek-coder-6_7b-instruct__AWQ_.log"]},"codellama-13b-instruct_(AWQ)":{"command":["python","scripts/start_vllm_server.py","--model-name","codellama-13b-instruct_(AWQ)","--background","--log-file","/app/logs/autostart-codellama-13b-instruct__AWQ_.log"]},"gpt-oss-20b_(MXFP4)":{"command":["python","scripts/start_vllm_server.py","--model-name","gpt-oss-20b_(MXFP4)","--background","--log-file","/app/logs/autostart-gpt-oss-20b__MXFP4_.log"]},"dialogpt-small":{"command":["python","scripts/start_vllm_server.py","--model-name","dialogpt-small","--background","--log-file","/app/logs/autostart-dialogpt-small.log"]},"qwen2.5-coder-7b-instruct_(GPTQ_INT8)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-coder-7b-instruct_(GPTQ_INT8)","--background","--log-file","/app/logs/autostart-qwen2_5-coder-7b-instruct__GPTQ_INT8_.log"]},"qwen2.5-vl-7b-instruct_(BF16)":{"command":["python","scripts/start_vllm_server.py","--model-name","qwen2.5-vl-7b-instruct_(BF16)","--background","--log-file","/app/logs/autostart-qwen2_5-vl-7b-instruct__BF16_.log"]},"siglip-large-patch16-384_(FP32)":{"command":["python","scripts/start_vllm_server.py","--model-name","siglip-large-patch16-384_(FP32)","--background","--log-file","/app/logs/autostart-siglip-large-patch16-384__FP32_.log"]}}
+      CHAT_PROXY_AUTOSTART_ENABLED: "1"
       CHAT_PROXY_HOST: "0.0.0.0"
       CHAT_PROXY_PORT: "8100"
       CHAT_PROXY_SUPPRESS_DECORATIONS: "1"
       CHAT_PROXY_INCLUDE_NON_INSTALLED: "0"
-      CHAT_PROXY_LOOPBACK_ALIAS: "host.docker.internal"
+      CHAT_PROXY_LOOPBACK_ALIAS: ""
+      CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S: "45"
+      CHAT_PROXY_VLLM_SINGLE_PORT: "${CHAT_PROXY_VLLM_SINGLE_PORT:-1}"
+      CHAT_PROXY_VLLM_PORT: "${CHAT_PROXY_VLLM_PORT:-24001}"
+      CHAT_PROXY_VLLM_STATE_PATH: "${CHAT_PROXY_VLLM_STATE_PATH:-/app/_staging/active_vllm.json}"
+      CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION: "${CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION:-0.7}"
+      CHAT_PROXY_VLLM_MAX_MODEL_LEN: "${CHAT_PROXY_VLLM_MAX_MODEL_LEN:-8192}"
     ports:
       - "8100:8100"  # Host:Container
     healthcheck:
@@ -33,6 +37,7 @@ services:
       - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    gpus: all
     networks:
       - imageworks-net
   openwebui:
@@ -70,4 +75,5 @@ volumes:
 
 networks:
   imageworks-net:
-    driver: bridge
+    external: true
+    name: imageworks_default

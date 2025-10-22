@@ -1,7 +1,11 @@
+import base64
 from fastapi.testclient import TestClient
 from imageworks.chat_proxy.app import app
 from imageworks.chat_proxy import app as app_module, forwarder as forwarder_module
-import base64
+
+app_module._cfg.vllm_single_port = False
+app_module._forwarder.cfg.vllm_single_port = False
+app_module._forwarder.vllm_manager = None
 
 
 def test_capability_mismatch(monkeypatch):

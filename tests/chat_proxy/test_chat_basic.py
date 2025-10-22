@@ -12,6 +12,10 @@ from imageworks.chat_proxy.metrics import MetricsAggregator
 from imageworks.chat_proxy.logging_utils import JsonlLogger
 from imageworks.chat_proxy.forwarder import ChatForwarder
 
+app_module._cfg.vllm_single_port = False
+app_module._forwarder.cfg.vllm_single_port = False
+app_module._forwarder.vllm_manager = None
+
 
 def test_chat_basic(monkeypatch):
     from imageworks.chat_proxy import forwarder
@@ -192,7 +196,7 @@ def test_chat_autostart_uses_resolved_id(monkeypatch):
 
     autostart_calls = []
 
-    async def fake_ensure_started(model):
+    async def fake_ensure_started(model, entry_obj):
         autostart_calls.append(model)
         return True
 
@@ -373,7 +377,7 @@ def test_loopback_alias_rewrites_localhost(tmp_path):
     metrics = MetricsAggregator()
     autostart = AutostartManager(None)
     logger = JsonlLogger(str(tmp_path / "proxy.log"))
-    forwarder = ChatForwarder(cfg, metrics, autostart, logger)
+    forwarder = ChatForwarder(cfg, metrics, autostart, logger, None)
     entry = SimpleNamespace(
         backend="vllm",
         backend_config=SimpleNamespace(host="127.0.0.1", port=9001, base_url=None),

@@ -568,6 +568,12 @@ def _persist_existing_entry(
         for key, value in data.extra_metadata.items():
             if value is not None and key not in existing.metadata:
                 existing.metadata[key] = value
+    if existing.backend == "ollama" and not getattr(
+        existing.backend_config, "host", None
+    ):
+        existing.backend_config.host = os.environ.get(
+            "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+        )
     unified_registry.update_entries([existing], save=True)
 
 

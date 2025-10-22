@@ -28,6 +28,7 @@ from .models import (
     BackendConfig,
     Artifacts,
     ChatTemplate,
+    GenerationDefaults,
     VersionLock,
     PerformanceSummary,
     Probes,
@@ -36,6 +37,7 @@ from .hashing import compute_artifact_hashes
 from .testing_filters import is_testing_name
 from .naming import build_identity
 from .simplified_naming import simplified_slug_for_fields
+from .service import default_backend_port
 import os as _os
 
 
@@ -393,6 +395,14 @@ def record_download(
             for k, v in extra_metadata.items():
                 if v is not None and k not in entry.metadata:
                     entry.metadata[k] = v
+        if not getattr(entry.backend_config, "port", 0):
+            entry.backend_config.port = default_backend_port(entry.backend)
+        if entry.backend == "ollama" and not getattr(
+            entry.backend_config, "host", None
+        ):
+            entry.backend_config.host = _os.environ.get(
+                "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+            )
         # Only set display_name if not already set (curated) or if explicitly requested
         if not getattr(entry, "display_name", None):
             try:
@@ -520,6 +530,7 @@ def record_download(
         probes=Probes(vision=None),
         profiles_placeholder=None,
         metadata={"created_from_download": True, **(extra_metadata or {})},
+        generation_defaults=GenerationDefaults(),
         served_model_id=served_model_id,
         model_aliases=[hf_id] if hf_id else [],
         roles=roles or [],
@@ -540,6 +551,12 @@ def record_download(
         downloaded_at=now,
         last_accessed=now,
     )
+    if entry.backend_config.port in (None, 0):
+        entry.backend_config.port = default_backend_port(entry.backend)
+    if entry.backend == "ollama" and not entry.backend_config.host:
+        entry.backend_config.host = _os.environ.get(
+            "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+        )
     entry = compute_artifact_hashes(entry)
     update_entries([entry], save=True)
     # Post-registration best-effort vision probe (Ollama)

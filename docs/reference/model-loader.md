@@ -99,6 +99,31 @@ Shows lightweight operational data derived from the registry:
 - When a name is provided it prints the full aggregate hash and lock status for
   that entry.
 
+### `activate-model`
+
+```
+uv run imageworks-loader activate-model <logical_name>
+uv run imageworks-loader activate-model --stop
+```
+
+Controls the single-port vLLM orchestrator used by the chat proxy. When passed
+a vLLM-backed logical name the command stops any running instance, launches the
+requested model on the canonical port, waits for the `/v1/health` probe, and
+writes the new metadata to the orchestrator state file. `--stop` (or passing the
+literal value `none`) shuts down the active instance without starting a new
+model. The command exits with a non-zero status if orchestration is disabled or
+the switch fails.
+
+### `current-model`
+
+```
+uv run imageworks-loader current-model
+```
+
+Prints the JSON descriptor stored in the orchestrator state file (`null` when no
+active vLLM process is registered). This is handy for verifying which model is
+currently bound to the canonical port.
+
 ## Python API Highlights
 
 Import the helpers directly from `imageworks.model_loader`:

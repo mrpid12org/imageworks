@@ -5,12 +5,14 @@ services:
       dockerfile: Dockerfile.chat-proxy
     container_name: imageworks-chat-proxy
     restart: unless-stopped
+    gpus: all
     environment:
       - CHAT_PROXY_HOST=0.0.0.0
       - CHAT_PROXY_PORT=8100
       - CHAT_PROXY_SUPPRESS_DECORATIONS=1
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
-      - CHAT_PROXY_LOOPBACK_ALIAS=host.docker.internal
+      - CHAT_PROXY_AUTOSTART_ENABLED=1
+      - CHAT_PROXY_LOOPBACK_ALIAS=
     ports:
       - "8100:8100"
     volumes:

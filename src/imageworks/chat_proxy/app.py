@@ -12,6 +12,7 @@ from .metrics import MetricsAggregator
 from .autostart import AutostartManager
 from .logging_utils import JsonlLogger
 from .forwarder import ChatForwarder
+from .vllm_manager import VllmManager
 from .capabilities import supports_vision
 from .errors import ProxyError
 from ..model_loader.registry import load_registry, list_models, get_entry
@@ -22,9 +23,10 @@ logging.basicConfig(level=logging.INFO)
 
 _cfg = ProxyConfig.load()
 _metrics = MetricsAggregator()
-_autostart = AutostartManager(_cfg.autostart_map_raw)
+_vllm_manager = VllmManager(_cfg)
+_autostart = AutostartManager(_cfg.autostart_map_raw, _cfg, _vllm_manager)
 _logger = JsonlLogger(_cfg.log_path, _cfg.max_log_bytes)
-_forwarder = ChatForwarder(_cfg, _metrics, _autostart, _logger)
+_forwarder = ChatForwarder(_cfg, _metrics, _autostart, _logger, _vllm_manager)
 
 
 app = FastAPI(title="ImageWorks Chat Proxy", version="0.1")

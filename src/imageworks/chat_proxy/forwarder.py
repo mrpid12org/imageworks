@@ -20,8 +20,9 @@ from .errors import (
 )
 from .normalization import normalize_response
 from .metrics import MetricsAggregator, MetricSample
-from .autostart import AutostartManager
+from .autostart import AutostartManager, VllmActivationError
 from .logging_utils import JsonlLogger
+from .vllm_manager import VllmManager
 from ..model_loader.registry import get_entry
 from .capabilities import supports_vision
 
@@ -33,12 +34,14 @@ class ChatForwarder:
         metrics: MetricsAggregator,
         autostart: AutostartManager,
         logger: JsonlLogger,
+        vllm_manager: VllmManager | None = None,
     ):
         self.cfg = cfg
         self.metrics = metrics
         self.autostart = autostart
         self.logger = logger
         self.client = httpx.AsyncClient(timeout=cfg.backend_timeout_ms / 1000)
+        self.vllm_manager = vllm_manager
 
     async def _probe(self, base_url: str) -> bool:
         try:
@@ -282,6 +285,15 @@ class ChatForwarder:
         backend_id = served or entry.name
         # Backend-specific base URL and API path
         base_url, api_path = self._resolve_backend_base(entry)
+        vllm_started = False
+        if self.cfg.autostart_enabled and entry.backend == "vllm" and self.autostart:
+            try:
+                vllm_started = await self.autostart.ensure_started(model, entry)
+            except VllmActivationError as exc:
+                raise err_model_start_timeout(model) from exc
+            except Exception:
+                vllm_started = False
+
         if entry.backend != "ollama":
             # For OpenAI-compatible backends (vLLM, LMDeploy, Triton), the upstream expects the
             # concrete served model name, which may differ from our logical model id. Rewrite the
@@ -294,11 +306,25 @@ class ChatForwarder:
                 # If payload isn't a dict, fall back without rewrite (defensive)
                 pass
 
+        if entry.backend == "vllm":
+            extra_body = {}
+            try:
+                current_extra = payload.get("extra_body")  # type: ignore[attr-defined]
+                if isinstance(current_extra, dict):
+                    extra_body = dict(current_extra)
+            except Exception:
+                extra_body = {}
+            extra_body.setdefault("add_generation_prompt", True)
+            if extra_body:
+                payload["extra_body"] = extra_body
+
         # Ensure backend reachable or autostart
         if entry.backend != "ollama" and not await self._probe(base_url):
             started = False
             if self.cfg.autostart_enabled:
-                if await self.autostart.ensure_started(model):
+                if vllm_started:
+                    started = True
+                elif await self.autostart.ensure_started(model, entry):
                     # wait grace
                     await asyncio.sleep(self.cfg.autostart_grace_period_s)
                     if await self._probe(base_url):

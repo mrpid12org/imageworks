@@ -3,6 +3,10 @@ from fastapi.testclient import TestClient
 from imageworks.chat_proxy.app import app
 from imageworks.chat_proxy import app as app_module, forwarder as forwarder_module
 
+app_module._cfg.vllm_single_port = False
+app_module._forwarder.cfg.vllm_single_port = False
+app_module._forwarder.vllm_manager = None
+
 
 autostart_calls = []
 
@@ -28,7 +32,7 @@ def test_autostart_race(monkeypatch):
             return False
         return True
 
-    async def ensure_started(self, model: str):
+    async def ensure_started(self, model: str, entry):
         if not autostart_calls:
             autostart_calls.append(model)
             return True
