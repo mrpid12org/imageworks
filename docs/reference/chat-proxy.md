@@ -86,6 +86,12 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
   installed on the host.
 - Mount your model weights into the container at the same absolute path used on
   the host so `start_vllm_server.py` resolves entries correctly.
+- Ollama entries imported via `imageworks-download` automatically set
+  `backend_config.host=host.docker.internal` (configurable via the
+  `IMAGEWORKS_OLLAMA_HOST` environment variable). This keeps the container’s
+  proxy talking to the host Ollama daemon without extra manual edits. You only
+  need to set `CHAT_PROXY_LOOPBACK_ALIAS` if your environment uses a different
+  name.
 - To fall back to a host-managed vLLM process, set
   `CHAT_PROXY_VLLM_SINGLE_PORT=0` (for example by exporting the environment
   variable before invoking `docker compose up`).

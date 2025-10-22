@@ -237,6 +237,15 @@ uv run python scripts/import_ollama_models.py --backend ollama --location linux_
 uv run python scripts/import_ollama_models.py --deprecate-placeholders
 ```
 
+Environment:
+```bash
+# Override the host written into backend_config for Ollama entries
+IMAGEWORKS_OLLAMA_HOST=host.docker.internal
+```
+
+(`host.docker.internal` is the default when the variable is unset so proxy
+containers can talk to the host daemon without extra edits.)
+
 The importer also migrates existing Strategy A entries that were previously stored
 without a quant suffix. When a quantization tag is detected, any matching
 `<family>-ollama-gguf` record is renamed to `<family>-ollama-gguf-<quant>` so the
@@ -263,6 +272,10 @@ uv run imageworks-loader discover-all --hf-root ~/ai-models/weights
 Note:
 - The commands live under `imageworks-loader` (module: `imageworks.model_loader.cli_sync`).
 - `discover-all` now invokes `ingest-local-hf` (adapter-backed) and the Ollama importer (already adapter-backed), ensuring there is only one route into the registry.
+- Curated overrides (display names, launch flags, etc.) remain in
+  `model_registry.curated.json`. Rediscovery only refreshes the discovered
+  overlay so the manual tweaks survive while dynamic fields such as
+  `download_path` continue to update.
 
 What gets populated:
 * `download_format = gguf`

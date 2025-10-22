@@ -28,6 +28,11 @@ NVIDIA Container Toolkit is installed. Weight directories are bind-mounted at
 the same absolute paths used on the host (`/home/you/ai-models/weights`) so
 registry entries continue to resolve correctly.
 
+For Ollama-backed entries imported via `imageworks-download`, the registry now
+writes `backend_config.host=host.docker.internal` by default (override with
+`IMAGEWORKS_OLLAMA_HOST`). This lets the container talk to your host Ollama
+daemon without additional manual tweaks.
+
 Single-port orchestration is enabled by default
 (`CHAT_PROXY_VLLM_SINGLE_PORT=1`). Switching models from OpenWebUI stops the
 running vLLM process, starts the requested entry, and resumes the conversation
@@ -60,6 +65,9 @@ Both `chat-proxy` and `openwebui` request GPU access (`gpus: all`). Ensure:
 ### 6. Networking notes
 * `openwebui` reaches the proxy by service name `chat-proxy`; no host networking required.
 * To expose OpenWebUI to your LAN, keep the default port mapping `3000:8080` and secure access as needed.
+* If you change the host name that Ollama entries should target, update
+  `IMAGEWORKS_OLLAMA_HOST` before running rediscovery/import scripts so the
+  backend configs align with your environment.
 
 ### 7. Proxy environment quick reference
 See `docs/reference/chat-proxy.md` for a full table. Common toggles:

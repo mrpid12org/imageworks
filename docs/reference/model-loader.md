@@ -6,21 +6,23 @@ ImageWorks model registry. It is a Python library with a Typer-powered CLI
 
 ## Registry Layout
 
-The active registry is kept in a layered structure under `configs/`:
+The active registry is layered under `configs/`:
 
-- `model_registry.curated.json` – hand-maintained baseline metadata (display
-  names, roles, licensing, version locks, etc.).
-- `model_registry.discovered.json` – dynamic overlay written by tooling
-  (downloader, importers, normalization commands). Runtime fields such as
-  `download_path`, `download_size_bytes`, `performance`, and probe data live
-  here.
-- `model_registry.json` – merged snapshot regenerated on load/save for backward
-  compatibility with scripts that still expect a single file.
+- `model_registry.curated.json` – human-maintained overrides: display names,
+  deliberate launch flags, backend host overrides, role tweaks, etc. Curated
+  entries now explicitly carry `metadata.registry_layer="curated"`.
+- `model_registry.discovered.json` – dynamic state written by tooling
+  (downloaders, rediscovery, probes). This is where runtime fields such as
+  `download_path`, file hashes, performance samples, and timestamps live.
+- `model_registry.json` – merged snapshot regenerated on load/save for legacy
+  scripts that still expect a single file.
 
-`imageworks.model_loader.registry.load_registry()` reads the curated and
-discovered layers, overlays them in memory, and caches the merged result.
-`save_registry()` only rewrites the discovered layer (and refreshes the merged
-snapshot) so curated edits remain stable.
+`imageworks.model_loader.registry.load_registry()` reads both layers, merges the
+dynamic data with curated overrides, and caches the result. `save_registry()`
+rewrites the discovered overlay and regenerates the merged snapshot while
+preserving the curated file. The curated overlay purposefully omits dynamic
+fields so rediscovery can continue to refresh them without clobbering manual
+tuning.
 
 ## CLI (`imageworks-loader`)
 
@@ -113,6 +115,12 @@ writes the new metadata to the orchestrator state file. `--stop` (or passing the
 literal value `none`) shuts down the active instance without starting a new
 model. The command exits with a non-zero status if orchestration is disabled or
 the switch fails.
+
+The downloader/importer layer also sets sensible defaults for Ollama entries.
+When an Ollama model is recorded and no host is provided, the tooling now
+injects `backend_config.host = "host.docker.internal"` (overridable with
+`IMAGEWORKS_OLLAMA_HOST`) so proxy containers can talk to the host daemon
+without additional manual curation.
 
 ### `current-model`
 
