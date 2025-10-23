@@ -264,10 +264,10 @@ class ChatForwarder:
         # Capability checks
         has_vision = supports_vision(entry)
         has_images, image_bytes = self._detect_images(payload.get("messages") or [])
-        # For Ollama, defer vision capability validation to the backend (some models support vision even if
-        # our registry hasn't been probed yet). Keep strict gating for non-Ollama backends.
-        if has_images and entry.backend != "ollama" and not has_vision:
-            raise err_capability_mismatch("Vision content provided to non-vision model")
+        if has_images and not has_vision:
+            raise err_capability_mismatch(
+                f"Model '{model}' does not support vision/image content"
+            )
         if image_bytes > self.cfg.max_image_bytes:
             raise err_payload_too_large(self.cfg.max_image_bytes)
         # Require chat template unless backend has its own prompting (e.g., ollama)

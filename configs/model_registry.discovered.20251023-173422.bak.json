@@ -262,7 +262,47 @@
       "audio": false,
       "thinking": true,
       "reasoning": true,
-      "tools": true
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": true,
+      "think": true,
+      "chain_of_thought": true,
+      "cot": true,
+      "reasoner": true,
+      "o1": true,
+      "o3": true,
+      "r1": true,
+      "deepseek": true
     },
     "generation_defaults": {
       "temperature": 0.35,
@@ -377,11 +417,11 @@
       "special_tokens_map.json",
       "tokenizer_config.json",
       "chat_template.jinja:Zone.Identifier",
-      "logs/vllm_server.log"
+      "vllm_server.log"
     ],
     "download_directory_checksum": "27f2a8598786b347",
-    "downloaded_at": "2025-10-23T17:41:09.279127+00:00",
-    "last_accessed": "2025-10-23T17:41:09.279127+00:00"
+    "downloaded_at": "2025-10-23T17:25:02.539068+00:00",
+    "last_accessed": "2025-10-23T17:25:02.539068+00:00"
   },
   {
     "name": "llama3.1-local-latest_(Q5_K_M)",
@@ -1079,8 +1119,8 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "8cae1463a1134800",
-    "downloaded_at": "2025-10-23T17:41:01.715794+00:00",
-    "last_accessed": "2025-10-23T17:41:01.715794+00:00"
+    "downloaded_at": "2025-10-23T17:24:56.276397+00:00",
+    "last_accessed": "2025-10-23T17:24:56.276397+00:00"
   },
   {
     "name": "qwen3_8.2b_(Q4_K_M)",
@@ -1444,8 +1484,8 @@
     "download_size_bytes": 16106127360,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-23T17:36:21.174038+00:00",
-    "last_accessed": "2025-10-23T17:36:21.174038+00:00"
+    "downloaded_at": "2025-10-23T17:24:27.915111+00:00",
+    "last_accessed": "2025-10-23T17:24:27.915111+00:00"
   },
   {
     "name": "qwen2.5-coder-7b-instruct_(Q4_K_M)",
@@ -1528,13 +1568,7 @@
       "last_sample": null
     },
     "probes": {
-      "vision": {
-        "vision_ok": true,
-        "timestamp": "2025-10-23T17:36:33.249121+00:00",
-        "probe_version": "1",
-        "latency_ms": 5946,
-        "notes": "auto-probe:ollama"
-      }
+      "vision": null
     },
     "profiles_placeholder": null,
     "metadata": {
@@ -1569,8 +1603,8 @@
     "download_size_bytes": 5046586572,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-23T17:36:27.299506+00:00",
-    "last_accessed": "2025-10-23T17:36:27.299506+00:00"
+    "downloaded_at": "2025-10-23T17:24:34.050915+00:00",
+    "last_accessed": "2025-10-23T17:24:34.050915+00:00"
   },
   {
     "name": "pixtral-local-latest_(Q4_K_M)",
@@ -1687,8 +1721,8 @@
     "download_size_bytes": 8912057139,
     "download_files": [],
     "download_directory_checksum": "",
-    "downloaded_at": "2025-10-23T17:36:33.326504+00:00",
-    "last_accessed": "2025-10-23T17:36:33.326504+00:00"
+    "downloaded_at": "2025-10-23T17:24:40.132865+00:00",
+    "last_accessed": "2025-10-23T17:24:40.132865+00:00"
   },
   {
     "name": "siglip-large-patch16-384_(FP32)",
@@ -1844,7 +1878,7 @@
       "tokenizer_config.json"
     ],
     "download_directory_checksum": "0bc0136d63c7a51f",
-    "downloaded_at": "2025-10-23T17:40:59.827607+00:00",
-    "last_accessed": "2025-10-23T17:40:59.827607+00:00"
+    "downloaded_at": "2025-10-23T17:24:53.131033+00:00",
+    "last_accessed": "2025-10-23T17:24:53.131033+00:00"
   }
 ]

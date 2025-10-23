@@ -1,0 +1,1391 @@
+[
+  {
+    "name": "gpt-oss-20b_(MXFP4)",
+    "display_name": "gpt-oss-20b (MXFP4)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b",
+      "extra_args": [
+        "--gpu-memory-utilization",
+        "0.75",
+        "--max-model-len",
+        "12000",
+        "--kv-cache-memory",
+        "600000000"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": true,
+      "reasoning": true,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": true,
+      "think": true,
+      "chain_of_thought": true,
+      "cot": true,
+      "reasoner": true,
+      "o1": true,
+      "o3": true,
+      "r1": true,
+      "deepseek": true
+    },
+    "generation_defaults": {
+      "temperature": 0.35,
+      "top_p": 0.9,
+      "top_k": 40
+    },
+    "artifacts": {
+      "aggregate_sha256": "8dd25acb04cfaba8b32fc6f6243d868be505c2d3b875e5d4ae02128828980797",
+      "files": [
+        {
+          "path": "chat_template.jinja",
+          "sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146"
+        },
+        {
+          "path": "chat_template.jinja:Zone.Identifier",
+          "sha256": "b31eb50473e34e4553e676526f915f66c0cc667267722091b67b861aba5be1f0"
+        },
+        {
+          "path": "chat_template.jinja:mshield",
+          "sha256": "4f71a0068ac45f350eec2f6e1e203c9dadde4130412d60e05fcd1b03a44bb144"
+        },
+        {
+          "path": "config.json",
+          "sha256": "3a2a26ded679375b7928ddeca59764df7cea83220c1961035f6d6e232659e9ce"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "f9970ada892d2d1f72e3ed0a6535ccebadd11897318794ca671d8c7014c957da"
+        },
+        {
+          "path": "logs/vllm_server.log",
+          "sha256": "5c801ccc2dd0f3d1aa529c4abad145727b1be8d2e0711076a05fc9b8b4efc071"
+        },
+        {
+          "path": "model-00001-of-00003.safetensors",
+          "sha256": "16d0f997dcfc4462089d536bffe51b4bcea2f872f5c430be09ef8ed392312427"
+        },
+        {
+          "path": "model-00002-of-00003.safetensors",
+          "sha256": "4fbe328ab445455d6f58dc73852b85873bd626986310abd91cd4d2ce3245eaea"
+        },
+        {
+          "path": "model-00003-of-00003.safetensors",
+          "sha256": "a18106b209e9ab35c3406db4f6f12a927364a058b21e9d1373d682e20674b303"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "dd5e191d20c12d2fee1da5bae14ca1db0f5f4215300af691f23cdee97120a293"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "9279e942392b742d633c7adbb89ebe002c98399db8926a7af5125c726f404070"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b/chat_template.jinja",
+      "sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146"
+    },
+    "served_model_id": "gpt-oss-20b_(MXFP4)",
+    "model_aliases": [
+      "openai/gpt-oss-20b"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "openai/gpt-oss-20b"
+    },
+    "deprecated": false,
+    "family": "gpt-oss-20b",
+    "source_provider": "hf",
+    "quantization": "mxfp4",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b",
+    "download_size_bytes": 13789208836,
+    "download_files": [
+      "model-00002-of-00003.safetensors",
+      "chat_template.jinja",
+      "chat_template.jinja:mshield",
+      "generation_config.json",
+      "config.json",
+      "model-00003-of-00003.safetensors",
+      "tokenizer.json",
+      "model-00001-of-00003.safetensors",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "chat_template.jinja:Zone.Identifier",
+      "logs/vllm_server.log"
+    ],
+    "download_directory_checksum": "27f2a8598786b347",
+    "downloaded_at": "2025-10-22T20:05:43.984242+00:00",
+    "last_accessed": "2025-10-22T20:05:43.984242+00:00"
+  },
+  {
+    "name": "siglip-large-patch16-384_(FP32)",
+    "display_name": "siglip-large-patch16-384 (FP32)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": true,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": true,
+      "text-embedding": true,
+      "representation": true,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {},
+    "artifacts": {
+      "aggregate_sha256": "f819f2dbe5b5d366711d09e16cc0accc686d15a621082ccb21b2571e9546e92e",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "README.md",
+          "sha256": "771d019af5fc01f21ec91ad7fbc3e2d24d750bb1df3a1e1dd04f060cbd90cd9c"
+        },
+        {
+          "path": "config.json",
+          "sha256": "ddefe38fdfe333d5dbb7d56a247bdc6fe84dbcdb4eafd2f462e05e9b13c532bc"
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "ab804d2c2c631159f65afa1de27787c5dba90cbfa189f26404de1944d50a18a2"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "f59da2f87c3cd079bd4f8f3037e81b277c60c498e279a8020331f67a5a3157e8"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "2b6a1ff67a27e0df9ac0c7d93250fc0d87431c7b366b3d5669217104f9088a26"
+        },
+        {
+          "path": "spiece.model",
+          "sha256": "1e5036bed065526c3c212dfbe288752391797c4bb1a284aa18c9a0b23fcaf8ec"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "c6e405cb7c670d56636a9402c81023a55bc6c3c53d89cf02b92f5c5005bfe920"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "d6423dae508cc3a129d22ea443841c111832a1a73125b8f25ea8736951698bcb"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "google/siglip-large-patch16-384"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "google/siglip-large-patch16-384"
+    },
+    "deprecated": false,
+    "family": "siglip-large-patch16-384",
+    "source_provider": "hf",
+    "quantization": "fp32",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/google/siglip-large-patch16-384",
+    "download_size_bytes": 2613215888,
+    "download_files": [
+      "preprocessor_config.json",
+      ".gitattributes",
+      "README.md",
+      "spiece.model",
+      "config.json",
+      "model.safetensors",
+      "tokenizer.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json"
+    ],
+    "download_directory_checksum": "0bc0136d63c7a51f",
+    "downloaded_at": "2025-10-22T20:05:42.074785+00:00",
+    "last_accessed": "2025-10-22T20:05:42.074785+00:00"
+  },
+  {
+    "name": "qwen3_8b_(Q4_K_M)",
+    "display_name": "qwen3 8b (Q4 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/qwen3:8b",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.6,
+      "top_p": 0.92,
+      "top_k": 20,
+      "frequency_penalty": 0.1
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "ollama_family": "qwen3",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "8.2B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "ollama_license": "                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, \"submitted\"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as \"Not a Contribution.\"\n\n      \"Contributor\" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a \"NOTICE\" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an \"AS IS\" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets \"[]\"\n      replaced with your own identifying information. (Don't include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same \"printed page\" as the copyright notice for easier\n      identification within third-party archives.\n   Copyright 2024 Alibaba Cloud\n   Licensed under the Apache License, Version 2.0 (the \"License\");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n       http://www.apache.org/licenses/LICENSE-2.0\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an \"AS IS\" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License."
+    },
+    "served_model_id": "qwen3:8b",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "qwen3-8b",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/qwen3:8b",
+    "download_size_bytes": 5583457484,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:05:53.511303+00:00",
+    "last_accessed": "2025-10-22T20:05:53.511303+00:00"
+  },
+  {
+    "name": "aqualaguna-gemma-3-27b-it-abliterated_(Q3_K_M)",
+    "display_name": "aqualaguna-gemma-3-27b-it-abliterated (Q3 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.95,
+      "top_p": 0.95,
+      "top_k": 64
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "ollama_family": "gemma3",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "27.0B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion"
+      ],
+      "ollama_license": null
+    },
+    "served_model_id": "aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "aqualaguna-gemma-3-27b-it-abliterated-gguf",
+    "source_provider": "ollama",
+    "quantization": "q3_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
+    "download_size_bytes": 13958643712,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:06:00.397994+00:00",
+    "last_accessed": "2025-10-22T20:06:00.397994+00:00"
+  },
+  {
+    "name": "qwen2.5-coder-7b-instruct_(Q4_K_M)",
+    "display_name": "qwen2.5-coder-7b-instruct (Q4 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/qwen2.5-coder:7b-instruct",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {},
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_family": "qwen2",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "7.6B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "tools",
+        "insert"
+      ],
+      "ollama_license": "\n                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, \"submitted\"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as \"Not a Contribution.\"\n\n      \"Contributor\" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a \"NOTICE\" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an \"AS IS\" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets \"[]\"\n      replaced with your own identifying information. (Don't include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same \"printed page\" as the copyright notice for easier\n      identification within third-party archives.\n\n   Copyright 2024 Alibaba Cloud\n\n   Licensed under the Apache License, Version 2.0 (the \"License\");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n\n       http://www.apache.org/licenses/LICENSE-2.0\n\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an \"AS IS\" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License."
+    },
+    "served_model_id": "qwen2.5-coder:7b-instruct",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "qwen2.5-coder-7b-instruct",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/qwen2.5-coder:7b-instruct",
+    "download_size_bytes": 5046586572,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:06:05.026436+00:00",
+    "last_accessed": "2025-10-22T20:06:05.026436+00:00"
+  },
+  {
+    "name": "qwen2.5vl_7b_(Q4_K_M)",
+    "display_name": "qwen2.5vl 7b (Q4 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/qwen2.5vl:7b",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.55,
+      "top_p": 0.9,
+      "top_k": 20
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "ollama_family": "qwen25vl",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "8.3B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "vision"
+      ],
+      "ollama_license": "\n                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, \"submitted\"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as \"Not a Contribution.\"\n\n      \"Contributor\" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a \"NOTICE\" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an \"AS IS\" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets \"[]\"\n      replaced with your own identifying information. (Don't include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same \"printed page\" as the copyright notice for easier\n      identification within third-party archives.\n\n   Copyright 2024 Alibaba Cloud\n\n   Licensed under the Apache License, Version 2.0 (the \"License\");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n\n       http://www.apache.org/licenses/LICENSE-2.0\n\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an \"AS IS\" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License."
+    },
+    "served_model_id": "qwen2.5vl:7b",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "qwen2.5vl-7b",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/qwen2.5vl:7b",
+    "download_size_bytes": 6442450944,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:06:11.067958+00:00",
+    "last_accessed": "2025-10-22T20:06:11.067958+00:00"
+  },
+  {
+    "name": "pixtral-local-latest_(Q4_K_M)",
+    "display_name": "pixtral-local-latest (Q4 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/pixtral-local:latest",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {},
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_family": "llama",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "12.2B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "vision"
+      ],
+      "ollama_license": null
+    },
+    "served_model_id": "pixtral-local:latest",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "pixtral-local-latest",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/pixtral-local:latest",
+    "download_size_bytes": 8912057139,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:06:14.149193+00:00",
+    "last_accessed": "2025-10-22T20:06:14.149193+00:00"
+  },
+  {
+    "name": "llama3.1-local-latest_(Q5_K_M)",
+    "display_name": "llama3.1-local-latest (Q5 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/llama3.1-local:latest",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.55,
+      "top_p": 0.9,
+      "top_k": 30
+    },
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "ollama_family": "llama",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "8.0B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion"
+      ],
+      "ollama_license": null
+    },
+    "served_model_id": "llama3.1-local:latest",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "llama3.1-local-latest",
+    "source_provider": "ollama",
+    "quantization": "q5_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/llama3.1-local:latest",
+    "download_size_bytes": 6120328396,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-22T20:06:20.191482+00:00",
+    "last_accessed": "2025-10-22T20:06:20.191482+00:00"
+  },
+  {
+    "name": "huihui-ai-gpt-oss-abliterated-20b-v2_(Q4_K_M)",
+    "display_name": "huihui-ai-gpt-oss-abliterated-20b-v2 (Q4 K M)",
+    "backend": "ollama",
+    "backend_config": {
+      "port": 11434,
+      "model_path": "ollama:/huihui_ai/gpt-oss-abliterated:20b-v2-q4_K_M",
+      "extra_args": [],
+      "host": "host.docker.internal"
+    },
+    "capabilities": {
+      "text": true,
+      "vision": false,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {},
+    "artifacts": {
+      "aggregate_sha256": "",
+      "files": []
+    },
+    "chat_template": {
+      "source": "embedded",
+      "path": null,
+      "sha256": null
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "ollama_family": "gpt-oss",
+      "ollama_architecture": null,
+      "ollama_parameters": null,
+      "ollama_parameter_size": "20.9B",
+      "ollama_context_length": null,
+      "ollama_embedding_length": null,
+      "ollama_capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "ollama_license": "\n                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      \"License\" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      \"Licensor\" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      \"Legal Entity\" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      \"control\" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      \"You\" (or \"Your\") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      \"Source\" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      \"Object\" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      \"Work\" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      \"Derivative Works\" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      \"Contribution\" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, \"submitted\"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as \"Not a Contribution.\"\n\n      \"Contributor\" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a \"NOTICE\" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an \"AS IS\" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets \"[]\"\n      replaced with your own identifying information. (Don't include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same \"printed page\" as the copyright notice for easier\n      identification within third-party archives.\n   Copyright [yyyy] [name of copyright owner]\n   Licensed under the Apache License, Version 2.0 (the \"License\");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n       http://www.apache.org/licenses/LICENSE-2.0\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an \"AS IS\" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License."
+    },
+    "served_model_id": "huihui_ai/gpt-oss-abliterated:20b-v2-q4_K_M",
+    "model_aliases": [],
+    "roles": [],
+    "license": null,
+    "source": null,
+    "deprecated": false,
+    "family": "huihui-ai-gpt-oss-abliterated-20b-v2-q4-k-m",
+    "source_provider": "ollama",
+    "quantization": "q4_k_m",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "gguf",
+    "download_location": "linux_wsl",
+    "download_path": "ollama:/huihui_ai/gpt-oss-abliterated:20b-v2-q4_K_M",
+    "download_size_bytes": 16106127360,
+    "download_files": [],
+    "download_directory_checksum": "",
+    "downloaded_at": "2025-10-23T09:26:33.091349+00:00",
+    "last_accessed": "2025-10-23T09:26:33.091349+00:00"
+  },
+  {
+    "name": "qwen3-vl-8b-instruct_(FP8)",
+    "display_name": "qwen3-vl-8b-instruct (FP8)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20
+    },
+    "artifacts": {
+      "aggregate_sha256": "87b7fcce8fede8a2ff8318d04b1bd77548cf8cb185082b55498bc6b61d359fef",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+        },
+        {
+          "path": "README.md",
+          "sha256": "bd153426cb404f6c33094068edf4be075ca522f6d95f1019c414f951a5b45fde"
+        },
+        {
+          "path": "chat_template.json",
+          "sha256": "2c1437f11fc16ab501b984c000f6e291c599f0d28d2c9c6bf2c4533e65429b42"
+        },
+        {
+          "path": "config.json",
+          "sha256": "8bbb7d41e722c000d4079c2520fd7d8438a5c13cf084c89784c0a2770cc9bf88"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "a8aeb4072b54a2b54755557cad7f2dddc9f99ea858a6eccd704731180b788592"
+        },
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "sha256": "e2dea2e85e643ef7045c31a485a426631a1e0a84e463f8b2c7e9c6682a06eafd"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "sha256": "3dc64ec934af27a7007d265014e907aff9e16658d409e5cd4cf79869bf2bd8c1"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "751e4b7c17b148d5cc8fb1296b281fe98a711c0182d88b8516f459186990f49d"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "6a970fd06f30e6943b3e2c14d5d3b42d49b06cf99b99103d56689bef462d90f8"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "ba85e4e5222d9f53d4bd00b303ef7e9743c8ac3d07e3c23f8498dbe17baa9a2d"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "c2da771801886ad9ae98181793ffd3dfb7f1af30f6f7c6a4e15d7dbba52e2399"
+        },
+        {
+          "path": "video_preprocessor_config.json",
+          "sha256": "e203bc065dfcd75226838b8e937d624bec8f0eb6ef6630a397e9a675f2873ea6"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "7a0cfa95c65792d7510205839f80cfd8a3c8f6b1fdad5132d95cee481800374d"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/chat_template.json",
+      "sha256": "2c1437f11fc16ab501b984c000f6e291c599f0d28d2c9c6bf2c4533e65429b42"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "readme_file": "README.md",
+      "readme_sha256": "bd153426cb404f6c33094068edf4be075ca522f6d95f1019c414f951a5b45fde",
+      "readme_signals": {
+        "quant_schemes": [
+          "bf16",
+          "fp8"
+        ],
+        "backends": [
+          "vllm"
+        ],
+        "tool_calls": true,
+        "reasoning": true,
+        "license_hint": "apache-2.0"
+      },
+      "producer": "qwen",
+      "model_type": "image-text-to-text",
+      "library": null,
+      "files_downloaded": 13,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": true,
+      "external_chat_template_files": [
+        "chat_template.json"
+      ],
+      "embedded_chat_template_preview": "{%- if tools %}\n    {{- '<|im_start|>system\\n' }}\n    {%- if messages[0].role == 'system' %}\n        {%- if messages[0].content is string %}\n            {{- mes...",
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.json",
+      "primary_chat_template_sha256": "2c1437f11fc16ab501b984c000f6e291c599f0d28d2c9c6bf2c4533e65429b42"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "Qwen/Qwen3-VL-8B-Instruct-FP8"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "Qwen/Qwen3-VL-8B-Instruct-FP8"
+    },
+    "deprecated": false,
+    "family": "qwen3-vl-8b-instruct-fp8",
+    "source_provider": "hf",
+    "quantization": "fp8",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8",
+    "download_size_bytes": 10605572454,
+    "download_files": [
+      "model-00001-of-00002.safetensors",
+      "model-00002-of-00002.safetensors",
+      "chat_template.json",
+      "config.json",
+      "generation_config.json",
+      "preprocessor_config.json",
+      "tokenizer_config.json",
+      "video_preprocessor_config.json",
+      "tokenizer.json",
+      "README.md",
+      ".gitattributes",
+      "model.safetensors.index.json",
+      "vocab.json"
+    ],
+    "download_directory_checksum": "8cae1463a1134800",
+    "downloaded_at": "2025-10-23T15:06:35.944700+00:00",
+    "last_accessed": "2025-10-23T15:06:35.944700+00:00"
+  }
+]

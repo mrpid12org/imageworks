@@ -139,17 +139,9 @@ class ModelIdentity:
             display = self.display_override.strip()
         else:
             family_label = _humanize_family(family_key)
-            format_label = _label_format(format_token)
             quant_label = _label_quant(quant_token)
-            backend_label = _label_backend(backend_token)
-            detail_parts = []
-            combo = " ".join(p for p in [format_label, quant_label] if p)
-            if combo:
-                detail_parts.append(combo)
-            if backend_label:
-                detail_parts.append(backend_label)
-            if detail_parts:
-                display = f"{family_label} ({', '.join(detail_parts)})"
+            if quant_label:
+                display = f"{family_label} ({quant_label})"
             else:
                 display = family_label
 

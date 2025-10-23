@@ -29,7 +29,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from imageworks.model_loader.download_adapter import record_download, ImportSkipped
+from imageworks.model_loader.download_adapter import (
+    record_download,
+    ImportSkipped,
+    derive_capabilities,
+)
 from imageworks.model_loader.naming import build_identity, ModelIdentity
 from imageworks.model_loader.simplified_naming import simplified_slug_for_fields
 from imageworks.model_loader import registry as unified_registry
@@ -555,7 +559,6 @@ def _persist_existing_entry(
     existing.family = identity.family_key
     existing.backend = identity.backend_key
     existing.quantization = identity.quant_key or existing.quantization
-    existing.display_name = identity.display_name
     existing.download_path = str(data.path)
     existing.download_format = identity.format_key or "gguf"
     existing.download_location = location
@@ -568,6 +571,25 @@ def _persist_existing_entry(
         for key, value in data.extra_metadata.items():
             if value is not None and key not in existing.metadata:
                 existing.metadata[key] = value
+    # Refresh display name using simplified naming so CLI / proxy stay concise.
+    try:
+        from imageworks.model_loader.simplified_naming import (
+            simplified_display_for_fields as _simple_disp,
+        )
+
+        display_meta = existing.metadata or {}
+        existing.display_name = _simple_disp(
+            family=existing.family,
+            backend=existing.backend,
+            format_type=identity.format_key or "gguf",
+            quantization=existing.quantization,
+            metadata=display_meta,
+            download_path=str(data.path),
+            served_model_id=data.name,
+        )
+    except Exception:
+        existing.display_name = identity.display_name
+    existing.capabilities = derive_capabilities(existing, metadata=existing.metadata)
     if existing.backend == "ollama" and not getattr(
         existing.backend_config, "host", None
     ):

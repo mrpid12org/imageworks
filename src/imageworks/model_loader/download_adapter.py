@@ -9,7 +9,7 @@ Responsibilities:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Iterable
 from datetime import datetime, timezone
 import hashlib
 import re
@@ -161,7 +161,9 @@ def _token_match(haystack: str, token: str) -> bool:
     return re.search(pattern, haystack) is not None
 
 
-def _infer_capabilities(name: str) -> Dict[str, bool]:
+def _infer_capabilities(
+    name: str, *, metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, bool]:
     n = name.lower()
     text = True
     vision_tokens = [
@@ -238,6 +240,45 @@ def _infer_capabilities(name: str) -> Dict[str, bool]:
         marker in n for marker in ["reason", "reasoning", "logic"]
     )
 
+    meta_caps: List[str] = []
+    if metadata:
+        raw_caps = metadata.get("ollama_capabilities")
+        iterable_caps: Iterable[Any] = []
+        if isinstance(raw_caps, (list, tuple, set)):
+            iterable_caps = raw_caps
+        elif isinstance(raw_caps, str):
+            iterable_caps = [raw_caps]
+        if iterable_caps:
+            for cap in iterable_caps:
+                if isinstance(cap, bytes):
+                    try:
+                        cap = cap.decode("utf-8", "ignore")
+                    except Exception:  # noqa: BLE001
+                        cap = ""
+                if not isinstance(cap, str):
+                    continue
+                token = cap.strip().lower()
+                if token:
+                    meta_caps.append(token)
+    meta_caps_set = set(meta_caps)
+    if meta_caps_set:
+        if any(token in meta_caps_set for token in ["vision", "images", "image"]):
+            vision = True
+        if any(
+            token in meta_caps_set for token in ["embedding", "embeddings", "embed"]
+        ):
+            embedding = True
+        if any(
+            token in meta_caps_set
+            for token in ["audio", "speech", "voice", "multimodal"]
+        ):
+            audio = True
+        if any(
+            token in meta_caps_set
+            for token in ["tool", "tools", "function_call", "function-call"]
+        ):
+            tools = True
+
     return {
         "text": text,
         "vision": vision,
@@ -246,6 +287,86 @@ def _infer_capabilities(name: str) -> Dict[str, bool]:
         "thinking": thinking or reasoning,
         "reasoning": reasoning or thinking,
         "tools": tools,
+    }
+
+
+def _merge_capabilities(
+    base: Dict[str, bool], updates: Dict[str, bool]
+) -> Dict[str, bool]:
+    """Return a new capabilities dict with any truthy updates applied."""
+    merged = dict(base)
+    for key, value in updates.items():
+        if value:
+            merged[key] = True
+    return merged
+
+
+def derive_capabilities(
+    entry: "RegistryEntry",
+    *,
+    metadata: Optional[Dict[str, Any]] = None,
+    seed: Optional[Dict[str, bool]] = None,
+) -> Dict[str, bool]:
+    """Compute capabilities using naming heuristics plus chat template hints."""
+    base_metadata = metadata if metadata is not None else (entry.metadata or {})
+    base = (
+        seed
+        if seed is not None
+        else _infer_capabilities(entry.name, metadata=base_metadata)
+    )
+    return _merge_capabilities(base, _capabilities_from_template(entry))
+
+
+def _capabilities_from_template(entry: "RegistryEntry") -> Dict[str, bool]:
+    """Inspect chat template text (if available) for capability hints."""
+    template_paths: List[Path] = []
+    tpl_path = getattr(entry.chat_template, "path", None)
+    if tpl_path:
+        template_paths.append(Path(tpl_path))
+    primary_tpl = (entry.metadata or {}).get("primary_chat_template_file")
+    if (
+        primary_tpl
+        and entry.download_path
+        and not str(entry.download_path).startswith("ollama://")
+    ):
+        template_paths.append(Path(entry.download_path) / primary_tpl)
+    content = ""
+    for candidate in template_paths:
+        try:
+            if candidate.exists():
+                content = candidate.read_text(encoding="utf-8")
+                break
+        except Exception:  # noqa: BLE001
+            continue
+    if not content:
+        return {}
+    lowered = content.lower()
+    tool_tokens = [
+        "tool_calls",
+        "tool call",
+        "tools must",
+        "tool_choice",
+        "tool-choice",
+        "functions.",
+        "builtin_tools",
+        "<|channel|>commentary",
+    ]
+    think_tokens = [
+        "<|channel|>analysis",
+        "chain of thought",
+        "chain-of-thought",
+        "internal reasoning",
+        "thinking field",
+        "analysis channel",
+    ]
+    has_tools = any(token in lowered for token in tool_tokens)
+    has_thinking = any(token in lowered for token in think_tokens)
+    if not (has_tools or has_thinking):
+        return {}
+    return {
+        "tools": has_tools,
+        "thinking": has_thinking,
+        "reasoning": has_thinking,
     }
 
 
@@ -403,8 +524,13 @@ def record_download(
             entry.backend_config.host = _os.environ.get(
                 "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
             )
-        # Only set display_name if not already set (curated) or if explicitly requested
-        if not getattr(entry, "display_name", None):
+        # Refresh auto-managed display names so CLI/proxy stay concise.
+        should_refresh_display = False
+        if (entry.metadata or {}).get("created_from_download"):
+            should_refresh_display = True
+        elif not getattr(entry, "display_name", None):
+            should_refresh_display = True
+        if should_refresh_display:
             try:
                 from .simplified_naming import (
                     simplified_display_for_fields as _simple_disp,
@@ -449,6 +575,9 @@ def record_download(
             e = _apply_download_updates(e)
             if not e.artifacts.files:
                 e = compute_artifact_hashes(e)
+            e.capabilities = derive_capabilities(
+                e, metadata=extra_metadata or e.metadata
+            )
             update_entries([e], save=False)
             save_registry()
             _maybe_probe_and_mark_vision(e)
@@ -458,6 +587,7 @@ def record_download(
         e = _apply_download_updates(existing)
         if not e.artifacts.files:
             e = compute_artifact_hashes(e)
+        e.capabilities = derive_capabilities(e, metadata=extra_metadata or e.metadata)
         update_entries([e], save=True)
         _maybe_probe_and_mark_vision(e)
         return e
@@ -479,6 +609,9 @@ def record_download(
             curated = _apply_download_updates(rename_source)
             if not curated.artifacts.files:
                 curated = compute_artifact_hashes(curated)
+            curated.capabilities = derive_capabilities(
+                curated, metadata=extra_metadata or curated.metadata
+            )
             update_entries([curated], save=True)
             _maybe_probe_and_mark_vision(curated)
             return curated
@@ -488,12 +621,15 @@ def record_download(
         rename_source = _apply_download_updates(rename_source)
         if not rename_source.artifacts.files:
             rename_source = compute_artifact_hashes(rename_source)
+        rename_source.capabilities = derive_capabilities(
+            rename_source, metadata=extra_metadata or rename_source.metadata
+        )
         update_entries([rename_source], save=False)
         save_registry()
         _maybe_probe_and_mark_vision(rename_source)
         return rename_source
 
-    capabilities = _infer_capabilities(variant_name)
+    capabilities = _infer_capabilities(variant_name, metadata=extra_metadata)
     entry = RegistryEntry(
         name=variant_name,
         # Seed display_name with simplified naming if helper is available
@@ -558,6 +694,9 @@ def record_download(
             "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
         )
     entry = compute_artifact_hashes(entry)
+    entry.capabilities = derive_capabilities(
+        entry, metadata=extra_metadata, seed=entry.capabilities
+    )
     update_entries([entry], save=True)
     # Post-registration best-effort vision probe (Ollama)
     _maybe_probe_and_mark_vision(entry)
@@ -597,9 +736,18 @@ def remove_download(name: str, *, keep_entry: bool = True) -> bool:
     return True
 
 
+def infer_capabilities(
+    name: str, *, metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, bool]:
+    """Public helper to expose capability inference for import scripts."""
+    return _infer_capabilities(name, metadata=metadata)
+
+
 __all__ = [
     "record_download",
     "list_downloads",
     "remove_download",
     "compute_directory_checksum",
+    "infer_capabilities",
+    "derive_capabilities",
 ]

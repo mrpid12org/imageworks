@@ -134,6 +134,14 @@ def simplified_display_for_fields(
         param = meta.get("ollama_parameter_size") or _extract_param_size(
             meta.get("ollama_parameters")
         )
+    elif backend_l == "vllm":
+        fam = (
+            family
+            or (meta.get("model_aliases") or [None])[-1]
+            or (meta.get("source") or {}).get("huggingface_id")
+            or "model"
+        )
+        param = _extract_param_size(fam) or _hf_param_size_label(download_path)
     else:
         fam = family or "model"
         # Token first, then optional safetensors scan

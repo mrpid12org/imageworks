@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 
@@ -20,6 +20,44 @@ def supports_vision(entry: Any) -> bool:
 
     capabilities = getattr(entry, "capabilities", None)
     if isinstance(capabilities, Mapping):
-        return bool(capabilities.get("vision"))
+        if capabilities.get("vision"):
+            return True
+        # Some registries store related markers such as multimodal/image flags.
+        for token in ("multimodal", "mm", "image", "visual"):
+            if capabilities.get(token):
+                return True
+
+    backend = getattr(entry, "backend", "")
+    metadata = getattr(entry, "metadata", None) or {}
+    if isinstance(metadata, Mapping):
+        caps = metadata.get("ollama_capabilities")
+        if isinstance(caps, Iterable) and not isinstance(caps, (str, bytes)):
+            for cap in caps:
+                if isinstance(cap, bytes):
+                    try:
+                        cap = cap.decode("utf-8", "ignore")
+                    except Exception:  # noqa: BLE001
+                        continue
+                if isinstance(cap, str) and cap.strip().lower() == "vision":
+                    return True
+
+    if isinstance(backend, str) and backend.lower() == "ollama":
+        # As a last resort, infer from naming conventions.
+        label = str(getattr(entry, "display_name", "") or getattr(entry, "name", ""))
+        label_l = label.lower()
+        vision_markers = (
+            " vision",
+            "-vision",
+            " pixtral",
+            " llava",
+            " minicpm-v",
+            " internvl",
+            " moondream",
+            " phi-3-vision",
+            "-vl",
+            " vl ",
+        )
+        if any(marker in label_l for marker in vision_markers):
+            return True
 
     return False
