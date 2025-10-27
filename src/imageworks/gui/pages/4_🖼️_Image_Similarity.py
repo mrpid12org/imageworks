@@ -11,13 +11,30 @@ from imageworks.gui.components.results_viewer import render_unified_results_brow
 from imageworks.gui.components.image_viewer import render_side_by_side
 from imageworks.gui.utils.cli_wrapper import build_similarity_command
 from imageworks.gui.config import (
-    OUTPUTS_DIR,
+    SIMILARITY_DEFAULT_LIBRARY_ROOT,
+    SIMILARITY_DEFAULT_OUTPUT_JSONL,
+    SIMILARITY_DEFAULT_SUMMARY_PATH,
+    get_app_setting,
+    set_app_setting,
+    reset_app_settings,
 )
 
 
 def render_custom_overrides(preset, session_key_prefix):
     """Custom override renderer for similarity checker."""
     overrides = {}
+
+    # Reset button
+    col_reset, col_spacer = st.columns([1, 3])
+    with col_reset:
+        if st.button(
+            "🔄 Reset to Defaults",
+            key=f"{session_key_prefix}_reset",
+            help="Reset all paths to global defaults",
+        ):
+            reset_app_settings(st.session_state, "similarity")
+            st.success("✅ Reset to defaults")
+            st.rerun()
 
     col1, col2 = st.columns(2)
 
@@ -33,13 +50,23 @@ def render_custom_overrides(preset, session_key_prefix):
         if candidates:
             overrides["candidates"] = candidates
 
-        # Library root
+        # Library root - use per-app setting
+        current_library = get_app_setting(
+            st.session_state,
+            "similarity",
+            "library_root",
+            SIMILARITY_DEFAULT_LIBRARY_ROOT,
+        )
         library_root = st.text_input(
             "Library Root",
-            value="",
+            value=current_library,
             key=f"{session_key_prefix}_library_root",
             help="Root directory of image library to compare against",
         )
+        if library_root and library_root != current_library:
+            set_app_setting(
+                st.session_state, "similarity", "library_root", library_root
+            )
         if library_root:
             overrides["library_root"] = library_root
 
@@ -71,20 +98,36 @@ def render_custom_overrides(preset, session_key_prefix):
             if query_threshold != preset.flags.get("query_threshold"):
                 overrides["query_threshold"] = query_threshold
 
-    # Output paths
+    # Output paths - use per-app settings
+    current_jsonl = get_app_setting(
+        st.session_state,
+        "similarity",
+        "output_jsonl",
+        str(SIMILARITY_DEFAULT_OUTPUT_JSONL),
+    )
     output_jsonl = st.text_input(
         "Output JSONL",
-        value=str(OUTPUTS_DIR / "results" / "similarity_results.jsonl"),
+        value=current_jsonl,
         key=f"{session_key_prefix}_output_jsonl",
     )
+    if output_jsonl and output_jsonl != current_jsonl:
+        set_app_setting(st.session_state, "similarity", "output_jsonl", output_jsonl)
     if output_jsonl:
         overrides["output_jsonl"] = output_jsonl
 
+    current_summary = get_app_setting(
+        st.session_state,
+        "similarity",
+        "summary_path",
+        str(SIMILARITY_DEFAULT_SUMMARY_PATH),
+    )
     summary_path = st.text_input(
         "Summary Markdown",
-        value=str(OUTPUTS_DIR / "summaries" / "similarity_summary.md"),
+        value=current_summary,
         key=f"{session_key_prefix}_summary",
     )
+    if summary_path and summary_path != current_summary:
+        set_app_setting(st.session_state, "similarity", "summary_path", summary_path)
     if summary_path:
         overrides["summary"] = summary_path
 

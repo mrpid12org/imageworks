@@ -23,7 +23,13 @@ def load_registry(registry_path: str) -> pd.DataFrame:
         with open(registry_path, "r") as f:
             registry = json.load(f)
 
-        models = registry.get("models", [])
+        # Handle both list and dict formats
+        if isinstance(registry, list):
+            models = registry
+        elif isinstance(registry, dict):
+            models = registry.get("models", [])
+        else:
+            return pd.DataFrame()
 
         if not models:
             return pd.DataFrame()
@@ -31,13 +37,54 @@ def load_registry(registry_path: str) -> pd.DataFrame:
         # Convert to DataFrame
         df = pd.DataFrame(models)
 
-        # Extract nested fields
-        if "metadata" in df.columns:
-            # Extract common metadata fields
-            for field in ["format", "quantization", "parameter_count"]:
-                df[field] = df["metadata"].apply(
-                    lambda x: x.get(field, "") if isinstance(x, dict) else ""
+        # Extract/normalize fields for display
+        # Quantization is at top level
+        if "quantization" not in df.columns:
+            df["quantization"] = ""
+
+        # Format - derive from multiple sources
+        if "format" not in df.columns:
+
+            def get_format(row):
+                # Use download_format if it's not None/empty
+                fmt = row.get("download_format")
+                if fmt and fmt not in [None, "None", ""]:
+                    return fmt
+
+                # Try to infer from model_path or name
+                model_path = ""
+                if isinstance(row.get("backend_config"), dict):
+                    model_path = row["backend_config"].get("model_path", "")
+
+                name = row.get("name", "")
+                combined = (model_path + " " + name).lower()
+
+                if "gguf" in combined or "-gguf" in combined:
+                    return "gguf"
+                elif "safetensors" in combined:
+                    return "safetensors"
+                elif "mxfp" in combined:
+                    return "mxfp4"
+                elif "fp8" in combined or "_fp8" in combined:
+                    return "fp8"
+
+                # Fall back to backend
+                return row.get("backend", "")
+
+            df["format"] = df.apply(get_format, axis=1)
+
+        # Parameter count from metadata
+        if "parameter_count" not in df.columns:
+            if "metadata" in df.columns:
+                df["parameter_count"] = df["metadata"].apply(
+                    lambda x: (
+                        x.get("ollama_parameter_size", "")
+                        if isinstance(x, dict)
+                        else ""
+                    )
                 )
+            else:
+                df["parameter_count"] = ""
 
         return df
 

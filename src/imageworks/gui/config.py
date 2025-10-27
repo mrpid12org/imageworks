@@ -17,10 +17,32 @@ MODEL_REGISTRY_DISCOVERED_PATH = CONFIGS_DIR / "model_registry.discovered.json"
 GUI_STATE_FILE = OUTPUTS_DIR / "gui_state.json"
 JOB_HISTORY_FILE = OUTPUTS_DIR / "gui_job_history.json"
 
-# Default output paths
-DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "latest_results.jsonl"
-DEFAULT_SUMMARY_PATH = OUTPUTS_DIR / "summaries" / "latest_summary.md"
-DEFAULT_OVERLAYS_DIR = OUTPUTS_DIR / "tmp_test_images"
+# Default input directory (from pyproject.toml [tool.imageworks.mono])
+DEFAULT_INPUT_DIR = "/mnt/d/Proper Photos/photos/ccc competition images"
+
+# Mono Checker defaults (from pyproject.toml [tool.imageworks.mono])
+MONO_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "mono_results.jsonl"
+MONO_DEFAULT_SUMMARY_PATH = OUTPUTS_DIR / "summaries" / "mono_summary.md"
+MONO_DEFAULT_OVERLAYS_DIR = OUTPUTS_DIR / "overlays"
+
+# Personal Tagger defaults (from pyproject.toml [tool.imageworks.personal_tagger])
+TAGGER_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "personal_tagger.jsonl"
+TAGGER_DEFAULT_SUMMARY_PATH = OUTPUTS_DIR / "summaries" / "personal_tagger_summary.md"
+
+# Image Similarity defaults (from pyproject.toml [tool.imageworks.image_similarity_checker])
+SIMILARITY_DEFAULT_LIBRARY_ROOT = "/mnt/d/Proper Photos/photos/ccc competition images"
+SIMILARITY_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "similarity_results.jsonl"
+SIMILARITY_DEFAULT_SUMMARY_PATH = OUTPUTS_DIR / "summaries" / "similarity_summary.md"
+SIMILARITY_DEFAULT_CACHE_DIR = OUTPUTS_DIR / "cache" / "similarity"
+
+# Color Narrator defaults (from pyproject.toml [tool.imageworks.color_narrator])
+NARRATOR_DEFAULT_IMAGES_DIR = "/mnt/d/Proper Photos/photos/ccc competition images"
+NARRATOR_DEFAULT_OVERLAYS_DIR = "/mnt/d/Proper Photos/photos/ccc competition images"
+
+# Legacy aliases for backward compatibility
+DEFAULT_OUTPUT_JSONL = MONO_DEFAULT_OUTPUT_JSONL
+DEFAULT_SUMMARY_PATH = MONO_DEFAULT_SUMMARY_PATH
+DEFAULT_OVERLAYS_DIR = MONO_DEFAULT_OVERLAYS_DIR
 
 # Backend URLs
 DEFAULT_BACKENDS = {
@@ -51,3 +73,60 @@ def ensure_directories():
     (OUTPUTS_DIR / "metrics").mkdir(exist_ok=True)
     DEFAULT_OVERLAYS_DIR.mkdir(exist_ok=True)
     LOGS_DIR.mkdir(exist_ok=True)
+
+
+def get_app_setting(session_state, app_key: str, setting_name: str, default_value):
+    """
+    Get per-app setting with fallback to default.
+
+    Args:
+        session_state: Streamlit session state
+        app_key: App identifier (e.g., 'mono', 'tagger', 'similarity')
+        setting_name: Setting name (e.g., 'input_dir', 'output_jsonl')
+        default_value: Default value if not overridden
+
+    Returns:
+        Setting value (override or default)
+    """
+    # Initialize app settings dict if not exists
+    if "app_settings" not in session_state:
+        session_state.app_settings = {}
+
+    if app_key not in session_state.app_settings:
+        session_state.app_settings[app_key] = {}
+
+    # Return override if exists, otherwise default
+    return session_state.app_settings[app_key].get(setting_name, default_value)
+
+
+def set_app_setting(session_state, app_key: str, setting_name: str, value):
+    """
+    Set per-app setting override.
+
+    Args:
+        session_state: Streamlit session state
+        app_key: App identifier
+        setting_name: Setting name
+        value: Value to set
+    """
+    if "app_settings" not in session_state:
+        session_state.app_settings = {}
+
+    if app_key not in session_state.app_settings:
+        session_state.app_settings[app_key] = {}
+
+    session_state.app_settings[app_key][setting_name] = value
+
+
+def reset_app_settings(session_state, app_key: str):
+    """
+    Reset per-app settings to defaults.
+
+    Args:
+        session_state: Streamlit session state
+        app_key: App identifier
+    """
+    if "app_settings" not in session_state:
+        session_state.app_settings = {}
+
+    session_state.app_settings[app_key] = {}

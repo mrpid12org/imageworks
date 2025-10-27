@@ -13,6 +13,7 @@ dependencies = [
   "scikit-image",
   "scipy",
   "tomli; python_version < '3.11'",
+  "tomli-w>=1.0.0",
   # Color-narrator VLM dependencies
   "torch>=2.3.0",
   "transformers>=4.38.0",

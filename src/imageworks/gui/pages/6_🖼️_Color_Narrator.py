@@ -13,12 +13,31 @@ from imageworks.gui.components.results_viewer import (
 )
 from imageworks.gui.components.image_viewer import render_image_detail
 from imageworks.gui.utils.cli_wrapper import build_narrator_command
-from imageworks.gui.config import OUTPUTS_DIR, DEFAULT_OVERLAYS_DIR
+from imageworks.gui.config import (
+    OUTPUTS_DIR,
+    MONO_DEFAULT_OUTPUT_JSONL,
+    MONO_DEFAULT_OVERLAYS_DIR,
+    get_app_setting,
+    set_app_setting,
+    reset_app_settings,
+)
 
 
 def render_custom_overrides(preset, session_key_prefix):
     """Custom override renderer for color narrator."""
     overrides = {}
+
+    # Reset button
+    col_reset, col_spacer = st.columns([1, 3])
+    with col_reset:
+        if st.button(
+            "🔄 Reset to Defaults",
+            key=f"{session_key_prefix}_reset",
+            help="Reset all paths to global defaults",
+        ):
+            reset_app_settings(st.session_state, "narrator")
+            st.success("✅ Reset to defaults")
+            st.rerun()
 
     # Import mono results option
     use_mono_results = st.checkbox(
@@ -29,21 +48,31 @@ def render_custom_overrides(preset, session_key_prefix):
     )
 
     if use_mono_results:
-        # Mono JSONL path
+        # Mono JSONL path - use per-app setting
+        current_mono_jsonl = get_app_setting(
+            st.session_state, "narrator", "mono_jsonl", str(MONO_DEFAULT_OUTPUT_JSONL)
+        )
         mono_jsonl = st.text_input(
             "Mono Results JSONL",
-            value=str(OUTPUTS_DIR / "results" / "mono_results.jsonl"),
+            value=current_mono_jsonl,
             key=f"{session_key_prefix}_mono_jsonl",
         )
+        if mono_jsonl and mono_jsonl != current_mono_jsonl:
+            set_app_setting(st.session_state, "narrator", "mono_jsonl", mono_jsonl)
         if mono_jsonl:
             overrides["mono_jsonl"] = mono_jsonl
 
-        # Overlays directory
+        # Overlays directory - use per-app setting
+        current_overlays = get_app_setting(
+            st.session_state, "narrator", "overlays_dir", str(MONO_DEFAULT_OVERLAYS_DIR)
+        )
         overlays_dir = st.text_input(
             "Overlays Directory",
-            value=str(DEFAULT_OVERLAYS_DIR),
+            value=current_overlays,
             key=f"{session_key_prefix}_overlays",
         )
+        if overlays_dir and overlays_dir != current_overlays:
+            set_app_setting(st.session_state, "narrator", "overlays_dir", overlays_dir)
         if overlays_dir:
             overrides["overlays"] = overlays_dir
 
@@ -72,11 +101,18 @@ def render_custom_overrides(preset, session_key_prefix):
         if images:
             overrides["images"] = images
 
+        current_overlays_manual = get_app_setting(
+            st.session_state, "narrator", "overlays_dir_manual", ""
+        )
         overlays_dir = st.text_input(
             "Overlays Directory (optional)",
-            value="",
+            value=current_overlays_manual,
             key=f"{session_key_prefix}_overlays_manual",
         )
+        if overlays_dir and overlays_dir != current_overlays_manual:
+            set_app_setting(
+                st.session_state, "narrator", "overlays_dir_manual", overlays_dir
+            )
         if overlays_dir:
             overrides["overlays"] = overlays_dir
 

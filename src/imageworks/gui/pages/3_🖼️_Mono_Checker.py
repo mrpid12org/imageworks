@@ -16,20 +16,45 @@ from imageworks.gui.components.image_viewer import (
     render_image_detail,
 )
 from imageworks.gui.utils.cli_wrapper import build_mono_command
-from imageworks.gui.config import DEFAULT_OVERLAYS_DIR, OUTPUTS_DIR
+from imageworks.gui.config import (
+    DEFAULT_INPUT_DIR,
+    DEFAULT_OVERLAYS_DIR,
+    DEFAULT_OUTPUT_JSONL,
+    DEFAULT_SUMMARY_PATH,
+    get_app_setting,
+    set_app_setting,
+    reset_app_settings,
+)
 
 
 def render_custom_overrides(preset, session_key_prefix):
     """Custom override renderer for mono checker."""
     overrides = {}
 
-    # Input directory
+    # Reset button at the top
+    col_reset, col_spacer = st.columns([1, 3])
+    with col_reset:
+        if st.button(
+            "🔄 Reset to Defaults",
+            key=f"{session_key_prefix}_reset",
+            help="Reset all paths to global defaults",
+        ):
+            reset_app_settings(st.session_state, "mono")
+            st.success("✅ Reset to defaults")
+            st.rerun()
+
+    # Input directory - use per-app setting with fallback to default
+    current_input = get_app_setting(
+        st.session_state, "mono", "input_dir", DEFAULT_INPUT_DIR
+    )
     input_dir = st.text_input(
         "Input Directory",
-        value="",
+        value=current_input,
         key=f"{session_key_prefix}_input",
         help="Directory containing images to check",
     )
+    if input_dir and input_dir != current_input:
+        set_app_setting(st.session_state, "mono", "input_dir", input_dir)
     if input_dir:
         overrides["input"] = [input_dir]
 
@@ -37,28 +62,43 @@ def render_custom_overrides(preset, session_key_prefix):
     col1, col2 = st.columns(2)
 
     with col1:
+        current_overlays = get_app_setting(
+            st.session_state, "mono", "overlays_dir", str(DEFAULT_OVERLAYS_DIR)
+        )
         overlays_dir = st.text_input(
             "Overlays Output",
-            value=str(DEFAULT_OVERLAYS_DIR),
+            value=current_overlays,
             key=f"{session_key_prefix}_overlays",
         )
+        if overlays_dir and overlays_dir != current_overlays:
+            set_app_setting(st.session_state, "mono", "overlays_dir", overlays_dir)
         if overlays_dir:
             overrides["overlays"] = overlays_dir
 
+        current_jsonl = get_app_setting(
+            st.session_state, "mono", "output_jsonl", str(DEFAULT_OUTPUT_JSONL)
+        )
         output_jsonl = st.text_input(
             "Output JSONL",
-            value=str(OUTPUTS_DIR / "results" / "mono_results.jsonl"),
+            value=current_jsonl,
             key=f"{session_key_prefix}_output_jsonl",
         )
+        if output_jsonl and output_jsonl != current_jsonl:
+            set_app_setting(st.session_state, "mono", "output_jsonl", output_jsonl)
         if output_jsonl:
             overrides["output_jsonl"] = output_jsonl
 
     with col2:
+        current_summary = get_app_setting(
+            st.session_state, "mono", "summary_path", str(DEFAULT_SUMMARY_PATH)
+        )
         summary_path = st.text_input(
             "Summary Markdown",
-            value=str(OUTPUTS_DIR / "summaries" / "mono_summary.md"),
+            value=current_summary,
             key=f"{session_key_prefix}_summary",
         )
+        if summary_path and summary_path != current_summary:
+            set_app_setting(st.session_state, "mono", "summary_path", summary_path)
         if summary_path:
             overrides["summary"] = summary_path
 
@@ -221,10 +261,13 @@ def main():
                 st.markdown("#### Filter by Verdict")
                 verdicts = sorted(set(r.get("verdict", "unknown") for r in results))
 
+                # Safe default: only include verdicts that actually exist
+                default_verdicts = [v for v in ["fail", "query"] if v in verdicts]
+
                 selected_verdicts = st.multiselect(
                     "Show verdicts",
                     options=verdicts,
-                    default=["fail", "query"],
+                    default=default_verdicts,
                     key="mono_verdict_filter",
                 )
 

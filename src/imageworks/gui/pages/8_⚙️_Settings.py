@@ -11,6 +11,12 @@ from imageworks.gui.config import (
     OUTPUTS_DIR,
     LOGS_DIR,
 )
+from imageworks.gui.utils.config_manager import (
+    load_pyproject_config,
+    save_pyproject_config,
+    get_tool_config,
+    update_tool_config,
+)
 
 
 def main():
@@ -22,7 +28,14 @@ def main():
 
     # Tabs for different settings
     tabs = st.tabs(
-        ["🔧 General", "📁 Paths", "🔌 Backends", "🎨 Appearance", "ℹ️ About"]
+        [
+            "🔧 General",
+            "📁 Paths",
+            "� Default Directories",
+            "�🔌 Backends",
+            "🎨 Appearance",
+            "ℹ️ About",
+        ]
     )
 
     # === GENERAL SETTINGS ===
@@ -131,8 +144,212 @@ def main():
             help="Override default output directory",
         )
 
-    # === BACKENDS SETTINGS ===
+    # === DEFAULT DIRECTORIES ===
     with tabs[2]:
+        st.markdown("### Default Directories Management")
+        st.markdown(
+            "Edit global default paths used by all modules. Changes are saved to `pyproject.toml`."
+        )
+
+        # Load current config
+        try:
+            pyproject_config = load_pyproject_config(PROJECT_ROOT)
+        except Exception as e:
+            st.error(f"Failed to load pyproject.toml: {e}")
+            pyproject_config = {}
+
+        # Track changes
+        if "config_changes" not in st.session_state:
+            st.session_state.config_changes = {}
+
+        # Tabs for each module
+        module_tabs = st.tabs(
+            [
+                "🖼️ Mono Checker",
+                "🏷️ Personal Tagger",
+                "🔍 Image Similarity",
+                "🎨 Color Narrator",
+            ]
+        )
+
+        # Mono Checker defaults
+        with module_tabs[0]:
+            st.markdown("#### Mono Checker Defaults")
+            mono_config = get_tool_config(pyproject_config, "imageworks.mono")
+
+            default_folder = st.text_input(
+                "Default Input Folder",
+                value=mono_config.get("default_folder", ""),
+                key="mono_default_folder",
+                help="Default directory for mono checker input",
+            )
+
+            default_jsonl = st.text_input(
+                "Default Output JSONL",
+                value=mono_config.get(
+                    "default_jsonl", "outputs/results/mono_results.jsonl"
+                ),
+                key="mono_default_jsonl",
+                help="Default path for mono results JSONL",
+            )
+
+            default_summary = st.text_input(
+                "Default Summary Path",
+                value=mono_config.get(
+                    "default_summary", "outputs/summaries/mono_summary.md"
+                ),
+                key="mono_default_summary",
+                help="Default path for mono summary markdown",
+            )
+
+            if st.button("💾 Save Mono Defaults", key="save_mono"):
+                try:
+                    updates = {
+                        "default_folder": default_folder,
+                        "default_jsonl": default_jsonl,
+                        "default_summary": default_summary,
+                    }
+                    pyproject_config = update_tool_config(
+                        pyproject_config, "imageworks.mono", updates
+                    )
+                    save_pyproject_config(PROJECT_ROOT, pyproject_config)
+                    st.success("✅ Mono defaults saved to pyproject.toml")
+                    st.cache_data.clear()  # Clear cache to reload config
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+
+        # Personal Tagger defaults
+        with module_tabs[1]:
+            st.markdown("#### Personal Tagger Defaults")
+            tagger_config = get_tool_config(
+                pyproject_config, "imageworks.personal_tagger"
+            )
+
+            tagger_output_jsonl = st.text_input(
+                "Default Output JSONL",
+                value=tagger_config.get(
+                    "default_output_jsonl", "outputs/results/personal_tagger.jsonl"
+                ),
+                key="tagger_default_output_jsonl",
+            )
+
+            tagger_summary = st.text_input(
+                "Default Summary Path",
+                value=tagger_config.get(
+                    "default_summary_path",
+                    "outputs/summaries/personal_tagger_summary.md",
+                ),
+                key="tagger_default_summary",
+            )
+
+            if st.button("💾 Save Tagger Defaults", key="save_tagger"):
+                try:
+                    updates = {
+                        "default_output_jsonl": tagger_output_jsonl,
+                        "default_summary_path": tagger_summary,
+                    }
+                    pyproject_config = update_tool_config(
+                        pyproject_config, "imageworks.personal_tagger", updates
+                    )
+                    save_pyproject_config(PROJECT_ROOT, pyproject_config)
+                    st.success("✅ Tagger defaults saved to pyproject.toml")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+
+        # Image Similarity defaults
+        with module_tabs[2]:
+            st.markdown("#### Image Similarity Defaults")
+            similarity_config = get_tool_config(
+                pyproject_config, "imageworks.image_similarity_checker"
+            )
+
+            similarity_library = st.text_input(
+                "Default Library Root",
+                value=similarity_config.get("default_library_root", ""),
+                key="similarity_default_library",
+            )
+
+            similarity_output_jsonl = st.text_input(
+                "Default Output JSONL",
+                value=similarity_config.get(
+                    "default_output_jsonl", "outputs/results/similarity_results.jsonl"
+                ),
+                key="similarity_default_output_jsonl",
+            )
+
+            similarity_summary = st.text_input(
+                "Default Summary Path",
+                value=similarity_config.get(
+                    "default_summary_path", "outputs/summaries/similarity_summary.md"
+                ),
+                key="similarity_default_summary",
+            )
+
+            similarity_cache = st.text_input(
+                "Default Cache Directory",
+                value=similarity_config.get(
+                    "default_cache_dir", "outputs/cache/similarity"
+                ),
+                key="similarity_default_cache",
+            )
+
+            if st.button("💾 Save Similarity Defaults", key="save_similarity"):
+                try:
+                    updates = {
+                        "default_library_root": similarity_library,
+                        "default_output_jsonl": similarity_output_jsonl,
+                        "default_summary_path": similarity_summary,
+                        "default_cache_dir": similarity_cache,
+                    }
+                    pyproject_config = update_tool_config(
+                        pyproject_config, "imageworks.image_similarity_checker", updates
+                    )
+                    save_pyproject_config(PROJECT_ROOT, pyproject_config)
+                    st.success("✅ Similarity defaults saved to pyproject.toml")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+
+        # Color Narrator defaults
+        with module_tabs[3]:
+            st.markdown("#### Color Narrator Defaults")
+            narrator_config = get_tool_config(
+                pyproject_config, "imageworks.color_narrator"
+            )
+
+            narrator_images_dir = st.text_input(
+                "Default Images Directory",
+                value=narrator_config.get("default_images_dir", ""),
+                key="narrator_default_images",
+            )
+
+            narrator_overlays_dir = st.text_input(
+                "Default Overlays Directory",
+                value=narrator_config.get("default_overlays_dir", ""),
+                key="narrator_default_overlays",
+            )
+
+            if st.button("💾 Save Narrator Defaults", key="save_narrator"):
+                try:
+                    updates = {
+                        "default_images_dir": narrator_images_dir,
+                        "default_overlays_dir": narrator_overlays_dir,
+                    }
+                    pyproject_config = update_tool_config(
+                        pyproject_config, "imageworks.color_narrator", updates
+                    )
+                    save_pyproject_config(PROJECT_ROOT, pyproject_config)
+                    st.success("✅ Narrator defaults saved to pyproject.toml")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+
+        st.markdown("---")
+        st.info("💡 After saving, restart the GUI or reload pages to see changes.")
+
+    # === BACKENDS SETTINGS ===
+    with tabs[3]:
         st.markdown("### Backend Configuration")
 
         st.markdown("#### Default Backend URLs")
@@ -178,7 +395,7 @@ def main():
         )
 
     # === APPEARANCE SETTINGS ===
-    with tabs[3]:
+    with tabs[4]:
         st.markdown("### Appearance")
 
         st.info("ℹ️ Appearance settings are controlled by Streamlit themes")
@@ -217,7 +434,7 @@ def main():
         st.session_state["debug_mode"] = show_debug
 
     # === ABOUT ===
-    with tabs[4]:
+    with tabs[5]:
         st.markdown("### About ImageWorks GUI")
 
         col1, col2 = st.columns([1, 1])

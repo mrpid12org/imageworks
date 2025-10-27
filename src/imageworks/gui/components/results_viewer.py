@@ -121,6 +121,7 @@ def render_jsonl_viewer(
 
     # Pagination
     total_pages = (len(filtered_results) + items_per_page - 1) // items_per_page
+    start_idx = 0  # Initialize before conditional
 
     if total_pages > 1:
         page = st.number_input(
