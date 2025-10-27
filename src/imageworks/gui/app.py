@@ -34,6 +34,37 @@ def main():
         initial_sidebar_state="expanded",
     )
 
+    # Global CSS for wider layout - applies to all pages
+    st.markdown(
+        """
+        <style>
+        /* Force wider main content area */
+        .main .block-container {
+            max-width: 95% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+
+        /* Remove Streamlit's default max-width constraint */
+        section.main > div {
+            max-width: none !important;
+        }
+
+        /* Make dataframes use full available width */
+        .stDataFrame {
+            width: 100% !important;
+        }
+
+        /* Ensure tables don't get cut off */
+        div[data-testid="stDataFrame"] > div {
+            width: 100% !important;
+            overflow-x: auto !important;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Sidebar branding and status
     with st.sidebar:
         st.title("🖼️ ImageWorks")
@@ -47,7 +78,8 @@ def main():
         try:
             from imageworks.libs.hardware.gpu_detector import GPUDetector
 
-            gpu_info = GPUDetector.detect_gpus()
+            detector = GPUDetector()
+            gpu_info = detector.detect_gpus()
             if gpu_info:
                 gpu = gpu_info[0]
                 st.success(f"✅ {gpu.name}")

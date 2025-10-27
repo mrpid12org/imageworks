@@ -134,34 +134,40 @@ def build_mono_command(config: Dict[str, Any]) -> List[str]:
     for path in input_paths:
         cmd.append(str(path))
 
-    # Thresholds
-    if "rgb_delta_threshold" in config:
-        cmd.extend(["--rgb-delta-threshold", str(config["rgb_delta_threshold"])])
-    if "chroma_threshold" in config:
-        cmd.extend(["--chroma-threshold", str(config["chroma_threshold"])])
-    if "hue_consistency_threshold" in config:
-        cmd.extend(
-            ["--hue-consistency-threshold", str(config["hue_consistency_threshold"])]
-        )
-    if "min_contaminated_pixels" in config:
-        cmd.extend(
-            ["--min-contaminated-pixels", str(config["min_contaminated_pixels"])]
-        )
+    # LAB color space thresholds
+    if "lab_neutral_chroma" in config:
+        cmd.extend(["--lab-neutral-chroma", str(config["lab_neutral_chroma"])])
+    if "lab_chroma_mask" in config:
+        cmd.extend(["--lab-chroma-mask", str(config["lab_chroma_mask"])])
+    if "lab_toned_pass" in config:
+        cmd.extend(["--lab-toned-pass", str(config["lab_toned_pass"])])
+    if "lab_toned_query" in config:
+        cmd.extend(["--lab-toned-query", str(config["lab_toned_query"])])
+    if "lab_fail_c4_ratio" in config:
+        cmd.extend(["--lab-fail-c4-ratio", str(config["lab_fail_c4_ratio"])])
+    if "lab_fail_c4_cluster" in config:
+        cmd.extend(["--lab-fail-c4-cluster", str(config["lab_fail_c4_cluster"])])
+
+    # Neutral tolerance
+    if "neutral_tol" in config:
+        cmd.extend(["--neutral-tol", str(config["neutral_tol"])])
 
     # Options
     if config.get("recursive"):
         cmd.append("--recursive")
 
-    if config.get("backup_originals"):
-        cmd.append("--backup-originals")
+    if config.get("auto_heatmap"):
+        cmd.append("--auto-heatmap")
+    if config.get("write_xmp"):
+        cmd.append("--write-xmp")
+    if config.get("xmp_keywords_only"):
+        cmd.append("--xmp-keywords-only")
 
     # Output paths
-    if config.get("overlays"):
-        cmd.extend(["--overlays", str(config["overlays"])])
-    if config.get("output_jsonl"):
-        cmd.extend(["--output-jsonl", str(config["output_jsonl"])])
-    if config.get("summary"):
-        cmd.extend(["--summary", str(config["summary"])])
+    if config.get("jsonl_out"):
+        cmd.extend(["--jsonl-out", str(config["jsonl_out"])])
+    if config.get("summary_out"):
+        cmd.extend(["--summary-out", str(config["summary_out"])])
 
     # Dry run
     if config.get("dry_run"):

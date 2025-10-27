@@ -71,7 +71,6 @@ class OllamaModelData:
     context_length: Optional[str]
     embedding_length: Optional[str]
     capabilities: Optional[List[str]]
-    license_text: Optional[str]
 
 
 def _fetch_tags() -> Dict[str, Dict]:
@@ -328,13 +327,6 @@ def _collect_model_data(
     if not capabilities and isinstance(detail.get("capabilities"), list):
         capabilities = detail.get("capabilities")
 
-    license_text = None
-    license_info = detail.get("license")
-    if isinstance(license_info, str):
-        license_text = license_info
-    elif isinstance(license_info, dict):
-        license_text = license_info.get("name") or license_info.get("text")
-
     family, quant_inferred = _derive_family_and_quant(name)
     # Prefer authoritative quantization_level, but ignore placeholders like 'unknown'
     quant = None
@@ -356,7 +348,6 @@ def _collect_model_data(
         "ollama_context_length": context_length,
         "ollama_embedding_length": embedding_length,
         "ollama_capabilities": capabilities,
-        "ollama_license": license_text,
     }
 
     if not quant and name in tags_index:
@@ -383,7 +374,6 @@ def _collect_model_data(
         context_length=context_length,
         embedding_length=embedding_length,
         capabilities=capabilities,
-        license_text=license_text,
     )
 
 

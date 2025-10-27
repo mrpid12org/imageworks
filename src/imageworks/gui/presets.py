@@ -53,8 +53,8 @@ IMAGE_SIMILARITY_PRESETS = ModulePresets(
         ),
         "standard": PresetConfig(
             name="Standard",
-            description="Balanced approach using SigLIP embeddings + perceptual hash. "
-            "Recommended for most use cases. No VLM explanations.",
+            description="Balanced duplicate detection using SigLIP base embeddings + perceptual hash. "
+            "Default CLI settings. No VLM explanations. Recommended for most use cases.",
             flags={
                 "strategy": ["embedding", "perceptual_hash"],
                 "embedding_backend": "siglip",
@@ -62,9 +62,9 @@ IMAGE_SIMILARITY_PRESETS = ModulePresets(
                 "similarity_metric": "cosine",
                 "fail_threshold": 0.92,
                 "query_threshold": 0.82,
-                "top_matches": 10,
+                "top_matches": 5,
                 "explain": False,
-                "write_metadata": True,
+                "write_metadata": False,
                 "backup_originals": True,
                 "perf_metrics": True,
                 "augment_pooling": False,
@@ -98,8 +98,8 @@ IMAGE_SIMILARITY_PRESETS = ModulePresets(
         ),
         "thorough": PresetConfig(
             name="Thorough",
-            description="Comprehensive analysis with large SigLIP model, augmentation pooling, "
-            "and VLM explanations. Slow but most accurate.",
+            description="Comprehensive analysis with SigLIP large model, augmentation pooling, "
+            "and VLM explanations. Most accurate but slowest. Best for critical decisions.",
             flags={
                 "strategy": ["embedding", "perceptual_hash"],
                 "embedding_backend": "siglip",
@@ -159,47 +159,55 @@ MONO_CHECKER_PRESETS = ModulePresets(
             description="Tight thresholds for competition-grade monochrome validation. "
             "High sensitivity to color contamination.",
             flags={
-                "rgb_delta_threshold": 8.0,
-                "chroma_threshold": 3.0,
-                "hue_consistency_threshold": 10.0,
-                "min_contaminated_pixels": 50,
-                "recursive": True,
+                "neutral_tol": 2,
+                "lab_neutral_chroma": 1.5,
+                "lab_chroma_mask": 1.5,
+                "lab_toned_pass": 8.0,
+                "lab_toned_query": 12.0,
+                "lab_fail_c4_ratio": 0.08,
+                "lab_fail_c4_cluster": 0.06,
+                "auto_heatmap": True,
+                "write_xmp": True,
+                "xmp_keywords_only": True,
                 "dry_run": False,
-                "backup_originals": True,
             },
             hidden_flags=[],
             common_overrides=[
                 "input",
-                "overlays",
-                "output_jsonl",
-                "summary",
+                "jsonl_out",
+                "summary_out",
                 "dry_run",
-                "rgb_delta_threshold",
-                "chroma_threshold",
+                "lab_neutral_chroma",
+                "lab_toned_pass",
+                "lab_toned_query",
             ],
         ),
         "balanced": PresetConfig(
             name="Balanced",
-            description="Recommended defaults for most monochrome checking. "
-            "Balance between false positives and false negatives.",
+            description="Default settings matching CLI defaults from pyproject.toml. "
+            "Recommended for most monochrome checking.",
             flags={
-                "rgb_delta_threshold": 10.0,
-                "chroma_threshold": 5.0,
-                "hue_consistency_threshold": 15.0,
-                "min_contaminated_pixels": 100,
-                "recursive": True,
+                "neutral_tol": 2,
+                "lab_neutral_chroma": 2.0,
+                "lab_chroma_mask": 2.0,
+                "lab_toned_pass": 10.0,
+                "lab_toned_query": 14.0,
+                "lab_fail_c4_ratio": 0.10,
+                "lab_fail_c4_cluster": 0.08,
+                "auto_heatmap": True,
+                "write_xmp": True,
+                "xmp_keywords_only": True,
                 "dry_run": False,
-                "backup_originals": True,
             },
             hidden_flags=[],
             common_overrides=[
                 "input",
-                "overlays",
-                "output_jsonl",
-                "summary",
+                "jsonl_out",
+                "summary_out",
                 "dry_run",
-                "rgb_delta_threshold",
-                "chroma_threshold",
+                "lab_neutral_chroma",
+                "lab_toned_pass",
+                "lab_toned_query",
             ],
         ),
         "lenient": PresetConfig(
@@ -207,23 +215,27 @@ MONO_CHECKER_PRESETS = ModulePresets(
             description="Relaxed thresholds for near-monochrome images. "
             "Allows subtle toning (sepia, blue-tone).",
             flags={
-                "rgb_delta_threshold": 15.0,
-                "chroma_threshold": 8.0,
-                "hue_consistency_threshold": 20.0,
-                "min_contaminated_pixels": 200,
-                "recursive": True,
+                "neutral_tol": 3,
+                "lab_neutral_chroma": 3.0,
+                "lab_chroma_mask": 3.0,
+                "lab_toned_pass": 15.0,
+                "lab_toned_query": 20.0,
+                "lab_fail_c4_ratio": 0.15,
+                "lab_fail_c4_cluster": 0.12,
+                "auto_heatmap": True,
+                "write_xmp": True,
+                "xmp_keywords_only": True,
                 "dry_run": False,
-                "backup_originals": True,
             },
             hidden_flags=[],
             common_overrides=[
                 "input",
-                "overlays",
-                "output_jsonl",
-                "summary",
+                "jsonl_out",
+                "summary_out",
                 "dry_run",
-                "rgb_delta_threshold",
-                "chroma_threshold",
+                "lab_neutral_chroma",
+                "lab_toned_pass",
+                "lab_toned_query",
             ],
         ),
     },
@@ -273,8 +285,8 @@ PERSONAL_TAGGER_PRESETS = ModulePresets(
         ),
         "full_tagging": PresetConfig(
             name="Full Tagging",
-            description="Generate captions, keywords, and descriptions. "
-            "Recommended for Lightroom library imports.",
+            description="Generate captions, keywords, and descriptions using Qwen2.5VL GGUF (Ollama). "
+            "Default CLI settings. Recommended for Lightroom library imports.",
             flags={
                 "use_registry": True,
                 "caption_role": "caption",
@@ -291,9 +303,6 @@ PERSONAL_TAGGER_PRESETS = ModulePresets(
                 "recursive": True,
             },
             hidden_flags=[
-                "backend",
-                "base_url",
-                "model",
                 "api_key",
                 "timeout",
             ],
@@ -351,16 +360,16 @@ PERSONAL_TAGGER_PRESETS = ModulePresets(
 
 COLOR_NARRATOR_PRESETS = ModulePresets(
     module_name="color_narrator",
-    default_preset="lmdeploy_standard",
+    default_preset="standard",
     presets={
-        "vllm_quick": PresetConfig(
-            name="vLLM Quick",
-            description="Fast narration using vLLM backend with smaller model. "
-            "No region hints.",
+        "quick": PresetConfig(
+            name="Quick",
+            description="Fast narration with basic prompt. "
+            "No region hints, faster processing.",
             flags={
-                "backend": "vllm",
-                "vlm_base_url": "http://localhost:8000/v1",
-                "vlm_model": "Qwen2-VL-2B-Instruct",
+                "backend": "ollama",
+                "vlm_base_url": "http://localhost:11434",
+                "vlm_model": "qwen2.5vl:7b",
                 "prompt": "1",
                 "regions": False,
                 "min_contamination_level": 0.1,
@@ -380,14 +389,14 @@ COLOR_NARRATOR_PRESETS = ModulePresets(
                 "dry_run",
             ],
         ),
-        "lmdeploy_standard": PresetConfig(
-            name="LMDeploy Standard",
-            description="Recommended setup using LMDeploy + Qwen2.5-VL-7B-AWQ. "
-            "Includes region-based prompt hints.",
+        "standard": PresetConfig(
+            name="Standard",
+            description="Recommended setup with region-based prompt hints "
+            "for detailed color contamination analysis.",
             flags={
-                "backend": "lmdeploy",
-                "vlm_base_url": "http://localhost:24001/v1",
-                "vlm_model": "Qwen2.5-VL-7B-AWQ",
+                "backend": "ollama",
+                "vlm_base_url": "http://localhost:11434",
+                "vlm_model": "qwen2.5vl:7b",
                 "prompt": "2",
                 "regions": True,
                 "min_contamination_level": 0.1,
@@ -407,7 +416,7 @@ COLOR_NARRATOR_PRESETS = ModulePresets(
                 "dry_run",
             ],
         ),
-        "proxy_role_based": PresetConfig(
+        "proxy": PresetConfig(
             name="Proxy (Role-Based)",
             description="Use chat proxy with automatic role-based model selection. "
             "Requires Phase 2 integration.",

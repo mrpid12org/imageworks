@@ -21,6 +21,9 @@ from imageworks.gui.config import (
     DEFAULT_OVERLAYS_DIR,
     DEFAULT_OUTPUT_JSONL,
     DEFAULT_SUMMARY_PATH,
+    ZIP_DEFAULT_ZIP_DIR,
+    ZIP_DEFAULT_EXTRACT_ROOT,
+    ZIP_DEFAULT_SUMMARY_OUTPUT,
     get_app_setting,
     set_app_setting,
     reset_app_settings,
@@ -109,32 +112,44 @@ def render_custom_overrides(preset, session_key_prefix):
         )
         overrides["dry_run"] = dry_run
 
-    # Threshold overrides
-    if "rgb_delta_threshold" in preset.common_overrides:
-        with st.expander("🎚️ Threshold Adjustments", expanded=False):
-            rgb_delta = st.slider(
-                "RGB Delta Threshold",
-                min_value=5.0,
-                max_value=20.0,
-                value=preset.flags.get("rgb_delta_threshold", 10.0),
-                step=0.5,
-                key=f"{session_key_prefix}_rgb_delta",
-                help="Maximum allowed difference between RGB channels",
+    # LAB threshold overrides
+    if "lab_neutral_chroma" in preset.common_overrides:
+        with st.expander("🎚️ LAB Threshold Adjustments", expanded=False):
+            lab_neutral_chroma = st.slider(
+                "LAB Neutral Chroma (C*)",
+                min_value=0.5,
+                max_value=5.0,
+                value=preset.flags.get("lab_neutral_chroma", 2.0),
+                step=0.1,
+                key=f"{session_key_prefix}_lab_neutral_chroma",
+                help="Neutral chroma threshold in LAB color space (lower = stricter)",
             )
-            if rgb_delta != preset.flags.get("rgb_delta_threshold"):
-                overrides["rgb_delta_threshold"] = rgb_delta
+            if lab_neutral_chroma != preset.flags.get("lab_neutral_chroma"):
+                overrides["lab_neutral_chroma"] = lab_neutral_chroma
 
-            chroma = st.slider(
-                "Chroma Threshold",
-                min_value=2.0,
-                max_value=15.0,
-                value=preset.flags.get("chroma_threshold", 5.0),
+            lab_toned_pass = st.slider(
+                "LAB Toned Pass (degrees)",
+                min_value=5.0,
+                max_value=25.0,
+                value=preset.flags.get("lab_toned_pass", 10.0),
                 step=0.5,
-                key=f"{session_key_prefix}_chroma",
-                help="Maximum allowed chroma (color saturation)",
+                key=f"{session_key_prefix}_lab_toned_pass",
+                help="LAB hue standard deviation threshold for PASS verdict",
             )
-            if chroma != preset.flags.get("chroma_threshold"):
-                overrides["chroma_threshold"] = chroma
+            if lab_toned_pass != preset.flags.get("lab_toned_pass"):
+                overrides["lab_toned_pass"] = lab_toned_pass
+
+            lab_toned_query = st.slider(
+                "LAB Toned Query (degrees)",
+                min_value=8.0,
+                max_value=30.0,
+                value=preset.flags.get("lab_toned_query", 14.0),
+                step=0.5,
+                key=f"{session_key_prefix}_lab_toned_query",
+                help="LAB hue standard deviation threshold for QUERY verdict",
+            )
+            if lab_toned_query != preset.flags.get("lab_toned_query"):
+                overrides["lab_toned_query"] = lab_toned_query
 
     return overrides
 
@@ -146,10 +161,180 @@ def main():
     st.title("🖼️ Mono Checker")
     st.markdown("Detect non-monochrome images in competition submissions")
 
-    # Tabs for workflow
-    tab_config, tab_execute, tab_results, tab_review = st.tabs(
-        ["⚙️ Configure", "▶️ Execute", "📊 Results", "🔍 Review Images"]
+    # Tabs for workflow (preprocessing first, following the workflow order)
+    tab_preprocess, tab_config, tab_execute, tab_results, tab_review = st.tabs(
+        [
+            "📦 Preprocessing",
+            "⚙️ Configure",
+            "▶️ Execute",
+            "📊 Results",
+            "🔍 Review Images",
+        ]
     )
+
+    # === PREPROCESSING TAB ===
+    with tab_preprocess:
+        st.markdown("### Stage 1: Zip Extraction & Preprocessing")
+        st.info(
+            "📋 **Workflow**: Extract competition zip files → Lightroom auto-imports → Run mono checker"
+        )
+
+        # Reset button for preprocessing settings
+        col_reset, col_spacer = st.columns([1, 3])
+        with col_reset:
+            if st.button(
+                "🔄 Reset to Defaults",
+                key="zip_reset",
+                help="Reset all paths to global defaults",
+            ):
+                reset_app_settings(st.session_state, "zip_extract")
+                st.success("✅ Reset to defaults")
+                st.rerun()
+
+        # Zip directory input
+        current_zip_dir = get_app_setting(
+            st.session_state, "zip_extract", "zip_dir", ZIP_DEFAULT_ZIP_DIR
+        )
+        zip_dir = st.text_input(
+            "Zip Files Directory",
+            value=current_zip_dir,
+            key="zip_dir_input",
+            help="Directory containing competition ZIP files to extract",
+        )
+        if zip_dir and zip_dir != current_zip_dir:
+            set_app_setting(st.session_state, "zip_extract", "zip_dir", zip_dir)
+
+        # Extract root directory
+        current_extract_root = get_app_setting(
+            st.session_state, "zip_extract", "extract_root", ZIP_DEFAULT_EXTRACT_ROOT
+        )
+        extract_root = st.text_input(
+            "Extract To (Lightroom Watched Folder)",
+            value=current_extract_root,
+            key="extract_root_input",
+            help="Destination directory (Lightroom auto-import folder)",
+        )
+        if extract_root and extract_root != current_extract_root:
+            set_app_setting(
+                st.session_state, "zip_extract", "extract_root", extract_root
+            )
+
+        # Summary output path
+        current_summary = get_app_setting(
+            st.session_state,
+            "zip_extract",
+            "summary_output",
+            str(ZIP_DEFAULT_SUMMARY_OUTPUT),
+        )
+        summary_output = st.text_input(
+            "Summary Output File",
+            value=current_summary,
+            key="zip_summary_output",
+            help="Path for extraction summary markdown file",
+        )
+        if summary_output and summary_output != current_summary:
+            set_app_setting(
+                st.session_state, "zip_extract", "summary_output", summary_output
+            )
+
+        # Options
+        col1, col2 = st.columns(2)
+
+        with col1:
+            include_xmp = st.checkbox(
+                "Include XMP Files",
+                value=False,
+                key="zip_include_xmp",
+                help="Also extract .xmp sidecar files (normally not needed)",
+            )
+
+        with col2:
+            update_all_metadata = st.checkbox(
+                "Update All Metadata",
+                value=False,
+                key="zip_update_all",
+                help="Re-update metadata for existing files (not just new extractions)",
+            )
+
+        # Show what will be processed
+        zip_path = Path(zip_dir) if zip_dir else None
+        if zip_path and zip_path.exists():
+            zip_files = list(zip_path.glob("*.zip"))
+            if zip_files:
+                st.success(f"✅ Found {len(zip_files)} zip file(s) to process")
+                with st.expander("📋 Zip Files", expanded=False):
+                    for zf in zip_files:
+                        st.text(f"  • {zf.name}")
+            else:
+                st.warning(f"⚠️ No .zip files found in {zip_dir}")
+        elif zip_path:
+            st.error(f"❌ Directory does not exist: {zip_dir}")
+
+        # Execute button
+        st.markdown("---")
+        if st.button(
+            "▶️ Extract Competition Zips",
+            type="primary",
+            key="run_zip_extract",
+            disabled=not (zip_path and zip_path.exists()),
+        ):
+            import subprocess
+
+            cmd = ["imageworks-zip", "run"]
+
+            if zip_dir:
+                cmd.extend(["--zip-dir", zip_dir])
+            if extract_root:
+                cmd.extend(["--extract-root", extract_root])
+            if summary_output:
+                cmd.extend(["--output-file", summary_output])
+            if include_xmp:
+                cmd.append("--include-xmp")
+            if update_all_metadata:
+                cmd.extend(["--metadata"])
+
+            with st.spinner("Extracting competition zips..."):
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        cwd=str(Path.cwd()),
+                        timeout=600,
+                    )
+
+                    if result.returncode == 0:
+                        st.success("✅ Zip extraction completed!")
+
+                        # Show output
+                        with st.expander("📋 Extraction Details", expanded=True):
+                            st.code(result.stdout)
+
+                        # Show summary file if it exists
+                        summary_path = Path(summary_output)
+                        if summary_path.exists():
+                            with st.expander("📄 Summary File", expanded=False):
+                                st.markdown(summary_path.read_text())
+
+                        st.info(
+                            "💡 **Next Steps**:\n"
+                            "1. Lightroom will auto-import the extracted images\n"
+                            "2. Switch to '⚙️ Configure' tab to set up mono checking\n"
+                            "3. Use the extracted folder as input for mono checker"
+                        )
+                    else:
+                        st.error(
+                            f"❌ Extraction failed (exit code: {result.returncode})"
+                        )
+                        if result.stderr:
+                            st.code(result.stderr)
+                        if result.stdout:
+                            st.code(result.stdout)
+
+                except subprocess.TimeoutExpired:
+                    st.error("❌ Extraction timed out (> 10 minutes)")
+                except Exception as e:
+                    st.error(f"❌ Error running extraction: {e}")
 
     # === CONFIGURE TAB ===
     with tab_config:

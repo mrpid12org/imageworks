@@ -39,16 +39,20 @@ SIMILARITY_DEFAULT_CACHE_DIR = OUTPUTS_DIR / "cache" / "similarity"
 NARRATOR_DEFAULT_IMAGES_DIR = "/mnt/d/Proper Photos/photos/ccc competition images"
 NARRATOR_DEFAULT_OVERLAYS_DIR = "/mnt/d/Proper Photos/photos/ccc competition images"
 
+# Zip Extract defaults (from pyproject.toml [tool.imageworks.zip-extract])
+ZIP_DEFAULT_ZIP_DIR = "/mnt/c/Users/stewa/Downloads/CCC comp zips"
+ZIP_DEFAULT_EXTRACT_ROOT = "/mnt/d/Proper Photos/photos/ccc competition images"
+ZIP_DEFAULT_SUMMARY_OUTPUT = OUTPUTS_DIR / "zip_extract_summary.md"
+
 # Legacy aliases for backward compatibility
 DEFAULT_OUTPUT_JSONL = MONO_DEFAULT_OUTPUT_JSONL
 DEFAULT_SUMMARY_PATH = MONO_DEFAULT_SUMMARY_PATH
 DEFAULT_OVERLAYS_DIR = MONO_DEFAULT_OVERLAYS_DIR
 
 # Backend URLs
+# Note: vLLM runs inside chat_proxy docker container, not as separate service
 DEFAULT_BACKENDS = {
     "chat_proxy": "http://localhost:8100/v1",
-    "vllm": "http://localhost:24001/v1",
-    "lmdeploy": "http://localhost:24001/v1",
     "ollama": "http://localhost:11434",
 }
 

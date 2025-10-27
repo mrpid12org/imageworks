@@ -24,6 +24,7 @@ from imageworks.gui.config import (
     set_app_setting,
     reset_app_settings,
 )
+from imageworks.model_loader.role_selection import list_models_for_role, select_by_role
 
 
 def render_custom_overrides(preset, session_key_prefix):
@@ -136,6 +137,179 @@ def render_custom_overrides(preset, session_key_prefix):
         key=f"{session_key_prefix}_dry_run_main",
     )
     overrides["dry_run"] = dry_run
+
+    # Advanced VLM/Backend Settings
+    with st.expander("🔧 Advanced Settings (VLM/Backend)", expanded=False):
+        st.markdown("##### Model Selection Mode")
+
+        # Mode selection
+        use_registry = st.checkbox(
+            "Use Registry (Auto)",
+            value=preset.flags.get("use_registry", True),
+            key=f"{session_key_prefix}_use_registry",
+            help="Automatically select models by role from registry. Uncheck for manual backend/model selection.",
+        )
+        overrides["use_registry"] = use_registry
+
+        if use_registry:
+            # AUTO MODE: Show what models will be used for each role
+            st.markdown("**Registry-based model selection enabled**")
+            st.info(
+                "Models will be automatically selected from the registry based on role priority scores. "
+                "The system will choose the highest-priority model for each task."
+            )
+
+            # Show which specific models will be selected
+            st.markdown("**Models that will be used:**")
+            try:
+                if overrides.get("caption_role"):
+                    caption_model = select_by_role(overrides["caption_role"])
+                    st.markdown(f"- 📝 **Caption**: `{caption_model}`")
+                if overrides.get("keyword_role"):
+                    keyword_model = select_by_role(overrides["keyword_role"])
+                    st.markdown(f"- 🏷️ **Keywords**: `{keyword_model}`")
+                if overrides.get("description_role"):
+                    description_model = select_by_role(overrides["description_role"])
+                    st.markdown(f"- 📄 **Description**: `{description_model}`")
+
+                if not any(
+                    [
+                        overrides.get("caption_role"),
+                        overrides.get("keyword_role"),
+                        overrides.get("description_role"),
+                    ]
+                ):
+                    st.warning("No roles enabled. Enable at least one tag type above.")
+            except Exception as e:
+                st.error(f"Error loading models from registry: {e}")
+
+        else:
+            # MANUAL MODE: Full backend/model control
+            st.markdown("**Manual backend/model configuration**")
+
+            # Backend selection
+            backend = st.selectbox(
+                "Backend",
+                options=["ollama", "vllm", "lmdeploy"],
+                index=0,  # Default to ollama
+                key=f"{session_key_prefix}_backend",
+                help="Inference backend to use",
+            )
+            overrides["backend"] = backend
+
+            # Base URL based on backend
+            default_urls = {
+                "ollama": "http://localhost:11434/v1",
+                "vllm": "http://localhost:8000/v1",
+                "lmdeploy": "http://localhost:23333/v1",
+            }
+            base_url = st.text_input(
+                "Base URL",
+                value=default_urls.get(backend, "http://localhost:11434/v1"),
+                key=f"{session_key_prefix}_base_url",
+                help="API endpoint for the selected backend",
+            )
+            overrides["base_url"] = base_url
+
+            # Model selection
+            st.markdown("**Model Selection**")
+
+            # Get available models for each role
+            try:
+                caption_models = (
+                    list_models_for_role("caption")
+                    if overrides.get("caption_role")
+                    else []
+                )
+                keyword_models = (
+                    list_models_for_role("keywords")
+                    if overrides.get("keyword_role")
+                    else []
+                )
+                description_models = (
+                    list_models_for_role("description")
+                    if overrides.get("description_role")
+                    else []
+                )
+
+                # Check if all roles can use same models
+                all_models = (
+                    set(caption_models) & set(keyword_models) & set(description_models)
+                    if all([caption_models, keyword_models, description_models])
+                    else []
+                )
+
+            except Exception as e:
+                st.error(f"Error loading available models: {e}")
+                caption_models = keyword_models = description_models = []
+                all_models = []
+
+            use_same_model = st.checkbox(
+                "Use same model for all roles",
+                value=True,
+                key=f"{session_key_prefix}_use_same_model",
+                help="Select one model for all enabled roles (model must support all enabled roles)",
+            )
+
+            if use_same_model:
+                # Show models that support ALL enabled roles
+                if all_models:
+                    model = st.selectbox(
+                        "Model",
+                        options=sorted(all_models),
+                        index=0,
+                        key=f"{session_key_prefix}_model",
+                        help="Model must support all enabled roles",
+                    )
+                    overrides["model"] = model
+                else:
+                    st.warning(
+                        "No models support all enabled roles. Use per-role selection or enable fewer roles."
+                    )
+                    # Fallback to text input
+                    model = st.text_input(
+                        "Model (manual entry)",
+                        value="qwen2.5vl:7b",
+                        key=f"{session_key_prefix}_model_manual",
+                        help="Manually specify model name",
+                    )
+                    overrides["model"] = model
+            else:
+                # Per-role model selection with dropdowns
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    if overrides.get("caption_role") and caption_models:
+                        caption_model = st.selectbox(
+                            "Caption Model",
+                            options=sorted(caption_models),
+                            index=0,
+                            key=f"{session_key_prefix}_caption_model",
+                            help="Models capable of caption generation",
+                        )
+                        overrides["caption_model"] = caption_model
+
+                with col2:
+                    if overrides.get("keyword_role") and keyword_models:
+                        keyword_model = st.selectbox(
+                            "Keyword Model",
+                            options=sorted(keyword_models),
+                            index=0,
+                            key=f"{session_key_prefix}_keyword_model",
+                            help="Models capable of keyword extraction",
+                        )
+                        overrides["keyword_model"] = keyword_model
+
+                with col3:
+                    if overrides.get("description_role") and description_models:
+                        description_model = st.selectbox(
+                            "Description Model",
+                            options=sorted(description_models),
+                            index=0,
+                            key=f"{session_key_prefix}_description_model",
+                            help="Models capable of description generation",
+                        )
+                        overrides["description_model"] = description_model
 
     return overrides
 

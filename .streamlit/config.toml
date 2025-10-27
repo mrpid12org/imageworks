@@ -1,0 +1,20 @@
+# Streamlit configuration for ImageWorks GUI
+
+[theme]
+# Optional: Customize theme colors if desired
+# primaryColor = "#FF4B4B"
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F0F2F6"
+# textColor = "#262730"
+
+[server]
+# Server configuration
+headless = true
+port = 8501
+
+[browser]
+# Browser settings
+gatherUsageStats = false
+
+# Note: Layout width is controlled by layout="wide" in st.set_page_config() calls
+# and custom CSS styling in the page components

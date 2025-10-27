@@ -1,0 +1,35 @@
+/* Global CSS for ImageWorks GUI - wider layout for better table display */
+
+/* Force wider main content area - override Streamlit defaults */
+.main .block-container {
+    max-width: 95% !important;
+    padding-left: 3rem !important;
+    padding-right: 3rem !important;
+}
+
+/* Remove max-width constraint from app view */
+section.main > div {
+    max-width: 100% !important;
+}
+
+/* Make dataframes use full available width */
+.stDataFrame {
+    width: 100% !important;
+}
+
+/* Ensure tables don't truncate unnecessarily */
+div[data-testid="stDataFrame"] > div {
+    width: 100% !important;
+    overflow-x: auto !important;
+}
+
+/* Expand dataframe container */
+.element-container:has(div[data-testid="stDataFrame"]) {
+    width: 100% !important;
+}
+
+/* Adjust column layout to use more space */
+div[data-testid="column"] {
+    width: fit-content !important;
+    min-width: 0 !important;
+}

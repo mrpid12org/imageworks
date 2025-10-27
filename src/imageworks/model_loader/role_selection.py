@@ -40,7 +40,7 @@ def select_by_role(
 
     Resolution order:
       1. preferred list (first that exists & matches role)
-      2. first non-deprecated registry entry advertising the role
+      2. highest role_priority score among non-deprecated registry entries advertising the role
     Capability requirements merged from DEFAULT_ROLE_CAPABILITIES and user provided list.
     """
     reg = load_registry()
@@ -70,14 +70,21 @@ def select_by_role(
             if _is_valid(candidate):
                 return candidate
 
-    # fallback to any matching entry
+    # fallback to highest priority matching entry
+    candidates = []
     for name, entry in reg.items():
         if _is_valid(name):
-            return name
+            priority = entry.role_priority.get(role, 0)
+            candidates.append((name, priority))
 
-    raise CapabilityError(
-        f"No model found for role '{role}' meeting capabilities {req_caps}"
-    )
+    if not candidates:
+        raise CapabilityError(
+            f"No model found for role '{role}' meeting capabilities {req_caps}"
+        )
+
+    # Sort by priority descending, return highest
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return candidates[0][0]
 
 
 __all__ = ["list_models_for_role", "select_by_role", "DEFAULT_ROLE_CAPABILITIES"]
