@@ -61,3 +61,32 @@ def supports_vision(entry: Any) -> bool:
             return True
 
     return False
+
+
+def supports_reasoning(entry: Any) -> bool:
+    """Return True when registry entry indicates reasoning/thinking support.
+
+    Reasoning models (like o1, deepseek-r1, gpt-oss) produce extended
+    chain-of-thought outputs that can consume large amounts of context.
+    """
+    capabilities = getattr(entry, "capabilities", None)
+    if isinstance(capabilities, Mapping):
+        # Check for explicit reasoning markers
+        reasoning_markers = (
+            "thinking",
+            "reasoning",
+            "reason",
+            "think",
+            "chain_of_thought",
+            "cot",
+            "reasoner",
+            "o1",
+            "o3",
+            "r1",
+            "deepseek",
+        )
+        for marker in reasoning_markers:
+            if capabilities.get(marker):
+                return True
+
+    return False

@@ -1,0 +1,438 @@
+"""Preset definitions for all modules."""
+
+from imageworks.gui.components.preset_selector import PresetConfig, ModulePresets
+
+
+# ===== IMAGE SIMILARITY PRESETS =====
+
+IMAGE_SIMILARITY_PRESETS = ModulePresets(
+    module_name="image_similarity",
+    default_preset="standard",
+    presets={
+        "quick": PresetConfig(
+            name="Quick",
+            description="Fast duplicate detection using perceptual hashing only. "
+            "No embeddings or VLM explanations. Best for initial screening.",
+            flags={
+                "strategy": ["perceptual_hash"],
+                "fail_threshold": 0.95,
+                "query_threshold": 0.90,
+                "top_matches": 5,
+                "explain": False,
+                "write_metadata": False,
+                "backup_originals": True,
+                "perf_metrics": False,
+                "augment_pooling": False,
+                "dry_run": True,
+            },
+            hidden_flags=[
+                "embedding_backend",
+                "embedding_model",
+                "similarity_metric",
+                "augment_grayscale",
+                "augment_five_crop",
+                "augment_five_crop_ratio",
+                "backend",
+                "base_url",
+                "model",
+                "prompt_profile",
+                "use_loader",
+                "registry_model",
+                "registry_capability",
+                "refresh_library_cache",
+                "manifest_ttl_seconds",
+            ],
+            common_overrides=[
+                "fail_threshold",
+                "query_threshold",
+                "library_root",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+            ],
+        ),
+        "standard": PresetConfig(
+            name="Standard",
+            description="Balanced approach using SigLIP embeddings + perceptual hash. "
+            "Recommended for most use cases. No VLM explanations.",
+            flags={
+                "strategy": ["embedding", "perceptual_hash"],
+                "embedding_backend": "siglip",
+                "embedding_model": "google/siglip-base-patch16-224",
+                "similarity_metric": "cosine",
+                "fail_threshold": 0.92,
+                "query_threshold": 0.82,
+                "top_matches": 10,
+                "explain": False,
+                "write_metadata": True,
+                "backup_originals": True,
+                "perf_metrics": True,
+                "augment_pooling": False,
+                "dry_run": True,
+            },
+            hidden_flags=[
+                "augment_grayscale",
+                "augment_five_crop",
+                "augment_five_crop_ratio",
+                "backend",
+                "base_url",
+                "model",
+                "prompt_profile",
+                "use_loader",
+                "registry_model",
+                "registry_capability",
+                "refresh_library_cache",
+                "manifest_ttl_seconds",
+            ],
+            common_overrides=[
+                "fail_threshold",
+                "query_threshold",
+                "library_root",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+                "strategy",
+                "explain",
+                "write_metadata",
+            ],
+        ),
+        "thorough": PresetConfig(
+            name="Thorough",
+            description="Comprehensive analysis with large SigLIP model, augmentation pooling, "
+            "and VLM explanations. Slow but most accurate.",
+            flags={
+                "strategy": ["embedding", "perceptual_hash"],
+                "embedding_backend": "siglip",
+                "embedding_model": "google/siglip-large-patch16-384",
+                "similarity_metric": "cosine",
+                "fail_threshold": 0.90,
+                "query_threshold": 0.80,
+                "top_matches": 15,
+                "augment_pooling": True,
+                "augment_grayscale": True,
+                "augment_five_crop": True,
+                "augment_five_crop_ratio": 0.875,
+                "explain": True,
+                "backend": "vllm",
+                "base_url": "http://localhost:8100/v1",
+                "model": "auto",  # Will be role-resolved
+                "prompt_profile": "detailed",
+                "write_metadata": True,
+                "backup_originals": True,
+                "perf_metrics": True,
+                "dry_run": True,
+            },
+            hidden_flags=[
+                "use_loader",
+                "registry_model",
+                "registry_capability",
+                "refresh_library_cache",
+                "manifest_ttl_seconds",
+            ],
+            common_overrides=[
+                "fail_threshold",
+                "query_threshold",
+                "library_root",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+                "strategy",
+                "embedding_backend",
+                "embedding_model",
+                "augment_pooling",
+                "explain",
+                "write_metadata",
+            ],
+        ),
+    },
+)
+
+
+# ===== MONO CHECKER PRESETS =====
+
+MONO_CHECKER_PRESETS = ModulePresets(
+    module_name="mono_checker",
+    default_preset="balanced",
+    presets={
+        "strict": PresetConfig(
+            name="Strict",
+            description="Tight thresholds for competition-grade monochrome validation. "
+            "High sensitivity to color contamination.",
+            flags={
+                "rgb_delta_threshold": 8.0,
+                "chroma_threshold": 3.0,
+                "hue_consistency_threshold": 10.0,
+                "min_contaminated_pixels": 50,
+                "recursive": True,
+                "dry_run": False,
+                "backup_originals": True,
+            },
+            hidden_flags=[],
+            common_overrides=[
+                "input",
+                "overlays",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+                "rgb_delta_threshold",
+                "chroma_threshold",
+            ],
+        ),
+        "balanced": PresetConfig(
+            name="Balanced",
+            description="Recommended defaults for most monochrome checking. "
+            "Balance between false positives and false negatives.",
+            flags={
+                "rgb_delta_threshold": 10.0,
+                "chroma_threshold": 5.0,
+                "hue_consistency_threshold": 15.0,
+                "min_contaminated_pixels": 100,
+                "recursive": True,
+                "dry_run": False,
+                "backup_originals": True,
+            },
+            hidden_flags=[],
+            common_overrides=[
+                "input",
+                "overlays",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+                "rgb_delta_threshold",
+                "chroma_threshold",
+            ],
+        ),
+        "lenient": PresetConfig(
+            name="Lenient",
+            description="Relaxed thresholds for near-monochrome images. "
+            "Allows subtle toning (sepia, blue-tone).",
+            flags={
+                "rgb_delta_threshold": 15.0,
+                "chroma_threshold": 8.0,
+                "hue_consistency_threshold": 20.0,
+                "min_contaminated_pixels": 200,
+                "recursive": True,
+                "dry_run": False,
+                "backup_originals": True,
+            },
+            hidden_flags=[],
+            common_overrides=[
+                "input",
+                "overlays",
+                "output_jsonl",
+                "summary",
+                "dry_run",
+                "rgb_delta_threshold",
+                "chroma_threshold",
+            ],
+        ),
+    },
+)
+
+
+# ===== PERSONAL TAGGER PRESETS =====
+
+PERSONAL_TAGGER_PRESETS = ModulePresets(
+    module_name="personal_tagger",
+    default_preset="full_tagging",
+    presets={
+        "quick_caption": PresetConfig(
+            name="Quick Caption",
+            description="Generate captions only (no keywords or descriptions). "
+            "Fast preview mode with dry-run enabled.",
+            flags={
+                "use_registry": True,
+                "caption_role": "caption",
+                "keyword_role": None,
+                "description_role": None,
+                "prompt_profile": "concise",
+                "batch_size": 8,
+                "max_workers": 2,
+                "dry_run": True,
+                "no_meta": False,
+                "backup_originals": True,
+                "preflight": True,
+                "recursive": True,
+            },
+            hidden_flags=[
+                "backend",
+                "base_url",
+                "model",
+                "api_key",
+                "timeout",
+                "overwrite_metadata",
+            ],
+            common_overrides=[
+                "input",
+                "summary",
+                "output_jsonl",
+                "dry_run",
+                "prompt_profile",
+                "batch_size",
+            ],
+        ),
+        "full_tagging": PresetConfig(
+            name="Full Tagging",
+            description="Generate captions, keywords, and descriptions. "
+            "Recommended for Lightroom library imports.",
+            flags={
+                "use_registry": True,
+                "caption_role": "caption",
+                "keyword_role": "keywords",
+                "description_role": "description",
+                "prompt_profile": "balanced",
+                "batch_size": 4,
+                "max_workers": 2,
+                "dry_run": True,
+                "no_meta": False,
+                "backup_originals": True,
+                "overwrite_metadata": False,
+                "preflight": True,
+                "recursive": True,
+            },
+            hidden_flags=[
+                "backend",
+                "base_url",
+                "model",
+                "api_key",
+                "timeout",
+            ],
+            common_overrides=[
+                "input",
+                "summary",
+                "output_jsonl",
+                "dry_run",
+                "prompt_profile",
+                "batch_size",
+                "caption_role",
+                "keyword_role",
+                "description_role",
+            ],
+        ),
+        "validate_existing": PresetConfig(
+            name="Validate Existing",
+            description="Check already-tagged images and regenerate missing metadata. "
+            "Useful for library maintenance.",
+            flags={
+                "use_registry": True,
+                "caption_role": "caption",
+                "keyword_role": "keywords",
+                "description_role": "description",
+                "prompt_profile": "balanced",
+                "batch_size": 4,
+                "max_workers": 2,
+                "dry_run": True,
+                "no_meta": True,
+                "backup_originals": True,
+                "overwrite_metadata": False,
+                "preflight": True,
+                "recursive": True,
+            },
+            hidden_flags=[
+                "backend",
+                "base_url",
+                "model",
+                "api_key",
+                "timeout",
+            ],
+            common_overrides=[
+                "input",
+                "summary",
+                "output_jsonl",
+                "dry_run",
+                "no_meta",
+            ],
+        ),
+    },
+)
+
+
+# ===== COLOR NARRATOR PRESETS =====
+
+COLOR_NARRATOR_PRESETS = ModulePresets(
+    module_name="color_narrator",
+    default_preset="lmdeploy_standard",
+    presets={
+        "vllm_quick": PresetConfig(
+            name="vLLM Quick",
+            description="Fast narration using vLLM backend with smaller model. "
+            "No region hints.",
+            flags={
+                "backend": "vllm",
+                "vlm_base_url": "http://localhost:8000/v1",
+                "vlm_model": "Qwen2-VL-2B-Instruct",
+                "prompt": "1",
+                "regions": False,
+                "min_contamination_level": 0.1,
+                "require_overlays": True,
+                "dry_run": False,
+                "backup_original_files": True,
+                "overwrite_existing_metadata": False,
+            },
+            hidden_flags=["vlm_api_key", "vlm_timeout"],
+            common_overrides=[
+                "images",
+                "overlays",
+                "mono_jsonl",
+                "summary",
+                "backend",
+                "prompt",
+                "dry_run",
+            ],
+        ),
+        "lmdeploy_standard": PresetConfig(
+            name="LMDeploy Standard",
+            description="Recommended setup using LMDeploy + Qwen2.5-VL-7B-AWQ. "
+            "Includes region-based prompt hints.",
+            flags={
+                "backend": "lmdeploy",
+                "vlm_base_url": "http://localhost:24001/v1",
+                "vlm_model": "Qwen2.5-VL-7B-AWQ",
+                "prompt": "2",
+                "regions": True,
+                "min_contamination_level": 0.1,
+                "require_overlays": True,
+                "dry_run": False,
+                "backup_original_files": True,
+                "overwrite_existing_metadata": False,
+            },
+            hidden_flags=["vlm_api_key", "vlm_timeout"],
+            common_overrides=[
+                "images",
+                "overlays",
+                "mono_jsonl",
+                "summary",
+                "prompt",
+                "regions",
+                "dry_run",
+            ],
+        ),
+        "proxy_role_based": PresetConfig(
+            name="Proxy (Role-Based)",
+            description="Use chat proxy with automatic role-based model selection. "
+            "Requires Phase 2 integration.",
+            flags={
+                "backend": "vllm",
+                "vlm_base_url": "http://localhost:8100/v1",
+                "vlm_model": "auto",
+                "prompt": "2",
+                "regions": True,
+                "min_contamination_level": 0.1,
+                "require_overlays": True,
+                "dry_run": False,
+                "backup_original_files": True,
+                "overwrite_existing_metadata": False,
+            },
+            hidden_flags=["vlm_api_key", "vlm_timeout"],
+            common_overrides=[
+                "images",
+                "overlays",
+                "mono_jsonl",
+                "summary",
+                "prompt",
+                "regions",
+                "dry_run",
+            ],
+        ),
+    },
+)

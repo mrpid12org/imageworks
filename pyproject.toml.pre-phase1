@@ -36,14 +36,6 @@ dependencies = [
   "timm>=1.0.20",
   "fastapi>=0.111.0",
   "uvicorn>=0.30.0",
-  # GUI dependencies
-  "streamlit>=1.28.0",
-  "streamlit-aggrid>=0.3.0",
-  "plotly>=5.0.0",
-  "markdown>=3.4.0",
-  "psutil>=5.9.0",
-  "watchdog>=3.0.0",
-  "pandas>=2.0.0",
 ]
 requires-python = ">=3.9"
 
@@ -58,7 +50,6 @@ imageworks-download = "imageworks.tools.model_downloader.cli:main"
 imageworks-models = "imageworks.model_loader.cli:app"
 imageworks-models-api = "imageworks.model_loader.api:app"
 imageworks-loader = "imageworks.model_loader.cli_sync:app"
-imageworks-gui = "imageworks.gui.app:main"
 imageworks-chat-proxy = "imageworks.chat_proxy.app:main"
 
 
@@ -204,7 +195,7 @@ default_output_jsonl = "outputs/results/personal_tagger.jsonl"
 default_summary_path = "outputs/summaries/personal_tagger_summary.md"
 default_backend = "lmdeploy"
 default_model = "Qwen2.5-VL-7B-AWQ"
-default_base_url = "http://localhost:8100/v1"  # Chat proxy with autostart & history management
+default_base_url = "http://localhost:24001/v1"
 default_timeout = 120
 default_max_new_tokens = 512
 default_temperature = 0.2
@@ -247,7 +238,7 @@ default_similarity_metric = "cosine"
 default_embedding_backend = "simple"
 default_backend = "vllm"
 default_model = "Qwen2.5-VL-7B-AWQ"
-default_base_url = "http://localhost:8100/v1"  # Chat proxy with autostart & history management
+default_base_url = "http://localhost:8000/v1"
 default_write_metadata = false
 default_backup_originals = true
 default_overwrite_metadata = false
@@ -281,62 +272,6 @@ retry_delay_seconds = 5
 # Registry and cache paths (relative to linux_wsl_root)
 registry_subdir = "registry"
 cache_subdir = "cache"
-
-# =============================================================================
-# Deployment Profiles - Auto-selected based on GPU hardware
-# =============================================================================
-
-[tool.imageworks.deployment_profiles.constrained_16gb]
-description = "RTX 4080 16GB - single model, load/unload strategy"
-max_vram_mb = 14000  # 16384 - 2048 headroom
-max_concurrent_models = 1
-preferred_quantizations = ["q4_k_m", "fp8", "awq", "q5_k_m", "q8_0"]
-strategy = "load_unload"
-autostart_timeout_seconds = 120
-grace_period_seconds = 300
-model_selection_bias = "vram_efficient"
-
-[tool.imageworks.deployment_profiles.balanced_24gb]
-description = "RTX 4090 24GB - dual model concurrent serving"
-max_vram_mb = 22000  # 24576 - 2048 headroom
-max_concurrent_models = 2
-preferred_quantizations = ["fp8", "awq", "q4_k_m", "q5_k_m"]
-strategy = "concurrent_limited"
-autostart_timeout_seconds = 90
-grace_period_seconds = 600
-model_selection_bias = "balanced"
-
-[tool.imageworks.deployment_profiles.multi_gpu_2x16gb]
-description = "2x RTX 4080 16GB - tensor parallel or distributed models"
-max_vram_mb = 28000  # (16384 * 2) - 4096 headroom
-max_concurrent_models = 3
-gpu_count = 2
-preferred_quantizations = ["fp8", "awq", "bf16", "q5_k_m"]
-strategy = "tensor_parallel_or_distributed"
-autostart_timeout_seconds = 150
-grace_period_seconds = 600
-tensor_parallel_threshold_mb = 12000
-model_selection_bias = "quality"
-
-[tool.imageworks.deployment_profiles.generous_96gb]
-description = "RTX 6000 Pro 96GB - multi-model concurrent serving"
-max_vram_mb = 90000  # 98304 - 8192 headroom
-max_concurrent_models = 5
-preferred_quantizations = ["fp8", "awq", "bf16", "fp16"]
-strategy = "concurrent_full"
-autostart_timeout_seconds = 60
-grace_period_seconds = 3600
-model_selection_bias = "quality"
-
-[tool.imageworks.deployment_profiles.development]
-description = "Development/testing - minimal footprint"
-max_vram_mb = 10000
-max_concurrent_models = 1
-preferred_quantizations = ["q4_k_m", "q5_k_m", "q8_0"]
-strategy = "load_unload"
-autostart_timeout_seconds = 180
-grace_period_seconds = 120
-model_selection_bias = "vram_efficient"
 
 [dependency-groups]
 dev = [

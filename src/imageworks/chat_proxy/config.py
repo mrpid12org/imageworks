@@ -64,6 +64,14 @@ class ProxyConfig:
     vllm_health_timeout_s: int = 120
     vllm_gpu_memory_utilization: float = 0.75
     vllm_max_model_len: int | None = None
+    # History truncation for vision models
+    vision_truncate_history: bool = True
+    vision_keep_system: bool = True
+    vision_keep_last_n_turns: int = 0  # 0 = only current message
+    # History truncation for reasoning/thinking models
+    reasoning_truncate_history: bool = False  # Opt-in for now
+    reasoning_keep_system: bool = True
+    reasoning_keep_last_n_turns: int = 1  # Keep 1 turn of context
 
     @classmethod
     def load(cls) -> "ProxyConfig":
@@ -104,4 +112,16 @@ class ProxyConfig:
                 "CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION", 0.75
             ),
             vllm_max_model_len=_get_optional_int("CHAT_PROXY_VLLM_MAX_MODEL_LEN"),
+            vision_truncate_history=_get_bool(
+                "CHAT_PROXY_VISION_TRUNCATE_HISTORY", True
+            ),
+            vision_keep_system=_get_bool("CHAT_PROXY_VISION_KEEP_SYSTEM", True),
+            vision_keep_last_n_turns=_get_int("CHAT_PROXY_VISION_KEEP_LAST_N_TURNS", 0),
+            reasoning_truncate_history=_get_bool(
+                "CHAT_PROXY_REASONING_TRUNCATE_HISTORY", False
+            ),
+            reasoning_keep_system=_get_bool("CHAT_PROXY_REASONING_KEEP_SYSTEM", True),
+            reasoning_keep_last_n_turns=_get_int(
+                "CHAT_PROXY_REASONING_KEEP_LAST_N_TURNS", 1
+            ),
         )

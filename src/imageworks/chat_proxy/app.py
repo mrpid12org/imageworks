@@ -15,7 +15,16 @@ from .forwarder import ChatForwarder
 from .vllm_manager import VllmManager
 from .capabilities import supports_vision
 from .errors import ProxyError
-from ..model_loader.registry import load_registry, list_models, get_entry
+from .profile_manager import ProfileManager
+from .role_selector import RoleSelector
+from ..model_loader.registry import (
+    load_registry,
+    list_models,
+    get_entry,
+    _curated_path,
+    _discovered_path,
+    _merged_snapshot_path,
+)
 from ..model_loader.testing_filters import is_testing_entry
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +36,10 @@ _vllm_manager = VllmManager(_cfg)
 _autostart = AutostartManager(_cfg.autostart_map_raw, _cfg, _vllm_manager)
 _logger = JsonlLogger(_cfg.log_path, _cfg.max_log_bytes)
 _forwarder = ChatForwarder(_cfg, _metrics, _autostart, _logger, _vllm_manager)
+
+# Phase 2: Profile management and role-based model selection
+_profile_manager: ProfileManager | None = None
+_role_selector: RoleSelector | None = None
 
 
 app = FastAPI(title="ImageWorks Chat Proxy", version="0.1")
@@ -47,9 +60,17 @@ async def debug_registry():
     return JSONResponse(content=out)
 
 
-# Track registry file modification time to auto-reload on change
-_REGISTRY_PATH = Path("configs/model_registry.json")
-_REGISTRY_MTIME: float | None = None
+# Track all registry files (curated, discovered, merged) for auto-reload
+_REGISTRY_MTIMES: dict[str, float] = {}
+
+
+def _get_all_registry_paths() -> list[Path]:
+    """Get paths to all registry files that may be edited."""
+    return [
+        _curated_path(),
+        _discovered_path(),
+        _merged_snapshot_path(),
+    ]
 
 
 def _path_exists(maybe_path: str | None) -> bool:
@@ -70,32 +91,64 @@ def _has_served_backend(entry) -> bool:
 
 
 def _refresh_registry_if_changed() -> None:
-    global _REGISTRY_MTIME  # noqa: PLW0603
-    try:
-        mtime = _REGISTRY_PATH.stat().st_mtime
-    except Exception:  # noqa: BLE001
-        return
-    if _REGISTRY_MTIME is None:
-        _REGISTRY_MTIME = mtime
-        return
-    if mtime != _REGISTRY_MTIME:
+    """Reload registry if any of the layer files have changed."""
+    global _REGISTRY_MTIMES  # noqa: PLW0603
+
+    paths = _get_all_registry_paths()
+    changed = False
+
+    for path in paths:
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            # File doesn't exist yet (e.g., fresh init)
+            continue
+        except Exception:  # noqa: BLE001
+            continue
+
+        key = str(path)
+        if key not in _REGISTRY_MTIMES:
+            _REGISTRY_MTIMES[key] = mtime
+            continue
+
+        if mtime != _REGISTRY_MTIMES[key]:
+            changed = True
+            _REGISTRY_MTIMES[key] = mtime
+
+    if changed:
+        logging.info("[app] Registry file(s) changed, reloading...")
         load_registry(force=True)
-        _REGISTRY_MTIME = mtime
 
 
 @app.on_event("startup")
 async def _startup():  # pragma: no cover
+    global _profile_manager, _role_selector  # noqa: PLW0603
+
     load_registry()
+
+    # Phase 2: Initialize profile manager and role selector
+    try:
+        _profile_manager = ProfileManager()
+        _role_selector = RoleSelector()
+        profile = _profile_manager.get_active_profile()
+        if profile:
+            logging.info(f"[app] Active deployment profile: {profile.name}")
+        else:
+            logging.warning("[app] No deployment profile active!")
+    except Exception as e:
+        logging.error(f"[app] Failed to initialize profile management: {e}")
+
     if _cfg.host != "127.0.0.1":
         print(
-            "[chat-proxy] WARNING: Exposed host without auth (Phase 1). Consider reverse proxy + auth."
+            "[chat-proxy] WARNING: Exposed host without auth (Phase 1). "
+            "Consider reverse proxy + auth."
         )
-    # Initialize registry mtime after first load
-    try:
-        global _REGISTRY_MTIME  # noqa: PLW0603
-        _REGISTRY_MTIME = _REGISTRY_PATH.stat().st_mtime
-    except Exception:  # noqa: BLE001
-        _REGISTRY_MTIME = None
+    # Initialize registry mtimes after first load
+    for path in _get_all_registry_paths():
+        try:
+            _REGISTRY_MTIMES[str(path)] = path.stat().st_mtime
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @app.get("/v1/models")
@@ -278,6 +331,120 @@ async def metrics_api():
             },
         )
     return _metrics.summary()
+
+
+@app.get("/v1/config/profile")
+async def get_profile_info():
+    """Get active deployment profile and detected GPU information."""
+    if _profile_manager is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "type": "service_unavailable",
+                    "code": 503,
+                    "message": "Profile manager not initialized",
+                }
+            },
+        )
+
+    try:
+        info = _profile_manager.get_profile_info()
+        return JSONResponse(content=info)
+    except Exception as e:
+        logging.error(f"[app] Error getting profile info: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "type": "internal_error",
+                    "code": 500,
+                    "message": str(e),
+                }
+            },
+        )
+
+
+@app.get("/v1/models/select_by_role")
+async def select_model_by_role(role: str, top_n: int = 3):
+    """Select best models for a specific task role within profile constraints."""
+    if _profile_manager is None or _role_selector is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "type": "service_unavailable",
+                    "code": 503,
+                    "message": "Profile management not initialized",
+                }
+            },
+        )
+
+    try:
+        profile = _profile_manager.get_active_profile()
+        if not profile:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "type": "no_active_profile",
+                        "code": 500,
+                        "message": "No active deployment profile",
+                    }
+                },
+            )
+
+        # Get available roles for validation
+        available_roles = _role_selector.get_available_roles()
+        if role not in available_roles:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "type": "invalid_role",
+                        "code": 400,
+                        "message": f"Unknown role '{role}'. Available roles: {', '.join(available_roles)}",
+                    }
+                },
+            )
+
+        # Select models for role
+        selected_models = _role_selector.select_for_role(role, profile, top_n)
+
+        # Format response
+        response = {
+            "role": role,
+            "profile": profile.name,
+            "max_vram_mb": profile.max_vram_mb,
+            "model_selection_bias": profile.model_selection_bias,
+            "top_n": top_n,
+            "models": [
+                {
+                    "id": model.get("id"),
+                    "name": model.get("name"),
+                    "backend": model.get("backend"),
+                    "quantization": model.get("quantization"),
+                    "vram_estimate_mb": model.get("vram_estimate_mb"),
+                    "role_priority": model.get("role_priority", {}).get(role),
+                }
+                for model in selected_models
+            ],
+        }
+
+        return JSONResponse(content=response)
+
+    except Exception as e:
+        logging.error(f"[app] Error selecting models by role: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "type": "internal_error",
+                    "code": 500,
+                    "message": str(e),
+                }
+            },
+        )
 
 
 @app.get("/v1/health")

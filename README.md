@@ -2,6 +2,15 @@
 
 Imageworks provides local-first photography tooling for competition compliance and metadata enrichment.
 
+## Features
+
+- **GUI Control Center** – Streamlit-based graphical interface for all ImageWorks tools
+  - Unified dashboard with system overview
+  - Preset-based workflows (Quick/Standard/Thorough)
+  - Model management and backend monitoring
+  - Job history with re-run capability
+  - See [GUI User Guide](docs/GUI-USER-GUIDE.md)
+
 - **Mono (Competition Checker)** – Complete workflow for Camera Club entries:
   - Extracts and organises competition images from downloaded ZIP files
   - Embeds title and author metadata from XMP sidecars
@@ -16,6 +25,35 @@ Imageworks provides local-first photography tooling for competition compliance a
 All applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
 
 See [Mono Workflow](docs/domains/mono/mono-workflow.md) for detailed documentation of the complete competition checking process.
+
+## Quick Start
+
+### GUI Interface (Recommended)
+
+Launch the GUI Control Center:
+
+```bash
+./scripts/launch_gui.sh
+```
+
+The GUI provides a user-friendly interface for all ImageWorks tools with preset configurations and visual workflows.
+
+See [GUI User Guide](docs/GUI-USER-GUIDE.md) for detailed documentation.
+
+### CLI Tools
+
+All tools are also available via command-line:
+
+```bash
+# Check for monochrome images
+imageworks-mono check path/to/images/
+
+# Find similar images
+imageworks-image-similarity check candidates/ --library-root library/
+
+# Generate color descriptions
+imageworks-color-narrator analyze path/to/images/
+```
 
 ### Chat Proxy & OpenWebUI
 ImageWorks includes a lightweight OpenAI-compatible Chat Proxy that presents your unified model registry (Ollama, vLLM, etc.) to OpenWebUI and other OpenAI clients. The proxy:

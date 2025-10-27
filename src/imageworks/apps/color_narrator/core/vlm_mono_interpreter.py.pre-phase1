@@ -11,10 +11,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any
+import requests
 from PIL import Image
 import io
 
-from imageworks.libs.vlm import create_backend_client
 from .prompts import MONO_INTERPRETATION_TEMPLATE
 
 logger = logging.getLogger(__name__)
@@ -38,8 +38,8 @@ class VLMMonoInterpreter:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8100/v1",  # Chat proxy with autostart & history management
-        model: str = "qwen3-vl-8b-instruct_(FP8)",  # Updated to registry name
+        base_url: str = "http://localhost:8000/v1",
+        model: str = "Qwen2-VL-2B-Instruct",
         timeout: int = 120,
         max_tokens: int = 500,
         temperature: float = 0.1,
@@ -108,17 +108,13 @@ class VLMMonoInterpreter:
 
             prompt = MONO_INTERPRETATION_TEMPLATE.format(**prompt_data)
 
-            # Create backend client and make API request
-            client = create_backend_client(
-                base_url=self.base_url,
-                api_key="EMPTY",
-                timeout=self.timeout,
-            )
-
-            try:
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
+            # API request
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "model": self.model,
+                    "messages": [
                         {
                             "role": "user",
                             "content": [
@@ -132,20 +128,23 @@ class VLMMonoInterpreter:
                             ],
                         }
                     ],
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    stream=False,
+                    "max_tokens": self.max_tokens,
+                    "temperature": self.temperature,
+                    "stream": False,
+                },
+                timeout=self.timeout,
+            )
+
+            if response.status_code != 200:
+                raise Exception(
+                    f"VLM API error: {response.status_code} - {response.text}"
                 )
 
-                # Extract content from response
-                content = response.choices[0].message.content
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
 
-                # Parse VLM response
-                verdict, technical, visual, summary = self._parse_vlm_response(content)
-
-            except Exception as e:
-                logger.error(f"VLM API request failed: {e}")
-                raise
+            # Parse VLM response
+            verdict, technical, visual, summary = self._parse_vlm_response(content)
 
             processing_time = time.time() - start_time
 

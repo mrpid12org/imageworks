@@ -204,6 +204,57 @@ class VllmManager:
                 return None
             return state
 
+    @staticmethod
+    def _validate_extra_args(extra_args: list[str], model_name: str) -> None:
+        """
+        Validate extra_args for common issues like duplicate flags.
+
+        Logs warnings if issues are detected but does not raise exceptions,
+        since vLLM will typically handle duplicates (using last occurrence).
+
+        Args:
+            extra_args: List of extra command-line arguments
+            model_name: Model name for logging context
+        """
+        if not extra_args:
+            return
+
+        # Track seen flags (both --flag and --flag=value forms)
+        seen_flags: dict[str, list[int]] = {}
+
+        for i, arg in enumerate(extra_args):
+            if arg.startswith("--"):
+                # Extract flag name (before '=' if present)
+                flag = arg.split("=")[0]
+
+                if flag not in seen_flags:
+                    seen_flags[flag] = []
+                seen_flags[flag].append(i)
+
+        # Check for duplicates
+        duplicates = {
+            flag: positions
+            for flag, positions in seen_flags.items()
+            if len(positions) > 1
+        }
+
+        if duplicates:
+            warnings = []
+            for flag, positions in duplicates.items():
+                values = [extra_args[pos] for pos in positions]
+                warnings.append(
+                    f"  {flag}: appears at positions {positions}\n"
+                    f"    Values: {values}\n"
+                    f"    vLLM typically uses the LAST occurrence"
+                )
+
+            logger.warning(
+                "[vllm-manager] Duplicate flags detected in extra_args for '%s':\n%s\n"
+                "This may cause unexpected behavior. Consider consolidating flags.",
+                model_name,
+                "\n".join(warnings),
+            )
+
     async def _launch(self, entry, served_model_id: str, port: int) -> int:
         command = self._build_command(entry, served_model_id, port)
         stdout_path = Path("logs/vllm").expanduser()
@@ -236,6 +287,17 @@ class VllmManager:
         ]
         extra = list(getattr(entry.backend_config, "extra_args", []) or [])
 
+        # Validate extra_args for common issues
+        self._validate_extra_args(extra, entry.name)
+
+        logger.info(
+            "[vllm-manager][debug] backend_config.extra_args for '%s': %r",
+            entry.name,
+            extra,
+        )
+        logger.info("[vllm-manager][debug] initial command: %r", command)
+
+        # Add GPU memory utilization if not already in extra_args
         if self.cfg.vllm_gpu_memory_utilization and not any(
             arg == "--gpu-memory-utilization"
             or arg.startswith("--gpu-memory-utilization=")
@@ -248,22 +310,54 @@ class VllmManager:
                 ]
             )
 
+        # Add max-model-len if configured and not already in extra_args
+        if self.cfg.vllm_max_model_len and not any(
+            arg == "--max-model-len" or arg.startswith("--max-model-len=")
+            for arg in extra
+        ):
+            command.extend(["--max-model-len", str(self.cfg.vllm_max_model_len)])
+
+        # Add chat template if present and not already in extra_args
         if entry.chat_template and entry.chat_template.path:
-            template_path = self._resolve_template_path(
-                Path(entry.chat_template.path).expanduser()
+            has_chat_template_in_extra = any(
+                arg == "--chat-template" or arg.startswith("--chat-template=")
+                for arg in extra
             )
-            if template_path:
-                command.extend(["--chat-template", str(template_path)])
-            else:
-                logger.warning(
-                    "[vllm-manager] Chat template %s not found on host or container; "
-                    "continuing without explicit template",
-                    entry.chat_template.path,
-                )
+            if not has_chat_template_in_extra:
+                original_path = Path(entry.chat_template.path).expanduser()
+                template_path = self._resolve_template_path(original_path)
+
+                if template_path:
+                    command.extend(["--chat-template", str(template_path)])
+                    logger.info("[vllm-manager] Using chat template: %s", template_path)
+                else:
+                    # Fail fast if template is explicitly configured but missing
+                    if self.cfg.require_template:
+                        msg = (
+                            f"Chat template not found: {entry.chat_template.path}\n"
+                            f"Checked: {original_path}\n"
+                            f"Set require_template=False to allow missing templates."
+                        )
+                        logger.error("[vllm-manager] %s", msg)
+                        raise FileNotFoundError(msg)
+                    else:
+                        logger.warning(
+                            "[vllm-manager] Chat template %s not found; "
+                            "continuing with vLLM's default template (require_template=False)",
+                            entry.chat_template.path,
+                        )
 
         if extra:
+            logger.info(
+                "[vllm-manager][debug] extending command with extra_args: %r", extra
+            )
             command.extend(extra)
 
+        logger.info(
+            "[vllm-manager][debug] final vLLM launch command for '%s': %r",
+            entry.name,
+            command,
+        )
         return command
 
     @staticmethod
@@ -295,6 +389,51 @@ class VllmManager:
 
     @staticmethod
     def _served_model_id(entry) -> str:
+        """
+        Determine the model ID to pass to vLLM's --served-model-name.
+
+        This controls what model name vLLM will respond with in API responses
+        and what name clients can use to query this model.
+
+        Precedence:
+        1. If entry.served_model_id is a non-empty string (not "none"): Use it
+        2. Otherwise: Use entry.name (the logical registry name)
+
+        Common use cases:
+        - Set to entry.name (default): Backend sees same name as registry
+        - Set to custom value: Backend uses different name (e.g., aliasing)
+        - Set to "None" or null: Explicitly fall back to entry.name
+
+        Example scenarios:
+
+        # Scenario 1: Default behavior
+        {
+          "name": "llama-3.1-8b-instruct_(Q4_K_M)",
+          "served_model_id": null
+        }
+        → vLLM sees: "llama-3.1-8b-instruct_(Q4_K_M)"
+
+        # Scenario 2: Alias for compatibility
+        {
+          "name": "llama-3.1-8b-instruct_(Q4_K_M)",
+          "served_model_id": "llama3-8b-instruct"
+        }
+        → vLLM sees: "llama3-8b-instruct"
+        → Clients can request either name (proxy resolves to registry entry)
+
+        # Scenario 3: Explicit None (same as null)
+        {
+          "name": "custom-model",
+          "served_model_id": "None"
+        }
+        → vLLM sees: "custom-model"
+
+        Args:
+            entry: Registry entry with potential served_model_id field
+
+        Returns:
+            The model ID to pass to --served-model-name
+        """
         served = getattr(entry, "served_model_id", None)
         if isinstance(served, str):
             stripped = served.strip()
@@ -304,13 +443,47 @@ class VllmManager:
 
     @staticmethod
     def _resolve_template_path(original: Path) -> Path | None:
+        """
+        Resolve template path, checking both original location and workspace-rebased path.
+        Returns None if not found in either location.
+
+        This handles cases where:
+        1. Template is at absolute path on host
+        2. Template needs to be rebased into workspace for container access
+        """
+        logger.debug("[vllm-manager] Resolving template path: %s", original)
+
         if original.exists():
+            logger.debug("[vllm-manager] Template found at original path: %s", original)
             return original
 
+        logger.debug(
+            "[vllm-manager] Template not found at original path, trying workspace rebase..."
+        )
         rebased = VllmManager._rebase_into_workspace(original)
-        if rebased and rebased.exists():
-            return rebased
 
+        if rebased:
+            logger.debug("[vllm-manager] Rebased path: %s", rebased)
+            if rebased.exists():
+                logger.debug(
+                    "[vllm-manager] Template found at rebased path: %s", rebased
+                )
+                return rebased
+            else:
+                logger.debug("[vllm-manager] Rebased path does not exist: %s", rebased)
+        else:
+            logger.debug("[vllm-manager] Could not compute rebased path")
+
+        logger.warning(
+            "[vllm-manager] Template resolution failed for: %s\n"
+            "  Original path: %s (exists: %s)\n"
+            "  Rebased path: %s (exists: %s)",
+            original,
+            original,
+            original.exists(),
+            rebased,
+            rebased.exists() if rebased else "N/A",
+        )
         return None
 
     @staticmethod

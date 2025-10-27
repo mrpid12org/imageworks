@@ -24,7 +24,7 @@ from .autostart import AutostartManager, VllmActivationError
 from .logging_utils import JsonlLogger
 from .vllm_manager import VllmManager
 from ..model_loader.registry import get_entry
-from .capabilities import supports_vision
+from .capabilities import supports_vision, supports_reasoning
 
 
 class ChatForwarder:
@@ -122,6 +122,105 @@ class ChatForwarder:
                             # Non-base64 URL present; count as minimal bytes to trigger image flow
                             total = max(total, 1)
         return has, total
+
+    def _truncate_history_for_vision(self, messages: list[Any]) -> list[Any]:
+        """
+        Truncate message history for vision requests to avoid context length issues.
+
+        Strategy:
+        - Keep system message (if present and config.vision_keep_system=True)
+        - Keep last N conversation turns (config.vision_keep_last_n_turns)
+        - Keep current message (always)
+
+        This allows vision models with limited VRAM to handle sequential image
+        analysis without accumulating massive context from previous images.
+
+        For text-only conversations, this function should not be called, preserving
+        full conversational context.
+        """
+        if not messages:
+            return messages
+
+        # Don't truncate if disabled
+        if not self.cfg.vision_truncate_history:
+            return messages
+
+        truncated = []
+        system_messages = []
+        conversation = []
+
+        # Separate system messages from conversation
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                system_messages.append(msg)
+            else:
+                conversation.append(msg)
+
+        # Keep system messages if configured
+        if self.cfg.vision_keep_system and system_messages:
+            truncated.extend(system_messages)
+
+        # Keep last N turns (pairs of user/assistant messages)
+        # A "turn" = user message + optional assistant response
+        if self.cfg.vision_keep_last_n_turns > 0 and len(conversation) > 1:
+            # Keep the last N turns before the current message
+            # Current message is always last, so we want to preserve some history
+            keep_count = self.cfg.vision_keep_last_n_turns * 2  # user + assistant
+            history_to_keep = conversation[
+                -(keep_count + 1) : -1
+            ]  # Exclude last (current)
+            truncated.extend(history_to_keep)
+
+        # Always keep the current message (last in conversation)
+        if conversation:
+            truncated.append(conversation[-1])
+
+        return truncated
+
+    def _truncate_history_for_reasoning(self, messages: list[Any]) -> list[Any]:
+        """
+        Truncate message history for reasoning/thinking model requests.
+
+        Reasoning models (o1, deepseek-r1, gpt-oss) generate very long outputs
+        with extended chain-of-thought. When these accumulate in conversation
+        history, they can quickly exhaust context windows or KV cache.
+
+        Strategy is similar to vision truncation but defaults to keeping
+        1 turn of history (since reasoning may benefit from immediate context).
+        """
+        if not messages:
+            return messages
+
+        # Don't truncate if disabled
+        if not self.cfg.reasoning_truncate_history:
+            return messages
+
+        truncated = []
+        system_messages = []
+        conversation = []
+
+        # Separate system messages from conversation
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                system_messages.append(msg)
+            else:
+                conversation.append(msg)
+
+        # Keep system messages if configured
+        if self.cfg.reasoning_keep_system and system_messages:
+            truncated.extend(system_messages)
+
+        # Keep last N turns (pairs of user/assistant messages)
+        if self.cfg.reasoning_keep_last_n_turns > 0 and len(conversation) > 1:
+            keep_count = self.cfg.reasoning_keep_last_n_turns * 2
+            history_to_keep = conversation[-(keep_count + 1) : -1]
+            truncated.extend(history_to_keep)
+
+        # Always keep the current message
+        if conversation:
+            truncated.append(conversation[-1])
+
+        return truncated
 
     def _resolve_backend_base(self, entry) -> tuple[str, str]:
         cfg = getattr(entry, "backend_config", None)
@@ -270,6 +369,51 @@ class ChatForwarder:
             )
         if image_bytes > self.cfg.max_image_bytes:
             raise err_payload_too_large(self.cfg.max_image_bytes)
+
+        # Truncate history for vision requests if configured
+        # This helps vision models with limited VRAM handle sequential image analysis
+        # without accumulating massive context from previous images
+        if has_images and has_vision:
+            original_count = len(payload.get("messages") or [])
+            truncated_messages = self._truncate_history_for_vision(
+                payload.get("messages") or []
+            )
+            if len(truncated_messages) < original_count:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    "[forwarder] Truncated vision history: %d → %d messages "
+                    "(keep_system=%s, keep_last_n_turns=%d)",
+                    original_count,
+                    len(truncated_messages),
+                    self.cfg.vision_keep_system,
+                    self.cfg.vision_keep_last_n_turns,
+                )
+                payload["messages"] = truncated_messages
+
+        # Truncate history for reasoning/thinking requests if configured
+        # This helps reasoning models avoid context overflow from previous long outputs
+        has_reasoning = supports_reasoning(entry)
+        if not has_images and has_reasoning and self.cfg.reasoning_truncate_history:
+            original_count = len(payload.get("messages") or [])
+            truncated_messages = self._truncate_history_for_reasoning(
+                payload.get("messages") or []
+            )
+            if len(truncated_messages) < original_count:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    "[forwarder] Truncated reasoning history: %d → %d messages "
+                    "(keep_system=%s, keep_last_n_turns=%d)",
+                    original_count,
+                    len(truncated_messages),
+                    self.cfg.reasoning_keep_system,
+                    self.cfg.reasoning_keep_last_n_turns,
+                )
+                payload["messages"] = truncated_messages
+
         # Require chat template unless backend has its own prompting (e.g., ollama)
         if (
             self.cfg.require_template
