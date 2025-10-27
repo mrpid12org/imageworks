@@ -1954,23 +1954,79 @@
   },
   {
     "name": "florence-2-large_(FP16)",
-    "display_name": "florence-2-large (FP16)",
+    "display_name": "Florence-2 Large (FP16)",
     "backend": "vllm",
     "backend_config": {
-      "port": 24001,
+      "port": 24002,
       "model_path": "/home/stewa/ai-models/weights/microsoft/Florence-2-large",
-      "extra_args": []
+      "extra_args": [
+        "--tensor-parallel-size",
+        "1",
+        "--dtype",
+        "auto",
+        "--gpu-memory-utilization",
+        "0.75",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "2",
+        "--trust-remote-code"
+      ]
     },
     "capabilities": {
       "text": true,
-      "vision": false,
+      "vision": true,
       "embedding": false,
       "audio": false,
       "thinking": false,
       "reasoning": false,
-      "tools": false
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
     },
-    "generation_defaults": {},
+    "generation_defaults": {
+      "temperature": 0.3,
+      "top_p": 0.9,
+      "top_k": 20
+    },
     "artifacts": {
       "aggregate_sha256": "17097bae8d1be7181bf87d3a8ba3b931c2e5e7b7f2c51cb930cb75253b0f384c",
       "files": [
@@ -2049,7 +2105,7 @@
       ]
     },
     "chat_template": {
-      "source": "embedded",
+      "source": "none",
       "path": null,
       "sha256": null
     },
@@ -2069,7 +2125,6 @@
     },
     "profiles_placeholder": null,
     "metadata": {
-      "created_from_download": true,
       "readme_file": "README.md",
       "readme_sha256": "16212f1929e4992649d18b812e0ebf7ebbbaffd90a5ba23dfdc5c78df2f92ac2",
       "readme_signals": {
@@ -2087,12 +2142,16 @@
       "embedded_chat_template_preview": null,
       "branch": "main"
     },
-    "served_model_id": null,
+    "served_model_id": "None",
     "model_aliases": [
       "microsoft/Florence-2-large"
     ],
-    "roles": [],
-    "license": null,
+    "roles": [
+      "keywords",
+      "caption",
+      "object_detection"
+    ],
+    "license": "mit",
     "source": {
       "huggingface_id": "microsoft/Florence-2-large"
     },
@@ -2101,7 +2160,11 @@
     "source_provider": "hf",
     "quantization": "fp16",
     "backend_alternatives": [],
-    "role_priority": {},
+    "role_priority": {
+      "keywords": 95,
+      "caption": 75,
+      "object_detection": 90
+    },
     "download_format": "safetensors",
     "download_location": "linux_wsl",
     "download_path": "/home/stewa/ai-models/weights/microsoft/Florence-2-large",
@@ -2129,5 +2192,183 @@
     "download_directory_checksum": "6bf4771c3682f0b5",
     "downloaded_at": "2025-10-26T18:51:18.944791+00:00",
     "last_accessed": "2025-10-26T18:51:18.944791+00:00"
+  },
+  {
+    "name": "qwen2.5-vl-7b-instruct_(AWQ)",
+    "display_name": "qwen2.5-vl-7b-instruct (AWQ)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+      "extra_args": []
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true
+    },
+    "generation_defaults": {},
+    "artifacts": {
+      "aggregate_sha256": "b1f24f83e8c1a510beeba62afc9cc334c8ebbb914788a597db2d72832b62634c",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "sha256": "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "a64b31d02653e5354ae174101be2e97e221f57f53ed22a084b7df7e8364d018b"
+        },
+        {
+          "path": "README.md",
+          "sha256": "e674a38d66374a0b7f9053dbe15d496586820f66eb6ae016dc5d837e9f627941"
+        },
+        {
+          "path": "added_tokens.json",
+          "sha256": "58b54bbe36fc752f79a24a271ef66a0a0830054b4dfad94bde757d851968060b"
+        },
+        {
+          "path": "chat_template.json",
+          "sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+        },
+        {
+          "path": "config.json",
+          "sha256": "0ccd6378c18544511f59a2ffedb2a616974cd17b24f33ce9caaa40fdb53e187c"
+        },
+        {
+          "path": "generation_config.json",
+          "sha256": "c685cb6ca7485922d0c1778c30da8102e0fbeeda9d1fbe58fc19c327ac79ea8c"
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+        },
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "sha256": "4f75e3de726546ee43620d1227d3596cd3ba0fdd19f11faeea71de578d2d1052"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "sha256": "dae4128bbfd2b8d489e838048edc0bbe6e31f269d9b96fa3effe11cc534b8f0c"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "9bbb7f66770d7f0f3c2f880f257f991d0e6c756e0b2a86eedc37c7ad37d5581d"
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "549c158011407dfb750d9ec578047cf76f5bfe365cd0aa069a50137d3f98d9dd"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "5eee858c5123a4279c3e1f7b81247343f356ac767940b2692a928ad929543214"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "0a6be425d5d62ec1904deb45e569c809d0973bd39a411452388f268a855e3183"
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      ]
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
+      "sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+    },
+    "version_lock": {
+      "locked": false,
+      "expected_aggregate_sha256": null,
+      "last_verified": null
+    },
+    "performance": {
+      "rolling_samples": 0,
+      "ttft_ms_avg": null,
+      "throughput_toks_per_s_avg": null,
+      "last_sample": null
+    },
+    "probes": {
+      "vision": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "created_from_download": true,
+      "readme_file": "README.md",
+      "readme_sha256": "e674a38d66374a0b7f9053dbe15d496586820f66eb6ae016dc5d837e9f627941",
+      "readme_signals": {
+        "quant_schemes": [
+          "awq",
+          "bf16",
+          "gptq"
+        ],
+        "tool_calls": true,
+        "license_hint": "apache-2.0"
+      },
+      "license_file": "LICENSE",
+      "producer": "qwen",
+      "model_type": "image-text-to-text",
+      "library": "transformers",
+      "files_downloaded": 16,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": true,
+      "external_chat_template_files": [
+        "chat_template.json"
+      ],
+      "embedded_chat_template_preview": "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}{% if loop.first and message['role'] != 'system...",
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.json",
+      "primary_chat_template_sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+    },
+    "served_model_id": null,
+    "model_aliases": [
+      "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+    ],
+    "roles": [],
+    "license": null,
+    "source": {
+      "huggingface_id": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+    },
+    "deprecated": false,
+    "family": "qwen2.5-vl-7b-instruct-awq",
+    "source_provider": "hf",
+    "quantization": "awq",
+    "backend_alternatives": [],
+    "role_priority": {},
+    "download_format": "safetensors",
+    "download_location": "linux_wsl",
+    "download_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "download_size_bytes": 6939964850,
+    "download_files": [
+      "model-00001-of-00002.safetensors",
+      "model-00002-of-00002.safetensors",
+      "chat_template.json",
+      "config.json",
+      "generation_config.json",
+      "preprocessor_config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "added_tokens.json",
+      "merges.txt",
+      "tokenizer.json",
+      "LICENSE",
+      "README.md",
+      ".gitattributes",
+      "model.safetensors.index.json",
+      "vocab.json"
+    ],
+    "download_directory_checksum": "1561ec8320b3bf25",
+    "downloaded_at": "2025-10-27T18:43:21.316395+00:00",
+    "last_accessed": "2025-10-27T18:43:21.316395+00:00"
   }
 ]

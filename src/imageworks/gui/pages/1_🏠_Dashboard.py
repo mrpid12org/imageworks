@@ -10,7 +10,28 @@ from imageworks.gui.config import LOGS_DIR, OUTPUTS_DIR
 
 def main():
     """Dashboard page."""
+    st.set_page_config(layout="wide")
     init_session_state()
+
+    # Apply wide layout CSS (ensures consistency on page refresh)
+    st.markdown(
+        """
+        <style>
+        .main .block-container {
+            max-width: 95% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        section.main > div {
+            max-width: none !important;
+        }
+        .stDataFrame {
+            width: 100% !important;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("🏠 Dashboard")
     st.markdown("System overview and recent activity")

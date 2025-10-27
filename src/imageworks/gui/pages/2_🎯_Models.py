@@ -10,7 +10,6 @@ from imageworks.gui.components.backend_monitor import (
     render_system_resources,
     render_gpu_monitor,
 )
-from imageworks.gui.components.process_runner import execute_command
 from imageworks.gui.config import DEFAULT_BACKENDS, PROJECT_ROOT
 from imageworks.model_loader.registry import save_registry
 from imageworks.model_loader.registry import load_registry as load_model_registry
@@ -22,22 +21,78 @@ def run_command_with_progress(
     show_output: bool = True,
     timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Run command with progress indicator and optional output display."""
-    with st.spinner(description):
-        result = execute_command(command, timeout=timeout)
+    """Run command with progress indicator and live output display."""
+    import subprocess
 
-    if show_output:
+    # Create placeholders for live updates
+    status_placeholder = st.empty()
+    output_placeholder = st.empty()
+
+    status_placeholder.info(f"⏳ {description}...")
+
+    output_lines = []
+
+    try:
+        # Run process with streaming output
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        # Stream output line by line
+        for line in process.stdout:
+            output_lines.append(line.rstrip())
+            # Show last 20 lines in real-time
+            if show_output:
+                recent_output = "\n".join(output_lines[-20:])
+                output_placeholder.code(recent_output, language="bash")
+
+        process.wait(timeout=timeout)
+
+        # Final result
+        result = {
+            "command": " ".join(command),
+            "exit_code": process.returncode,
+            "stdout": "\n".join(output_lines),
+            "stderr": "",
+            "success": process.returncode == 0,
+        }
+
         if result["success"]:
-            st.success(f"✅ {description} - Complete")
-            if result["stdout"]:
-                with st.expander("📄 Output", expanded=False):
-                    st.code(result["stdout"])
+            status_placeholder.success(f"✅ {description} - Complete")
+            if show_output and output_lines:
+                with output_placeholder.container():
+                    with st.expander("📄 Full Output", expanded=False):
+                        st.code("\n".join(output_lines), language="bash")
         else:
-            st.error(f"❌ {description} - Failed")
-            if result["stderr"]:
-                st.error(result["stderr"])
+            status_placeholder.error(f"❌ {description} - Failed")
+            if show_output and output_lines:
+                output_placeholder.error("\n".join(output_lines[-50:]))
 
-    return result
+        return result
+
+    except subprocess.TimeoutExpired:
+        status_placeholder.error(f"❌ {description} - Timed out after {timeout}s")
+        return {
+            "command": " ".join(command),
+            "exit_code": -1,
+            "stdout": "\n".join(output_lines),
+            "stderr": f"Timeout after {timeout}s",
+            "success": False,
+        }
+    except Exception as e:
+        status_placeholder.error(f"❌ {description} - Error: {e}")
+        return {
+            "command": " ".join(command),
+            "exit_code": -1,
+            "stdout": "\n".join(output_lines),
+            "stderr": str(e),
+            "success": False,
+        }
 
 
 def confirm_destructive_operation(operation_name: str, details: str) -> bool:
@@ -53,58 +108,234 @@ def confirm_destructive_operation(operation_name: str, details: str) -> bool:
     return confirmed
 
 
+def extract_known_flags(extra_args: List[str]) -> Dict[str, Optional[str]]:
+    """Extract known model loading flags from extra_args list.
+
+    Returns dict with flag names (without --) as keys and their values.
+    Returns None for flags not present.
+    """
+    known_flags = {
+        "max-model-len": None,
+        "gpu-memory-utilization": None,
+        "tensor-parallel-size": None,
+        "kv-cache-dtype": None,
+        "cache-max-entry-count": None,  # LMDeploy
+        "tp": None,  # LMDeploy tensor parallel
+        "num-ctx": None,  # Ollama
+        "num-gpu": None,  # Ollama
+    }
+
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+
+        # Handle --flag=value format
+        if "=" in arg:
+            flag_part, value_part = arg.split("=", 1)
+            flag_name = flag_part.lstrip("-")
+            if flag_name in known_flags:
+                known_flags[flag_name] = value_part
+            i += 1
+            continue
+
+        # Handle --flag value format
+        if arg.startswith("--"):
+            flag_name = arg.lstrip("-")
+            if flag_name in known_flags:
+                # Get next arg as value if it exists and doesn't start with --
+                if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
+                    known_flags[flag_name] = extra_args[i + 1]
+                    i += 2
+                    continue
+
+        i += 1
+
+    return known_flags
+
+
+def update_extra_args(
+    extra_args: List[str], updates: Dict[str, Optional[str]]
+) -> List[str]:
+    """Update extra_args list with new flag values.
+
+    - If value is None, removes the flag
+    - If flag exists, updates its value
+    - If flag doesn't exist, appends it
+    - Preserves unknown flags
+    """
+    result = []
+    skip_next = False
+    processed_flags = set()
+
+    i = 0
+    while i < len(extra_args):
+        if skip_next:
+            skip_next = False
+            i += 1
+            continue
+
+        arg = extra_args[i]
+
+        # Handle --flag=value format
+        if "=" in arg and arg.startswith("--"):
+            flag_part, value_part = arg.split("=", 1)
+            flag_name = flag_part.lstrip("-")
+
+            if flag_name in updates:
+                processed_flags.add(flag_name)
+                # Update or remove
+                if updates[flag_name] is not None:
+                    result.append(f"--{flag_name}={updates[flag_name]}")
+                # else: skip (remove)
+            else:
+                # Keep unknown flag
+                result.append(arg)
+            i += 1
+            continue
+
+        # Handle --flag value format
+        if arg.startswith("--"):
+            flag_name = arg.lstrip("-")
+
+            if flag_name in updates:
+                processed_flags.add(flag_name)
+                # Update or remove
+                if updates[flag_name] is not None:
+                    result.append(f"--{flag_name}")
+                    result.append(updates[flag_name])
+                # else: skip both flag and value
+                if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
+                    skip_next = True
+            else:
+                # Keep unknown flag
+                result.append(arg)
+        else:
+            # Keep non-flag args
+            result.append(arg)
+
+        i += 1
+
+    # Add new flags that weren't already present
+    for flag_name, value in updates.items():
+        if flag_name not in processed_flags and value is not None:
+            result.append(f"--{flag_name}")
+            result.append(value)
+
+    return result
+
+
+def analyze_hf_repository(model_id: str) -> Dict[str, Any]:
+    """Analyze HuggingFace repository and return structured results."""
+    from imageworks.tools.model_downloader.url_analyzer import URLAnalyzer
+
+    analyzer = URLAnalyzer()
+    analysis = analyzer.analyze_url(model_id)
+
+    # Check critical files
+    critical_status = check_critical_files(analysis)
+
+    return {
+        "analysis": analysis,
+        "critical_status": critical_status,
+        "warnings": generate_warnings(analysis, critical_status),
+    }
+
+
+def check_critical_files(analysis) -> Dict[str, Any]:
+    """Check which critical files are present/missing."""
+    files = analysis.files
+    critical = {
+        "config.json": None,
+        "tokenizer_config.json": None,
+        "tokenizer.json or tokenizer.model": None,
+        "generation_config.json": None,
+        "chat_template": None,
+    }
+
+    # Get file lists
+    config_files = [f.path for f in files.get("config", [])]
+    tokenizer_files = [f.path for f in files.get("tokenizer", [])]
+
+    # Check config.json
+    if any("config.json" in f for f in config_files):
+        critical["config.json"] = "found"
+    else:
+        critical["config.json"] = "missing"
+
+    # Check tokenizer_config.json
+    if any("tokenizer_config.json" in f for f in config_files):
+        critical["tokenizer_config.json"] = "found"
+    else:
+        critical["tokenizer_config.json"] = "missing"
+
+    # Check tokenizer.json or tokenizer.model
+    if any("tokenizer.json" in f for f in tokenizer_files):
+        critical["tokenizer.json or tokenizer.model"] = "tokenizer.json"
+    elif any("tokenizer.model" in f for f in tokenizer_files):
+        critical["tokenizer.json or tokenizer.model"] = "tokenizer.model"
+    else:
+        critical["tokenizer.json or tokenizer.model"] = "missing"
+
+    # Check generation_config.json
+    if any("generation_config.json" in f for f in config_files):
+        critical["generation_config.json"] = "found"
+    else:
+        critical["generation_config.json"] = "missing"
+
+    # Check chat_template
+    chat_template_files = [
+        f
+        for f in config_files
+        if "chat_template" in f.lower()
+        and (f.endswith(".json") or f.endswith(".jinja"))
+    ]
+    if chat_template_files:
+        critical["chat_template"] = "standalone"
+    else:
+        critical["chat_template"] = "check_embedded"
+
+    return critical
+
+
+def generate_warnings(analysis, critical_status: Dict[str, Any]) -> List[str]:
+    """Generate warnings based on analysis results."""
+    warnings = []
+
+    # Critical file warnings
+    if critical_status["config.json"] == "missing":
+        warnings.append("❌ config.json is MISSING - download will likely fail")
+
+    if critical_status["tokenizer.json or tokenizer.model"] == "missing":
+        warnings.append("❌ Tokenizer file is MISSING - model cannot be loaded")
+
+    if critical_status["chat_template"] == "check_embedded":
+        warnings.append(
+            "⚠️ No standalone chat_template.json - may be embedded in tokenizer_config"
+        )
+
+    if critical_status["generation_config.json"] == "missing":
+        warnings.append(
+            "⚠️ generation_config.json missing - may need manual configuration"
+        )
+
+    # Format detection warnings
+    if not analysis.formats:
+        warnings.append("❌ No model format detected - download may fail")
+    elif analysis.formats[0].confidence < 0.5:
+        warnings.append("⚠️ Low confidence format detection - verify before downloading")
+
+    # Size warnings
+    if analysis.total_size > 50 * 1024**3:  # > 50GB
+        warnings.append(
+            f"⚠️ Large download: {analysis.total_size / (1024**3):.1f} GB - ensure sufficient disk space"
+        )
+
+    return warnings
+
+
 def render_browse_manage_tab():
     """Browse & Manage tab - model browsing with role/config editing."""
     st.markdown("### 📚 Browse & Manage Models")
-
-    # Stats widget - show only downloaded models (matching CLI)
-    with st.expander("📊 Registry Statistics", expanded=True):
-        from imageworks.model_loader.download_adapter import list_downloads
-
-        # Get downloaded models only (matching CLI default behavior)
-        downloads = list(list_downloads(only_installed=False))
-
-        # Filter out logical-only entries (no download_path or synthetic ollama://)
-        installed_downloads = []
-        for d in downloads:
-            dp = d.download_path
-            if dp is None:
-                continue
-            if isinstance(dp, str) and dp.startswith("ollama://"):
-                continue
-            installed_downloads.append(d)
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("Total Models", len(installed_downloads))
-
-        with col2:
-            formats = {}
-            for d in installed_downloads:
-                fmt = d.download_format or "unknown"
-                formats[fmt] = formats.get(fmt, 0) + 1
-
-            st.metric("Formats", len(formats))
-            for fmt, count in sorted(formats.items()):
-                # Map format names to match CLI display
-                fmt_display = fmt
-                if fmt == "safetensors":
-                    fmt_display = "safetensors"
-                elif fmt == "gguf":
-                    fmt_display = "gguf"
-                elif fmt == "ollama":
-                    fmt_display = "ollama"
-                st.caption(f"{fmt_display}: {count}")
-
-        with col3:
-            total_size = sum(d.download_size_bytes or 0 for d in installed_downloads)
-            st.metric("Total Size", f"{total_size / (1024**3):.1f} GB")
-
-    st.markdown("---")
-
-    # Model table with filters - use download_adapter to match CLI
-    st.markdown("### 📋 Downloaded Models")
 
     from imageworks.model_loader.download_adapter import list_downloads
 
@@ -122,8 +353,6 @@ def render_browse_manage_tab():
     if not installed_downloads:
         st.info("No downloaded models found. Use Download & Import tab to add models.")
         return
-
-    st.success(f"✅ Loaded {len(installed_downloads)} models")
 
     # Filters
     st.markdown("**Filters**")
@@ -225,17 +454,51 @@ def render_browse_manage_tab():
 
     df = pd.DataFrame(table_data)
 
-    # Make it selectable
+    # Show table first
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Summary line (CLI-style)
+    total_size = sum(d.download_size_bytes or 0 for d in filtered_downloads)
+    st.caption(
+        f"📊 {len(filtered_downloads)} models • {total_size / (1024**3):.1f} GB total"
+    )
+
+    # Model selector below table
+    st.markdown("---")
+
+    # Check if we have unsaved changes and warn before changing selection
+    prev_selection_key = "browse_prev_model_select"
+    if prev_selection_key not in st.session_state:
+        st.session_state[prev_selection_key] = 0
+
+    # Check if any model has unsaved changes
+    has_any_unsaved = False
+    if st.session_state.get(prev_selection_key) is not None:
+        prev_model = filtered_downloads[st.session_state[prev_selection_key]]
+        prev_model_name = prev_model.name
+        has_changes_key = f"params_has_changes_{prev_model_name}"
+        edit_mode_key = f"params_edit_mode_{prev_model_name}"
+        if st.session_state.get(edit_mode_key) and st.session_state.get(
+            has_changes_key
+        ):
+            has_any_unsaved = True
+
+    if has_any_unsaved:
+        st.warning(
+            "⚠️ You have unsaved changes. Please save or cancel before selecting a different model."
+        )
+
     selected_idx = st.selectbox(
-        "Select model to edit",
+        "Select model to view/edit",
         options=range(len(filtered_downloads)),
         format_func=lambda i: filtered_downloads[i].display_name
         or filtered_downloads[i].name,
         key="browse_model_select",
+        disabled=has_any_unsaved,
     )
 
-    # Show table
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    # Update previous selection
+    st.session_state[prev_selection_key] = selected_idx
 
     selected_model = (
         filtered_downloads[selected_idx] if selected_idx is not None else None
@@ -245,57 +508,405 @@ def render_browse_manage_tab():
         st.markdown("---")
         st.markdown("### 🔍 Selected Model Details")
 
-        col1, col2 = st.columns(2)
+        # Single line - just name and path
+        st.write(
+            f"**Name:** {selected_model.name} • **Path:** {selected_model.download_path or 'Unknown'}"
+        )
 
-        with col1:
-            st.write(f"**Name:** {selected_model.name}")
-            st.write(f"**Backend:** {selected_model.backend}")
-            st.write(f"**Format:** {selected_model.download_format or 'Unknown'}")
-            st.write(f"**Quantization:** {selected_model.quantization or 'None'}")
+        # Load from registry for complete info
+        model_name = selected_model.name
+        registry = load_model_registry()
+        registry_entry = registry.get(model_name)
 
-        with col2:
-            st.write(f"**Path:** {selected_model.download_path or 'Unknown'}")
+        # Generation & Runtime Parameters
+        st.markdown("---")
+        st.markdown("### ⚙️ Generation & Runtime Parameters")
+        st.caption("💡 Common model parameters for generation and model loading.")
 
-            # Show size if available
-            if selected_model.download_path:
-                model_path = Path(selected_model.download_path)
-                if model_path.exists():
-                    if model_path.is_file():
-                        size_mb = model_path.stat().st_size / (1024 * 1024)
-                        st.write(f"**Size:** {size_mb:.1f} MB")
-                    elif model_path.is_dir():
-                        total_size = sum(
-                            f.stat().st_size
-                            for f in model_path.rglob("*")
-                            if f.is_file()
+        if model_name and registry_entry:
+            # Edit mode tracking
+            edit_mode_key = f"params_edit_mode_{model_name}"
+            has_changes_key = f"params_has_changes_{model_name}"
+
+            # Initialize session state
+            if edit_mode_key not in st.session_state:
+                st.session_state[edit_mode_key] = False
+            if has_changes_key not in st.session_state:
+                st.session_state[has_changes_key] = False
+
+            is_editing = st.session_state[edit_mode_key]
+
+            # Get current values
+            gen_defaults = registry_entry.generation_defaults
+            backend_config = registry_entry.backend_config
+            current_extra_args = backend_config.extra_args if backend_config else []
+
+            # Extract known flags from extra_args
+            known_flags = extract_known_flags(current_extra_args)
+
+            # Edit/Save/Cancel buttons at top
+            col_btn1, col_btn2, col_btn3, col_spacer = st.columns([1, 1, 1, 3])
+
+            with col_btn1:
+                if not is_editing:
+                    if st.button("✏️ Edit", key=f"edit_params_{model_name}"):
+                        st.session_state[edit_mode_key] = True
+                        st.rerun()
+                else:
+                    if st.button(
+                        "💾 Save",
+                        type="primary",
+                        key=f"save_params_{model_name}",
+                    ):
+                        # Will handle save below
+                        pass
+
+            with col_btn2:
+                if is_editing:
+                    if st.button("❌ Cancel", key=f"cancel_params_{model_name}"):
+                        st.session_state[edit_mode_key] = False
+                        st.session_state[has_changes_key] = False
+                        st.rerun()
+
+            with col_btn3:
+                if is_editing and st.session_state[has_changes_key]:
+                    st.warning("⚠️ Unsaved changes")
+
+            col1, col2 = st.columns(2)
+
+            # LEFT COLUMN - Generation Parameters
+            with col1:
+                st.markdown("**🎲 Generation Parameters**")
+
+                temperature = st.number_input(
+                    "Temperature",
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=(
+                        gen_defaults.temperature
+                        if gen_defaults.temperature is not None
+                        else 0.7
+                    ),
+                    step=0.1,
+                    key=f"gen_temp_{model_name}",
+                    help="Controls randomness (0.0-0.3: deterministic, 0.4-0.7: balanced, 0.8-1.2: creative)",
+                    disabled=not is_editing,
+                )
+
+                top_p = st.number_input(
+                    "Top-p (Nucleus Sampling)",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=gen_defaults.top_p if gen_defaults.top_p is not None else 0.9,
+                    step=0.05,
+                    key=f"gen_top_p_{model_name}",
+                    help="Cumulative probability threshold (0.8-0.9 recommended)",
+                    disabled=not is_editing,
+                )
+
+                top_k = st.number_input(
+                    "Top-k",
+                    min_value=0,
+                    max_value=200,
+                    value=gen_defaults.top_k if gen_defaults.top_k is not None else 40,
+                    step=5,
+                    key=f"gen_top_k_{model_name}",
+                    help="Limits sampling to top k tokens (20-50 typical, 0 to disable)",
+                    disabled=not is_editing,
+                )
+
+                max_tokens = st.number_input(
+                    "Max Tokens",
+                    min_value=1,
+                    max_value=32000,
+                    value=(
+                        gen_defaults.max_tokens
+                        if gen_defaults.max_tokens is not None
+                        else 512
+                    ),
+                    step=64,
+                    key=f"gen_max_tokens_{model_name}",
+                    help="Maximum tokens to generate",
+                    disabled=not is_editing,
+                )
+
+                context_window = st.number_input(
+                    "Context Window",
+                    min_value=512,
+                    max_value=128000,
+                    value=(
+                        gen_defaults.context_window
+                        if gen_defaults.context_window is not None
+                        else 4096
+                    ),
+                    step=512,
+                    key=f"gen_context_{model_name}",
+                    help="Model's context window size",
+                    disabled=not is_editing,
+                )
+
+                frequency_penalty = st.number_input(
+                    "Frequency Penalty",
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=(
+                        gen_defaults.frequency_penalty
+                        if gen_defaults.frequency_penalty is not None
+                        else 0.0
+                    ),
+                    step=0.1,
+                    key=f"gen_freq_penalty_{model_name}",
+                    help="Reduces repetition based on frequency (0.0-0.5 typical)",
+                    disabled=not is_editing,
+                )
+
+                presence_penalty = st.number_input(
+                    "Presence Penalty",
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=(
+                        gen_defaults.presence_penalty
+                        if gen_defaults.presence_penalty is not None
+                        else 0.0
+                    ),
+                    step=0.1,
+                    key=f"gen_pres_penalty_{model_name}",
+                    help="Encourages new topics (0.0-0.5 typical)",
+                    disabled=not is_editing,
+                )
+
+                stop_sequences_text = st.text_area(
+                    "Stop Sequences",
+                    value=(
+                        ", ".join(gen_defaults.stop_sequences)
+                        if gen_defaults.stop_sequences
+                        else ""
+                    ),
+                    height=60,
+                    key=f"gen_stop_{model_name}",
+                    help="Comma-separated stop sequences",
+                    disabled=not is_editing,
+                )
+
+            # RIGHT COLUMN - Model Loading Parameters
+            with col2:
+                st.markdown("**🔧 Model Loading Parameters**")
+
+                # Read-only backend info at top
+                st.text_input(
+                    "Backend",
+                    value=registry_entry.backend,
+                    key=f"load_backend_{model_name}",
+                    disabled=True,
+                    help="Backend serving this model",
+                )
+
+                st.number_input(
+                    "Port",
+                    value=backend_config.port if backend_config else 8000,
+                    key=f"load_port_{model_name}",
+                    disabled=True,
+                    help="Port where backend is listening",
+                )
+
+                st.markdown("**Editable Parameters:**")
+
+                max_model_len = st.number_input(
+                    "Max Model Length (vLLM)",
+                    min_value=512,
+                    max_value=128000,
+                    value=(
+                        int(known_flags["max-model-len"])
+                        if known_flags["max-model-len"]
+                        else 4096
+                    ),
+                    step=512,
+                    key=f"load_max_model_len_{model_name}",
+                    help="Maximum sequence length for vLLM (overrides model config)",
+                    disabled=not is_editing,
+                )
+
+                gpu_mem = st.number_input(
+                    "GPU Memory Utilization (vLLM)",
+                    min_value=0.1,
+                    max_value=1.0,
+                    value=(
+                        float(known_flags["gpu-memory-utilization"])
+                        if known_flags["gpu-memory-utilization"]
+                        else 0.90
+                    ),
+                    step=0.05,
+                    key=f"load_gpu_mem_{model_name}",
+                    help="Fraction of GPU memory to use (0.85-0.95 recommended)",
+                    disabled=not is_editing,
+                )
+
+                tensor_parallel = st.number_input(
+                    "Tensor Parallel Size (vLLM)",
+                    min_value=1,
+                    max_value=8,
+                    value=(
+                        int(known_flags["tensor-parallel-size"])
+                        if known_flags["tensor-parallel-size"]
+                        else 1
+                    ),
+                    step=1,
+                    key=f"load_tp_{model_name}",
+                    help="Number of GPUs for tensor parallelism",
+                    disabled=not is_editing,
+                )
+
+                kv_cache = st.text_input(
+                    "KV Cache Dtype (vLLM)",
+                    value=known_flags["kv-cache-dtype"] or "auto",
+                    key=f"load_kv_cache_{model_name}",
+                    help="KV cache data type (auto, fp8, fp16)",
+                    disabled=not is_editing,
+                )
+
+                # Ollama-specific
+                num_ctx_ollama = st.number_input(
+                    "Context Length (Ollama)",
+                    min_value=512,
+                    max_value=128000,
+                    value=(
+                        int(known_flags["num-ctx"]) if known_flags["num-ctx"] else 4096
+                    ),
+                    step=512,
+                    key=f"load_num_ctx_{model_name}",
+                    help="Context window for Ollama",
+                    disabled=not is_editing,
+                )
+
+                num_gpu_ollama = st.number_input(
+                    "GPU Layers (Ollama)",
+                    min_value=0,
+                    max_value=999,
+                    value=int(known_flags["num-gpu"]) if known_flags["num-gpu"] else 35,
+                    step=1,
+                    key=f"load_num_gpu_{model_name}",
+                    help="Number of layers to offload to GPU",
+                    disabled=not is_editing,
+                )
+
+            # Track changes (check if values differ from stored values)
+            if is_editing:
+                has_changes = (
+                    temperature != (gen_defaults.temperature or 0.7)
+                    or top_p != (gen_defaults.top_p or 0.9)
+                    or top_k != (gen_defaults.top_k or 40)
+                    or max_tokens != (gen_defaults.max_tokens or 512)
+                    or context_window != (gen_defaults.context_window or 4096)
+                    or frequency_penalty != (gen_defaults.frequency_penalty or 0.0)
+                    or presence_penalty != (gen_defaults.presence_penalty or 0.0)
+                )
+                st.session_state[has_changes_key] = has_changes
+
+            # Handle save action
+            if is_editing and st.session_state.get(f"save_params_{model_name}"):
+                try:
+                    # Update generation_defaults
+                    gen_defaults.temperature = temperature
+                    gen_defaults.top_p = top_p
+                    gen_defaults.top_k = top_k if top_k > 0 else None
+                    gen_defaults.max_tokens = max_tokens
+                    gen_defaults.context_window = context_window
+                    gen_defaults.frequency_penalty = (
+                        frequency_penalty if frequency_penalty > 0 else None
+                    )
+                    gen_defaults.presence_penalty = (
+                        presence_penalty if presence_penalty > 0 else None
+                    )
+                    gen_defaults.stop_sequences = [
+                        s.strip() for s in stop_sequences_text.split(",") if s.strip()
+                    ]
+
+                    # Update extra_args with model loading parameters
+                    updates = {}
+
+                    # vLLM parameters
+                    if registry_entry.backend == "vllm":
+                        updates["max-model-len"] = str(max_model_len)
+                        updates["gpu-memory-utilization"] = str(gpu_mem)
+                        if tensor_parallel > 1:
+                            updates["tensor-parallel-size"] = str(tensor_parallel)
+                        if kv_cache and kv_cache != "auto":
+                            updates["kv-cache-dtype"] = kv_cache
+
+                    # Ollama parameters
+                    elif registry_entry.backend == "ollama":
+                        updates["num-ctx"] = str(num_ctx_ollama)
+                        updates["num-gpu"] = str(num_gpu_ollama)
+
+                    # Update extra_args
+                    if backend_config:
+                        backend_config.extra_args = update_extra_args(
+                            current_extra_args, updates
                         )
-                        size_gb = total_size / (1024 * 1024 * 1024)
-                        st.write(f"**Size:** {size_gb:.2f} GB")
-            elif selected_model.download_size_bytes:
-                size_gb = selected_model.download_size_bytes / (1024 * 1024 * 1024)
-                st.write(f"**Size:** {size_gb:.2f} GB")
 
-        # Full metadata
-        with st.expander("📋 Full Metadata", expanded=False):
-            # Convert RegistryEntry to dict for display
-            metadata_dict = {
-                "name": selected_model.name,
-                "display_name": selected_model.display_name,
-                "backend": selected_model.backend,
-                "download_format": selected_model.download_format,
-                "quantization": selected_model.quantization,
-                "download_path": selected_model.download_path,
-                "download_size_bytes": selected_model.download_size_bytes,
-                "roles": list(selected_model.roles) if selected_model.roles else [],
-                "capabilities": (
-                    list(selected_model.capabilities)
-                    if selected_model.capabilities
-                    else []
-                ),
-                "family": selected_model.family,
-                "served_model_id": selected_model.served_model_id,
-            }
-            st.json(metadata_dict)
+                    # Save registry
+                    save_registry()
+
+                    # Reset edit mode
+                    st.session_state[edit_mode_key] = False
+                    st.session_state[has_changes_key] = False
+
+                    st.success(f"✅ Saved parameters for {model_name}")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Failed to save parameters: {e}")
+
+            # Full Metadata expander at bottom of this section
+            st.markdown("---")
+            with st.expander("📋 Full Metadata", expanded=False):
+                # Show actual capability values (True/False), not just keys
+                capabilities_dict = {}
+                if registry_entry.capabilities:
+                    # Only show capabilities that are True
+                    for key, value in registry_entry.capabilities.items():
+                        if value:  # Only include True capabilities
+                            capabilities_dict[key] = value
+
+                # Build comprehensive metadata dict
+                metadata_dict = {
+                    "name": registry_entry.name,
+                    "display_name": registry_entry.display_name,
+                    "backend": registry_entry.backend,
+                    "backend_config": {
+                        "port": registry_entry.backend_config.port,
+                        "host": registry_entry.backend_config.host,
+                        "model_path": registry_entry.backend_config.model_path,
+                        "extra_args": registry_entry.backend_config.extra_args,
+                    },
+                    "download_format": registry_entry.download_format,
+                    "quantization": registry_entry.quantization,
+                    "download_path": registry_entry.download_path,
+                    "download_size_bytes": registry_entry.download_size_bytes,
+                    "roles": list(registry_entry.roles) if registry_entry.roles else [],
+                    "capabilities": capabilities_dict,  # Only True values
+                    "generation_defaults": {
+                        "temperature": registry_entry.generation_defaults.temperature,
+                        "top_p": registry_entry.generation_defaults.top_p,
+                        "top_k": registry_entry.generation_defaults.top_k,
+                        "max_tokens": registry_entry.generation_defaults.max_tokens,
+                        "context_window": registry_entry.generation_defaults.context_window,
+                        "frequency_penalty": registry_entry.generation_defaults.frequency_penalty,
+                        "presence_penalty": registry_entry.generation_defaults.presence_penalty,
+                        "stop_sequences": registry_entry.generation_defaults.stop_sequences,
+                    },
+                    "family": registry_entry.family,
+                    "served_model_id": registry_entry.served_model_id,
+                }
+                st.json(metadata_dict)
+
+        else:
+            if not model_name:
+                st.info(
+                    "ℹ️ Select a model from the dropdown above to view/edit parameters"
+                )
+            else:
+                st.warning(f"Model '{model_name}' not found in registry")
 
         # Role & Configuration Management
         st.markdown("---")
@@ -362,65 +973,7 @@ def render_browse_manage_tab():
                             )
                             role_priorities[role] = priority
 
-                # Backend Config Editor
-                st.markdown("---")
-                st.markdown("#### Backend Configuration")
-
-                backend_config = registry_entry.backend_config
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.write(f"**Backend:** {registry_entry.backend}")
-                    if backend_config:
-                        st.write(f"**Port:** {backend_config.port}")
-                    else:
-                        st.write("**Port:** N/A")
-
-                with col2:
-                    if backend_config:
-                        st.write(f"**Host:** {backend_config.host or 'localhost'}")
-                    else:
-                        st.write("**Host:** localhost")
-
-                # Extra Args Editor
-                st.markdown("**Extra Arguments**")
-                st.caption(
-                    "Additional CLI arguments passed to the backend (one per line)"
-                )
-
-                current_extra_args = backend_config.extra_args if backend_config else []
-                extra_args_text = "\n".join(current_extra_args)
-
-                edited_extra_args = st.text_area(
-                    "Extra Arguments (one per line)",
-                    value=extra_args_text,
-                    height=150,
-                    key=f"extra_args_{model_name}",
-                    help="Example args:\n--max-model-len 8192\n--gpu-memory-utilization 0.9\n--tensor-parallel-size 2",
-                    label_visibility="collapsed",
-                )
-
-                # Common arg helpers
-                with st.expander("📖 Common Arguments", expanded=False):
-                    st.markdown(
-                        """
-                    **vLLM:**
-                    - `--max-model-len 8192` - Set context length
-                    - `--gpu-memory-utilization 0.9` - GPU memory fraction
-                    - `--tensor-parallel-size 2` - Multi-GPU parallelism
-
-                    **LMDeploy:**
-                    - `--tp 2` - Tensor parallelism
-                    - `--cache-max-entry-count 0.9` - KV cache size
-
-                    **Ollama:**
-                    - `--num-ctx 8192` - Context length
-                    - `--num-gpu 1` - Number of GPU layers
-                    """
-                    )
-
-                # Save button
+                # Save button for roles
                 st.markdown("---")
                 col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -432,16 +985,6 @@ def render_browse_manage_tab():
                             # Update registry entry
                             registry_entry.roles = selected_roles
                             registry_entry.role_priority = role_priorities
-
-                            # Update extra_args in backend_config
-                            new_extra_args = [
-                                line.strip()
-                                for line in edited_extra_args.split("\n")
-                                if line.strip()
-                            ]
-
-                            if backend_config:
-                                backend_config.extra_args = new_extra_args
 
                             # Save registry
                             save_registry()
@@ -477,7 +1020,13 @@ def render_download_import_tab():
     with subtabs[0]:
         st.markdown("#### Download from HuggingFace")
 
-        col1, col2 = st.columns([2, 1])
+        # Initialize session state for analysis
+        if "hf_analysis" not in st.session_state:
+            st.session_state.hf_analysis = None
+        if "hf_analyzed_model" not in st.session_state:
+            st.session_state.hf_analyzed_model = None
+
+        col1, col2, col3 = st.columns([3, 2, 1])
 
         with col1:
             model_input = st.text_input(
@@ -496,14 +1045,193 @@ def render_download_import_tab():
                 help="Use @branch in identifier or specify here",
             )
 
+        with col3:
+            st.write("")  # spacing
+            st.write("")  # spacing
+            analyze_btn = st.button(
+                "🔍 Analyze",
+                disabled=not model_input,
+                key="hf_analyze_btn",
+                use_container_width=True,
+            )
+
+        # Clear analysis if model changed
+        if st.session_state.get("hf_analyzed_model") != model_input:
+            st.session_state.hf_analysis = None
+            st.session_state.hf_analyzed_model = None
+
+        # Handle analyze button click
+        if analyze_btn and model_input:
+            full_model = f"{model_input}@{branch}" if branch else model_input
+            with st.spinner("🔍 Analyzing repository..."):
+                try:
+                    result = analyze_hf_repository(full_model)
+                    st.session_state.hf_analysis = result
+                    st.session_state.hf_analyzed_model = model_input
+                    st.success("✅ Analysis complete!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Analysis failed: {e}")
+                    st.session_state.hf_analysis = None
+
+        # Display analysis results
+        if st.session_state.hf_analysis:
+            result = st.session_state.hf_analysis
+            analysis = result["analysis"]
+            critical = result["critical_status"]
+            warnings_list = result["warnings"]
+
+            st.markdown("---")
+            st.markdown("### 📊 Repository Analysis")
+
+            # Repository info
+            repo = analysis.repository
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Repository", f"{repo.owner}/{repo.repo}")
+            with col2:
+                if repo.model_type:
+                    st.metric("Model Type", repo.model_type)
+            with col3:
+                if repo.library_name:
+                    st.metric("Library", repo.library_name)
+
+            # Available formats
+            st.markdown("#### 🎯 Available Formats")
+            if analysis.formats:
+                for fmt in analysis.formats:
+                    confidence = f"{fmt.confidence:.0%}"
+                    quant_str = ""
+                    if fmt.quantization_details:
+                        details = ", ".join(
+                            f"{k}={v}" for k, v in fmt.quantization_details.items()
+                        )
+                        quant_str = f" `[{details}]`"
+
+                    # Color code by confidence
+                    if fmt.confidence >= 0.8:
+                        confidence_icon = "🟢"
+                    elif fmt.confidence >= 0.5:
+                        confidence_icon = "🟡"
+                    else:
+                        confidence_icon = "🔴"
+
+                    st.markdown(
+                        f"{confidence_icon} **{fmt.format_type.upper()}** ({confidence}){quant_str}"
+                    )
+
+                    # Show evidence in expander
+                    if fmt.evidence:
+                        with st.expander(
+                            f"Evidence for {fmt.format_type}", expanded=False
+                        ):
+                            for evidence in fmt.evidence[:5]:
+                                st.caption(f"• {evidence}")
+                            if len(fmt.evidence) > 5:
+                                st.caption(
+                                    f"... and {len(fmt.evidence) - 5} more signals"
+                                )
+            else:
+                st.warning("⚠️ No formats detected")
+
+            # Critical files status
+            st.markdown("#### 🔍 Critical Files Status")
+
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                # Config files
+                if critical["config.json"] == "found":
+                    st.success("✅ config.json")
+                else:
+                    st.error("❌ config.json - MISSING (REQUIRED)")
+
+                if critical["tokenizer_config.json"] == "found":
+                    st.success("✅ tokenizer_config.json")
+                else:
+                    st.warning("⚠️ tokenizer_config.json - Missing (recommended)")
+
+                # Tokenizer
+                if critical["tokenizer.json or tokenizer.model"] in [
+                    "tokenizer.json",
+                    "tokenizer.model",
+                ]:
+                    st.success(f"✅ {critical['tokenizer.json or tokenizer.model']}")
+                else:
+                    st.error("❌ Tokenizer file - MISSING (REQUIRED)")
+
+                # Generation config
+                if critical["generation_config.json"] == "found":
+                    st.success("✅ generation_config.json")
+                else:
+                    st.warning(
+                        "⚠️ generation_config.json - Missing (may affect generation)"
+                    )
+
+                # Chat template
+                if critical["chat_template"] == "standalone":
+                    st.success("✅ chat_template (standalone file)")
+                elif critical["chat_template"] == "check_embedded":
+                    st.info(
+                        "ℹ️ chat_template - Not found as standalone (may be embedded in tokenizer_config)"
+                    )
+                else:
+                    st.warning("⚠️ chat_template - Status unknown")
+
+            with col2:
+                # File counts
+                files = analysis.files
+                st.metric("Weights", len(files.get("model_weights", [])))
+                st.metric("Config", len(files.get("config", [])))
+                st.metric("Tokenizer", len(files.get("tokenizer", [])))
+
+            # Size breakdown
+            st.markdown("#### 💾 Download Size")
+
+            required_size = sum(
+                f.size
+                for f in files.get("model_weights", [])
+                + files.get("config", [])
+                + files.get("tokenizer", [])
+            )
+            optional_size = sum(f.size for f in files.get("optional", []))
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Required Files", f"{required_size / (1024**3):.2f} GB")
+            with col2:
+                st.metric("Optional Files", f"{optional_size / (1024**2):.2f} MB")
+
+            # Warnings
+            if warnings_list:
+                st.markdown("#### ⚠️ Warnings")
+                for warning in warnings_list:
+                    if warning.startswith("❌"):
+                        st.error(warning)
+                    else:
+                        st.warning(warning)
+
+            st.markdown("---")
+
+        # Download options
         col1, col2 = st.columns(2)
 
         with col1:
+            # Suggest format from analysis if available
+            default_format = ["awq"]
+            if st.session_state.hf_analysis:
+                analysis = st.session_state.hf_analysis["analysis"]
+                if analysis.formats:
+                    suggested = analysis.formats[0].format_type
+                    if suggested in ["gguf", "awq", "gptq", "safetensors"]:
+                        default_format = [suggested]
+
             formats = st.multiselect(
                 "Preferred Formats",
                 options=["gguf", "awq", "gptq", "safetensors"],
-                default=["awq"],
+                default=default_format,
                 key="hf_formats",
+                help="Format suggested from analysis if available",
             )
 
             location = st.selectbox(
@@ -513,7 +1241,9 @@ def render_download_import_tab():
             )
 
         with col2:
-            include_optional = st.checkbox("Include optional files", key="hf_optional")
+            include_optional = st.checkbox(
+                "Include optional files", value=True, key="hf_optional"
+            )
             force_redownload = st.checkbox("Force re-download", key="hf_force")
             non_interactive = st.checkbox(
                 "Non-interactive", value=True, key="hf_nonint"
@@ -1108,24 +1838,23 @@ def render_advanced_tab():
 
 def main():
     """Models management hub page with comprehensive CLI parity."""
+    st.set_page_config(layout="wide")
     init_session_state()
 
-    # Custom CSS for wider layout and better table display
+    # Apply wide layout CSS (consistent with global settings)
     st.markdown(
         """
         <style>
-        /* Force wider main content area - override Streamlit defaults */
+        /* Force wider main content area - consistent with app.py */
         .main .block-container {
-            max-width: 100% !important;
-            padding-left: 3rem !important;
-            padding-right: 3rem !important;
+            max-width: 95% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
         }
 
-        /* Remove max-width constraint from app view */
+        /* Remove Streamlit's default max-width constraint */
         section.main > div {
-            max-width: 100% !important;
-            padding-left: 3rem !important;
-            padding-right: 3rem !important;
+            max-width: none !important;
         }
 
         /* Make dataframes use full available width */
@@ -1133,15 +1862,10 @@ def main():
             width: 100% !important;
         }
 
-        /* Ensure tables don't truncate unnecessarily */
+        /* Ensure tables don't get cut off */
         div[data-testid="stDataFrame"] > div {
             width: 100% !important;
             overflow-x: auto !important;
-        }
-
-        /* Expand dataframe container */
-        .element-container:has(div[data-testid="stDataFrame"]) {
-            width: 100% !important;
         }
         </style>
     """,

@@ -14,7 +14,28 @@ from imageworks.gui.config import OUTPUTS_DIR
 
 def main():
     """Results browser page."""
+    st.set_page_config(layout="wide")
     init_session_state()
+
+    # Apply wide layout CSS (ensures consistency on page refresh)
+    st.markdown(
+        """
+        <style>
+        .main .block-container {
+            max-width: 95% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        section.main > div {
+            max-width: none !important;
+        }
+        .stDataFrame {
+            width: 100% !important;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("📊 Results Browser")
     st.markdown("View and analyze results from all modules")

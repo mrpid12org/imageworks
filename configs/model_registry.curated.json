@@ -1,120 +1,5 @@
 [
   {
-    "name": "florence-2-large_(FP16)",
-    "display_name": "Florence-2 Large (FP16)",
-    "backend": "vllm",
-    "backend_config": {
-      "port": 24002,
-      "model_path": "/home/stewa/ai-models/weights/microsoft/Florence-2-large",
-      "extra_args": [
-        "--tensor-parallel-size",
-        "1",
-        "--dtype",
-        "auto",
-        "--gpu-memory-utilization",
-        "0.75",
-        "--max-model-len",
-        "4096",
-        "--max-num-seqs",
-        "2",
-        "--trust-remote-code"
-      ]
-    },
-    "capabilities": {
-      "text": true,
-      "vision": true,
-      "embedding": false,
-      "audio": false,
-      "thinking": false,
-      "reasoning": false,
-      "tools": false,
-      "language": true,
-      "chat": true,
-      "visual": true,
-      "multimodal": true,
-      "mm": true,
-      "image": true,
-      "vl": true,
-      "speech": false,
-      "voice": false,
-      "asr": false,
-      "tts": false,
-      "embed": false,
-      "text-embedding": false,
-      "representation": false,
-      "tool_use": false,
-      "tool-use": false,
-      "tool_call": false,
-      "tool-call": false,
-      "toolcalls": false,
-      "tool_calls": false,
-      "toolchoice": false,
-      "tool_choice": false,
-      "function_call": false,
-      "function-call": false,
-      "function_calls": false,
-      "function_calling": false,
-      "function-calling": false,
-      "function_tools": false,
-      "functioncalling": false,
-      "toolcalling": false,
-      "auto_tool_choice": false,
-      "reason": false,
-      "think": false,
-      "chain_of_thought": false,
-      "cot": false,
-      "reasoner": false,
-      "o1": false,
-      "o3": false,
-      "r1": false,
-      "deepseek": false
-    },
-    "generation_defaults": {
-      "temperature": 0.3,
-      "top_p": 0.9,
-      "top_k": 20
-    },
-    "chat_template": {
-      "source": "none",
-      "path": null,
-      "sha256": null
-    },
-    "profiles_placeholder": null,
-    "metadata": {
-      "model_type": "image-text-to-text",
-      "library": "transformers",
-      "producer": "microsoft",
-      "files_downloaded": 18,
-      "verified_complete": true,
-      "has_chat_template": false,
-      "registry_layer": "curated"
-    },
-    "served_model_id": "None",
-    "model_aliases": [
-      "microsoft/Florence-2-large"
-    ],
-    "roles": [
-      "keywords",
-      "caption",
-      "object_detection"
-    ],
-    "license": "mit",
-    "source": {
-      "huggingface_id": "microsoft/Florence-2-large"
-    },
-    "deprecated": false,
-    "family": "florence-2-large",
-    "source_provider": "hf",
-    "quantization": "fp16",
-    "backend_alternatives": [],
-    "role_priority": {
-      "keywords": 95,
-      "caption": 75,
-      "object_detection": 90
-    },
-    "vram_estimate_mb": 3500
-  },
-  {
     "name": "aqualaguna-gemma-3-27b-it-abliterated_(Q3_K_M)",
     "display_name": "aqualaguna-gemma-3-27b-it-abliterated (Q3 K M)",
     "backend": "ollama",
@@ -208,6 +93,130 @@
     "quantization": "q3_k_m",
     "backend_alternatives": [],
     "role_priority": {}
+  },
+  {
+    "name": "florence-2-large_(FP16)",
+    "display_name": "Florence-2 Large (FP16)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24002,
+      "model_path": "/home/stewa/ai-models/weights/microsoft/Florence-2-large",
+      "extra_args": [
+        "--tensor-parallel-size",
+        "1",
+        "--dtype",
+        "auto",
+        "--gpu-memory-utilization",
+        "0.75",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "2",
+        "--trust-remote-code"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.3,
+      "top_p": 0.9,
+      "top_k": 20
+    },
+    "chat_template": {
+      "source": "none",
+      "path": null,
+      "sha256": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "readme_file": "README.md",
+      "readme_sha256": "16212f1929e4992649d18b812e0ebf7ebbbaffd90a5ba23dfdc5c78df2f92ac2",
+      "readme_signals": {
+        "license_hint": "mit"
+      },
+      "license_file": "LICENSE",
+      "producer": "microsoft",
+      "model_type": "image-text-to-text",
+      "library": "transformers",
+      "files_downloaded": 18,
+      "verified_complete": true,
+      "has_chat_template": false,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [],
+      "embedded_chat_template_preview": null,
+      "branch": "main",
+      "registry_layer": "curated"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "microsoft/Florence-2-large"
+    ],
+    "roles": [
+      "keywords",
+      "caption",
+      "object_detection"
+    ],
+    "license": "mit",
+    "source": {
+      "huggingface_id": "microsoft/Florence-2-large"
+    },
+    "deprecated": false,
+    "family": "florence-2-large",
+    "source_provider": "hf",
+    "quantization": "fp16",
+    "backend_alternatives": [],
+    "role_priority": {
+      "keywords": 95,
+      "caption": 75,
+      "object_detection": 90
+    }
   },
   {
     "name": "gemma3_27.0b_(Q3_K_M)",
@@ -592,6 +601,99 @@
     "role_priority": {}
   },
   {
+    "name": "qwen2.5-vl-7b-instruct_(AWQ)",
+    "display_name": "qwen2.5-vl-7b-instruct (AWQ)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+      "extra_args": [
+        "--max-model-len",
+        "4096",
+        "--enforce-eager",
+        "--trust-remote-code"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": false,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": false,
+      "tool-use": false,
+      "tool_call": false,
+      "tool-call": false,
+      "toolcalls": false,
+      "tool_calls": false,
+      "toolchoice": false,
+      "tool_choice": false,
+      "function_call": false,
+      "function-call": false,
+      "function_calls": false,
+      "function_calling": false,
+      "function-calling": false,
+      "function_tools": false,
+      "functioncalling": false,
+      "toolcalling": false,
+      "auto_tool_choice": false,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 20
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
+      "sha256": null
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "format": "awq",
+      "quantization": "awq",
+      "vision": true,
+      "parameter_size": "7B",
+      "context_length": 32768,
+      "registry_layer": "curated"
+    },
+    "model_aliases": [],
+    "roles": [],
+    "license": "Apache-2.0",
+    "source": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "deprecated": false,
+    "family": "qwen2.5-vl",
+    "source_provider": "huggingface",
+    "quantization": "awq",
+    "backend_alternatives": [],
+    "role_priority": {}
+  },
+  {
     "name": "qwen2.5vl_7b_(Q4_K_M)",
     "display_name": "qwen2.5vl 7b (Q4 K M)",
     "backend": "ollama",
@@ -793,8 +895,7 @@
       "description": 85,
       "narration": 85,
       "vision_general": 80
-    },
-    "vram_estimate_mb": 6400
+    }
   },
   {
     "name": "qwen3-vl-8b-instruct_(FP8)",
@@ -943,8 +1044,7 @@
       "description": 90,
       "narration": 90,
       "vision_general": 85
-    },
-    "vram_estimate_mb": 10600
+    }
   },
   {
     "name": "qwen3_8.2b_(Q4_K_M)",

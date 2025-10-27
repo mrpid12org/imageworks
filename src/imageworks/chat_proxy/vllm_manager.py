@@ -6,7 +6,6 @@ import logging
 import os
 import signal
 import subprocess
-import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -272,8 +271,11 @@ class VllmManager:
     def _build_command(self, entry, served_model_id: str, port: int) -> list[str]:
         model_path = self._resolve_model_path(entry)
         host = self._resolve_host(entry)
+        # Use uv run to ensure correct Python environment with vLLM installed
         command: list[str] = [
-            sys.executable,
+            "uv",
+            "run",
+            "python",
             "-m",
             "vllm.entrypoints.openai.api_server",
             "--model",

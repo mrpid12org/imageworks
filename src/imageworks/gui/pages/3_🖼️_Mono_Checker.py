@@ -156,7 +156,28 @@ def render_custom_overrides(preset, session_key_prefix):
 
 def main():
     """Mono checker page."""
+    st.set_page_config(layout="wide")
     init_session_state()
+
+    # Apply wide layout CSS (ensures consistency on page refresh)
+    st.markdown(
+        """
+        <style>
+        .main .block-container {
+            max-width: 95% !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        section.main > div {
+            max-width: none !important;
+        }
+        .stDataFrame {
+            width: 100% !important;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("🖼️ Mono Checker")
     st.markdown("Detect non-monochrome images in competition submissions")
