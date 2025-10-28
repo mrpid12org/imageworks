@@ -142,6 +142,7 @@ class ChatTemplate:
 @dataclass
 class GenerationDefaults:
     max_tokens: Optional[int] = None
+    min_tokens: Optional[int] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     top_k: Optional[int] = None

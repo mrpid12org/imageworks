@@ -43,6 +43,10 @@ class ChatForwarder:
         self.client = httpx.AsyncClient(timeout=cfg.backend_timeout_ms / 1000)
         self.vllm_manager = vllm_manager
 
+    @staticmethod
+    def _clean_generation_text(text: str | None) -> str | None:
+        return text
+
     async def _probe(self, base_url: str) -> bool:
         try:
             r = await self.client.get(base_url + "/models")
@@ -360,6 +364,18 @@ class ChatForwarder:
             payload["model"] = resolved
             model = resolved
 
+        messages = list(payload.get("messages") or [])
+        meta = getattr(entry, "metadata", {}) or {}
+        default_system_prompt = meta.get("default_system_prompt")
+        if default_system_prompt:
+            has_system = any(
+                isinstance(msg, dict) and msg.get("role") == "system"
+                for msg in messages
+            )
+            if not has_system:
+                messages.insert(0, {"role": "system", "content": default_system_prompt})
+                payload["messages"] = messages
+
         # Capability checks
         has_vision = supports_vision(entry)
         has_images, image_bytes = self._detect_images(payload.get("messages") or [])
@@ -450,6 +466,27 @@ class ChatForwarder:
                 # If payload isn't a dict, fall back without rewrite (defensive)
                 pass
 
+        # Apply registry generation defaults when caller did not set explicit sampling params.
+        defaults = getattr(entry, "generation_defaults", None)
+        if defaults:
+
+            def _apply_or_keep(target: dict, key: str, value):
+                if value is None:
+                    return
+                if key not in target or target[key] is None:
+                    target[key] = value
+
+            _apply_or_keep(payload, "temperature", defaults.temperature)
+            _apply_or_keep(payload, "top_p", defaults.top_p)
+            _apply_or_keep(payload, "top_k", defaults.top_k)
+            _apply_or_keep(payload, "max_tokens", defaults.max_tokens)
+            _apply_or_keep(payload, "min_tokens", defaults.min_tokens)
+            _apply_or_keep(payload, "frequency_penalty", defaults.frequency_penalty)
+            _apply_or_keep(payload, "presence_penalty", defaults.presence_penalty)
+            if getattr(defaults, "stop_sequences", None):
+                if not payload.get("stop"):
+                    payload["stop"] = list(defaults.stop_sequences)
+
         if entry.backend == "vllm":
             extra_body = {}
             try:
@@ -467,7 +504,7 @@ class ChatForwarder:
             started = False
             if self.cfg.autostart_enabled:
                 if vllm_started:
-                    started = True
+                    started = await self._probe(base_url)
                 elif await self.autostart.ensure_started(model, entry):
                     # wait grace
                     await asyncio.sleep(self.cfg.autostart_grace_period_s)
@@ -507,6 +544,19 @@ class ChatForwarder:
 
                     nonlocal first_token_at, collected_tokens, estimated
                     logger = logging.getLogger("ollama-stream")
+                    raw_accum = ""
+                    clean_accum = ""
+
+                    def consume(delta_raw: str) -> str:
+                        nonlocal raw_accum, clean_accum
+                        raw_accum += delta_raw
+                        cleaned_total = self._clean_generation_text(raw_accum) or ""
+                        if not cleaned_total.strip():
+                            return ""
+                        new_segment = cleaned_total[len(clean_accum) :]
+                        clean_accum = cleaned_total
+                        return new_segment
+
                     # If upstream is non-stream (image payload), do one-shot post and re-emit as SSE
                     if opayload.get("stream") is False:
                         logger.info("[Ollama] Non-streaming POST to %s", url)
@@ -531,28 +581,30 @@ class ChatForwarder:
                             raise err_backend_unavailable(
                                 model, hint=txt.decode(errors="ignore")[:200]
                             )
-                        delta = ((obj.get("message") or {}).get("content")) or ""
-                        if delta:
-                            if first_token_at is None:
-                                first_token_at = time.time()
-                            collected_tokens += len(delta) // 4
-                            estimated = False
-                            oai = {
-                                "id": obj.get("id") or "cmpl-ollama",
-                                "object": "chat.completion.chunk",
-                                "choices": [
-                                    {
-                                        "index": 0,
-                                        "delta": {"content": delta},
-                                        "finish_reason": None,
-                                    }
-                                ],
-                            }
-                            out = _json.dumps(oai, ensure_ascii=False)
-                            logger.info(
-                                "[Ollama] Yielding non-stream chunk: %s", out[:200]
-                            )
-                            yield f"data: {out}\n\n".encode()
+                        delta_raw = ((obj.get("message") or {}).get("content")) or ""
+                        if delta_raw:
+                            new_segment = consume(delta_raw)
+                            if new_segment:
+                                if first_token_at is None:
+                                    first_token_at = time.time()
+                                collected_tokens += len(new_segment) // 4
+                                estimated = False
+                                oai = {
+                                    "id": obj.get("id") or "cmpl-ollama",
+                                    "object": "chat.completion.chunk",
+                                    "choices": [
+                                        {
+                                            "index": 0,
+                                            "delta": {"content": new_segment},
+                                            "finish_reason": None,
+                                        }
+                                    ],
+                                }
+                                out = _json.dumps(oai, ensure_ascii=False)
+                                logger.info(
+                                    "[Ollama] Yielding non-stream chunk: %s", out[:200]
+                                )
+                                yield f"data: {out}\n\n".encode()
                         # Terminate stream
                         logger.info("[Ollama] Yielding [DONE] for non-stream")
                         yield b"data: [DONE]\n\n"
@@ -606,12 +658,17 @@ class ChatForwarder:
                                         done = True
                                         break
                                     # Ollama stream messages usually include a 'message': { 'content': '...' }
-                                    delta = (
+                                    delta_raw = (
                                         (obj.get("message") or {}).get("content")
                                     ) or ""
-                                    if delta and first_token_at is None:
+                                    if not delta_raw:
+                                        continue
+                                    new_segment = consume(delta_raw)
+                                    if not new_segment:
+                                        continue
+                                    if first_token_at is None:
                                         first_token_at = time.time()
-                                    collected_tokens += len(delta) // 4
+                                    collected_tokens += len(new_segment) // 4
                                     estimated = True
                                     oai = {
                                         "id": obj.get("id") or "cmpl-ollama",
@@ -619,14 +676,15 @@ class ChatForwarder:
                                         "choices": [
                                             {
                                                 "index": 0,
-                                                "delta": {"content": delta},
+                                                "delta": {"content": new_segment},
                                                 "finish_reason": None,
                                             }
                                         ],
                                     }
                                     out = _json.dumps(oai, ensure_ascii=False)
                                     logger.info(
-                                        "[Ollama] Yielding stream chunk: %s", out[:200]
+                                        "[Ollama] Yielding stream chunk: %s",
+                                        out[:200],
                                     )
                                     yield f"data: {out}\n\n".encode()
                                 except Exception as e:
@@ -664,6 +722,19 @@ class ChatForwarder:
             async def event_gen() -> AsyncGenerator[bytes, None]:
                 nonlocal first_token_at, collected_tokens, estimated
                 done = False
+                raw_accum = ""
+                clean_accum = ""
+
+                def consume(delta_raw: str) -> str:
+                    nonlocal raw_accum, clean_accum
+                    raw_accum += delta_raw
+                    cleaned_total = self._clean_generation_text(raw_accum) or ""
+                    if not cleaned_total.strip():
+                        return ""
+                    new_segment = cleaned_total[len(clean_accum) :]
+                    clean_accum = cleaned_total
+                    return new_segment
+
                 async with self.client.stream("POST", url, json=payload) as resp:
                     if resp.status_code >= 400:
                         data = await resp.aread()
@@ -691,16 +762,24 @@ class ChatForwarder:
                                         obj,
                                         disabled=self.cfg.disable_tool_normalization,
                                     )
+                                    choices = norm.get("choices") or []
+                                    if not choices:
+                                        continue
+                                    delta = (choices[0] or {}).get("delta", {})
+                                    if not isinstance(delta, dict):
+                                        continue
+                                    content = delta.get("content")
+                                    if not content:
+                                        continue
+                                    new_segment = consume(content)
+                                    if not new_segment:
+                                        continue
+                                    if first_token_at is None:
+                                        first_token_at = time.time()
+                                    delta["content"] = new_segment
                                     chunk = json.dumps(norm, ensure_ascii=False)
                                     # naive token estimate
-                                    collected_tokens += (
-                                        len(
-                                            (norm.get("choices") or [{}])[0]
-                                            .get("delta", {})
-                                            .get("content", "")
-                                        )
-                                        // 4
-                                    )
+                                    collected_tokens += len(new_segment) // 4
                                     estimated = True
                                 except Exception:  # noqa: BLE001
                                     pass
@@ -729,7 +808,8 @@ class ChatForwarder:
                     raise err_backend_unavailable(model, hint=resp.text[:200])
                 obj = resp.json()
                 # Transform Ollama response to OpenAI format
-                content = ((obj.get("message") or {}).get("content")) or ""
+                content_raw = ((obj.get("message") or {}).get("content")) or ""
+                content = self._clean_generation_text(content_raw) or ""
                 first_token_at = time.time()
                 norm = {
                     "id": obj.get("id") or "cmpl-ollama",
@@ -792,6 +872,23 @@ class ChatForwarder:
                                 norm["choices"] = choices
                         except Exception:
                             pass
+            except Exception:
+                pass
+            try:
+                for choice in norm.get("choices", []):
+                    message = (
+                        choice.get("message") if isinstance(choice, dict) else None
+                    )
+                    if isinstance(message, dict):
+                        content = message.get("content")
+                        cleaned = self._clean_generation_text(content)
+                        if cleaned is not None:
+                            message["content"] = cleaned
+                            if isinstance(choice, dict) and isinstance(
+                                choice.get("text"), str
+                            ):
+                                text_clean = self._clean_generation_text(choice["text"])
+                                choice["text"] = text_clean or ""
             except Exception:
                 pass
             usage = norm.get("usage") or {}

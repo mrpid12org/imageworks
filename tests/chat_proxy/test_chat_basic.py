@@ -81,6 +81,87 @@ def test_chat_basic(monkeypatch):
     assert body["choices"][0]["message"]["content"] == "Hello"
 
 
+def test_chat_applies_generation_defaults(monkeypatch):
+    defaults = SimpleNamespace(
+        temperature=0.4,
+        top_p=0.85,
+        top_k=10,
+        max_tokens=128,
+        min_tokens=12,
+        frequency_penalty=0.1,
+        presence_penalty=0.2,
+        stop_sequences=["Observation:"],
+        context_window=None,
+    )
+
+    class DummyEntry:
+        name = "llava"
+        display_name = "llava"
+        quantization = None
+        backend = "vllm"
+        probes = type("P", (), {"vision": None})
+        chat_template = type("T", (), {"path": "templates/chat.jinja"})
+        backend_config = type("cfg", (), {"port": 12346})
+        served_model_id = None
+        generation_defaults = defaults
+
+    monkeypatch.setattr(
+        app_module, "get_entry", lambda name: DummyEntry(), raising=True
+    )
+    monkeypatch.setattr(
+        forwarder_module, "get_entry", lambda name: DummyEntry(), raising=True
+    )
+
+    async def fake_probe(self, base_url):
+        return True
+
+    captured = {}
+
+    async def fake_post(self, url, json=None):  # noqa: A002
+        captured["payload"] = json
+
+        class Resp:
+            status_code = 200
+
+            def json(self_inner):
+                return {
+                    "id": "resp-defaults",
+                    "object": "chat.completion",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Hello"},
+                        }
+                    ],
+                    "created": 1,
+                    "model": "llava",
+                }
+
+        return Resp()
+
+    monkeypatch.setattr(forwarder_module.ChatForwarder, "_probe", fake_probe)
+    monkeypatch.setattr(forwarder_module.httpx.AsyncClient, "post", fake_post)
+
+    client = TestClient(app)
+    r = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "llava",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+    )
+    assert r.status_code == 200
+    payload = captured["payload"]
+    assert payload["temperature"] == defaults.temperature
+    assert payload["top_p"] == defaults.top_p
+    assert payload["top_k"] == defaults.top_k
+    assert payload["max_tokens"] == defaults.max_tokens
+    assert payload["min_tokens"] == defaults.min_tokens
+    assert payload["frequency_penalty"] == defaults.frequency_penalty
+    assert payload["presence_penalty"] == defaults.presence_penalty
+    assert payload["stop"] == defaults.stop_sequences
+
+
 def test_chat_resolves_simplified_display(monkeypatch):
     class DummyEntry:
         name = "qwen2.5vl_7b_(Q4_K_M)"

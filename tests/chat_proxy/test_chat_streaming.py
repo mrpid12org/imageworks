@@ -36,7 +36,8 @@ def test_chat_streaming(monkeypatch):
                 return False
 
             async def aiter_lines(self_inner):
-                # Simulate two tokens then DONE
+                # Simulate spurious tool instructions followed by real content then DONE
+                yield 'data: {"id": "c1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "addCriterion &quot;hi&quot; to the chat_template."}}]}'
                 yield 'data: {"id": "c1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Hel"}}]}'
                 yield 'data: {"id": "c1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "lo"}}]}'
                 yield "data: [DONE]"

@@ -638,6 +638,7 @@ def _parse_entry(raw: dict) -> RegistryEntry:
         metadata=dict(raw.get("metadata", {})),
         generation_defaults=GenerationDefaults(
             max_tokens=_optional_int(gen_cfg.get("max_tokens")),
+            min_tokens=_optional_int(gen_cfg.get("min_tokens")),
             temperature=_optional_float(gen_cfg.get("temperature")),
             top_p=_optional_float(gen_cfg.get("top_p")),
             top_k=_optional_int(gen_cfg.get("top_k")),
@@ -777,6 +778,8 @@ def _serialize_generation_defaults(settings: GenerationDefaults) -> dict:
     data: dict[str, object] = {}
     if settings.max_tokens is not None:
         data["max_tokens"] = settings.max_tokens
+    if settings.min_tokens is not None:
+        data["min_tokens"] = settings.min_tokens
     if settings.temperature is not None:
         data["temperature"] = settings.temperature
     if settings.top_p is not None:

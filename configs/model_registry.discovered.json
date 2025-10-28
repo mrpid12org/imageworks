@@ -2211,7 +2211,17 @@
       "reasoning": false,
       "tools": true
     },
-    "generation_defaults": {},
+    "generation_defaults": {
+      "min_tokens": 32,
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "top_k": 40,
+      "presence_penalty": 0.6,
+      "frequency_penalty": 0.2,
+      "stop_sequences": [
+        "<tool_call>"
+      ]
+    },
     "artifacts": {
       "aggregate_sha256": "b1f24f83e8c1a510beeba62afc9cc334c8ebbb914788a597db2d72832b62634c",
       "files": [
@@ -2328,7 +2338,8 @@
       "embedded_chat_template_preview": "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}{% if loop.first and message['role'] != 'system...",
       "branch": "main",
       "primary_chat_template_file": "chat_template.json",
-      "primary_chat_template_sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+      "primary_chat_template_sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7",
+      "default_system_prompt": "You are a helpful assistant. Answer in concise English."
     },
     "served_model_id": null,
     "model_aliases": [

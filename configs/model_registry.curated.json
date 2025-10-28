@@ -665,14 +665,20 @@
     },
     "generation_defaults": {
       "temperature": 0.7,
-      "top_p": 0.9,
-      "top_k": 20
+      "top_p": 0.95,
+      "top_k": 40,
+      "min_tokens": 32,
+      "presence_penalty": 0.6,
+      "frequency_penalty": 0.2,
+      "stop_sequences": [
+        "<tool_call>"
+      ]
     },
-    "chat_template": {
-      "source": "external",
-      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
-      "sha256": null
-    },
+  "chat_template": {
+    "source": "external",
+    "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/qwen_template.jinja",
+    "sha256": null
+  },
     "profiles_placeholder": null,
     "metadata": {
       "format": "awq",
@@ -680,7 +686,8 @@
       "vision": true,
       "parameter_size": "7B",
       "context_length": 32768,
-      "registry_layer": "curated"
+      "registry_layer": "curated",
+      "default_system_prompt": "You are a helpful assistant. Answer in concise English."
     },
     "model_aliases": [],
     "roles": [],
