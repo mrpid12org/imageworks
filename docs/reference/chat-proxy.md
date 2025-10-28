@@ -141,6 +141,14 @@ services:
 If you see fewer models than expected, it’s usually because the proxy can’t see your HF paths. Add the HF mount (above) or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1`.
 
 ### Tool normalization
+
+### Vision history management
+Vision requests can blow past backend context windows, so the proxy trims
+prior conversation turns when an image is present. Defaults keep the system
+message and current user payload while dropping history. Tune behaviour with
+`CHAT_PROXY_VISION_TRUNCATE_HISTORY`, `CHAT_PROXY_VISION_KEEP_SYSTEM`, and
+`CHAT_PROXY_VISION_KEEP_LAST_N_TURNS` to keep additional context when needed.【F:src/imageworks/chat_proxy/forwarder.py†L126-L178】【F:src/imageworks/chat_proxy/config.py†L68-L123】
+
 Some backends return legacy `function_call` fields. The proxy can synthesize a standard `tool_calls` array for OpenAI compatibility. Disable with `CHAT_PROXY_DISABLE_TOOL_NORMALIZATION=1` if you prefer raw passthrough.
 
 ### Security note
