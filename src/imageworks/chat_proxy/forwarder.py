@@ -107,7 +107,8 @@ class ChatForwarder:
             prepared.append(msg)
         return {"model": backend_id, "messages": prepared, "stream": bool(stream)}
 
-    def _detect_images(self, messages: list[Any]) -> tuple[bool, int]:
+    @staticmethod
+    def _detect_images(messages: list[Any]) -> tuple[bool, int]:
         has = False
         total = 0
         for m in messages:
@@ -118,14 +119,66 @@ class ChatForwarder:
                         url = (part.get("image_url") or {}).get("url") or ""
                         if url:
                             has = True
-                        if url.startswith("data:image"):
-                            # Rough size estimate: base64 length * 3/4
-                            b64 = url.split(",", 1)[-1]
-                            total += int(len(b64) * 0.75)
-                        else:
-                            # Non-base64 URL present; count as minimal bytes to trigger image flow
-                            total = max(total, 1)
+                if url.startswith("data:image"):
+                    # Rough size estimate: base64 length * 3/4
+                    b64 = url.split(",", 1)[-1]
+                    total += int(len(b64) * 0.75)
+                else:
+                    # Non-base64 URL present; count as minimal bytes to trigger image flow
+                    total = max(total, 1)
         return has, total
+
+    @staticmethod
+    def _strip_images_for_text_model(
+        messages: list[Any],
+    ) -> tuple[list[Any], int]:
+        sanitized: list[Any] = []
+        removed_count = 0
+        placeholder = "[Image omitted: model does not support vision content]"
+
+        for m in messages:
+            if not isinstance(m, dict):
+                sanitized.append(m)
+                continue
+
+            content = m.get("content")
+            if isinstance(content, list):
+                text_segments: list[str] = []
+                found_images = 0
+
+                for part in content:
+                    if not isinstance(part, dict):
+                        text_segments.append(str(part))
+                        continue
+
+                    ptype = part.get("type")
+                    if ptype == "image_url":
+                        found_images += 1
+                        removed_count += 1
+                        image_meta = part.get("image_url") or {}
+                        alt_text = (
+                            image_meta.get("alt_text") or part.get("alt_text") or ""
+                        )
+                        if alt_text:
+                            text_segments.append(f"{placeholder} (alt: {alt_text})")
+                        else:
+                            text_segments.append(placeholder)
+                    elif ptype == "text":
+                        text_segments.append(str(part.get("text", "")))
+                    else:
+                        text_segments.append(str(part))
+
+                if found_images:
+                    msg_copy = dict(m)
+                    combined = "\n".join(seg for seg in text_segments if seg)
+                    msg_copy["content"] = combined or placeholder
+                    sanitized.append(msg_copy)
+                else:
+                    sanitized.append(m)
+            else:
+                sanitized.append(m)
+
+        return sanitized, removed_count
 
     def _truncate_history_for_vision(self, messages: list[Any]) -> list[Any]:
         """
@@ -378,11 +431,27 @@ class ChatForwarder:
 
         # Capability checks
         has_vision = supports_vision(entry)
-        has_images, image_bytes = self._detect_images(payload.get("messages") or [])
+        has_images, image_bytes = self._detect_images(messages)
         if has_images and not has_vision:
-            raise err_capability_mismatch(
-                f"Model '{model}' does not support vision/image content"
+            sanitized_messages, removed_count = self._strip_images_for_text_model(
+                messages
             )
+            if removed_count:
+                messages = sanitized_messages
+                payload = dict(payload)
+                payload["messages"] = messages
+                has_images, image_bytes = self._detect_images(messages)
+                import logging
+
+                logging.getLogger(__name__).info(
+                    "[forwarder] Sanitized %d image attachment(s) for non-vision model '%s'",
+                    removed_count,
+                    model,
+                )
+            if has_images:
+                raise err_capability_mismatch(
+                    f"Model '{model}' does not support vision/image content"
+                )
         if image_bytes > self.cfg.max_image_bytes:
             raise err_payload_too_large(self.cfg.max_image_bytes)
 

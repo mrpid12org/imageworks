@@ -162,6 +162,89 @@ def test_chat_applies_generation_defaults(monkeypatch):
     assert payload["stop"] == defaults.stop_sequences
 
 
+def test_chat_strips_images_for_non_vision_model(monkeypatch):
+    placeholder = "[Image omitted: model does not support vision content]"
+
+    class DummyEntry:
+        name = "text-model"
+        display_name = "Text Model"
+        quantization = None
+        backend = "vllm"
+        probes = type("P", (), {"vision": None})
+        chat_template = type("T", (), {"path": "templates/chat.jinja"})
+        backend_config = type("cfg", (), {"port": 12347})
+        served_model_id = None
+        generation_defaults = None
+        capabilities = {"text": True, "vision": False}
+        metadata = {}
+
+    monkeypatch.setattr(
+        app_module, "get_entry", lambda name: DummyEntry(), raising=True
+    )
+    monkeypatch.setattr(
+        forwarder_module, "get_entry", lambda name: DummyEntry(), raising=True
+    )
+
+    async def fake_probe(self, base_url):
+        return True
+
+    captured = {}
+
+    async def fake_post(self, url, json=None):  # noqa: A002
+        captured["payload"] = json
+
+        class Resp:
+            status_code = 200
+
+            def json(self_inner):
+                return {
+                    "id": "resp-vision-strip",
+                    "object": "chat.completion",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Acknowledged"},
+                        }
+                    ],
+                    "created": 1,
+                    "model": "text-model",
+                }
+
+        return Resp()
+
+    monkeypatch.setattr(forwarder_module.ChatForwarder, "_probe", fake_probe)
+    monkeypatch.setattr(forwarder_module.httpx.AsyncClient, "post", fake_post)
+
+    client = TestClient(app)
+    r = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "text-model",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "what is this?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/png;base64,AAAA",
+                                "alt_text": "album cover",
+                            },
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+    assert r.status_code == 200
+    payload = captured["payload"]
+    sanitized_message = payload["messages"][-1]
+    assert isinstance(sanitized_message["content"], str)
+    assert placeholder in sanitized_message["content"]
+    assert "data:image" not in sanitized_message["content"]
+
+
 def test_chat_resolves_simplified_display(monkeypatch):
     class DummyEntry:
         name = "qwen2.5vl_7b_(Q4_K_M)"

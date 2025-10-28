@@ -2349,7 +2349,7 @@
     },
     "chat_template": {
       "source": "external",
-      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/chat_template.json",
+      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/qwen_template.jinja",
       "sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
     },
     "version_lock": {
