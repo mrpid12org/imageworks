@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
+import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -272,21 +274,46 @@ class VllmManager:
         model_path = self._resolve_model_path(entry)
         host = self._resolve_host(entry)
         # Use uv run to ensure correct Python environment with vLLM installed
-        command: list[str] = [
-            "uv",
-            "run",
-            "python",
-            "-m",
-            "vllm.entrypoints.openai.api_server",
-            "--model",
-            model_path,
-            "--host",
-            host,
-            "--port",
-            str(port),
-            "--served-model-name",
-            served_model_id,
-        ]
+        uv_path = shutil.which("uv")
+        if uv_path:
+            command: list[str] = [
+                uv_path,
+                "run",
+                "python",
+                "-m",
+                "vllm.entrypoints.openai.api_server",
+                "--model",
+                model_path,
+                "--host",
+                host,
+                "--port",
+                str(port),
+                "--served-model-name",
+                served_model_id,
+            ]
+        else:
+            python_exec = (
+                sys.executable
+                if sys.executable
+                else shutil.which("python3") or shutil.which("python") or "python3"
+            )
+            command = [
+                str(python_exec),
+                "-m",
+                "vllm.entrypoints.openai.api_server",
+                "--model",
+                model_path,
+                "--host",
+                host,
+                "--port",
+                str(port),
+                "--served-model-name",
+                served_model_id,
+            ]
+            logger.warning(
+                "[vllm-manager] 'uv' not found; falling back to direct interpreter %s",
+                command[0],
+            )
         extra = list(getattr(entry.backend_config, "extra_args", []) or [])
 
         # Validate extra_args for common issues

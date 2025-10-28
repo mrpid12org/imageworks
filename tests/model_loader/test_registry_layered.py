@@ -44,6 +44,14 @@ def _base_entry(name: str, backend: str = "vllm") -> dict:
     }
 
 
+def _reset_registry_state():
+    registry._REGISTRY_CACHE = None  # type: ignore[attr-defined]
+    registry._REGISTRY_PATH = None  # type: ignore[attr-defined]
+    registry._CURATED_NAMES = set()  # type: ignore[attr-defined]
+    registry._SINGLE_FILE_MODE = False  # type: ignore[attr-defined]
+    registry._REGISTRY_SIGNATURE = None  # type: ignore[attr-defined]
+
+
 def test_save_registry_promotes_dynamic_entries(tmp_path, monkeypatch):
     config_dir = tmp_path / "configs"
     config_dir.mkdir()
@@ -63,7 +71,7 @@ def test_save_registry_promotes_dynamic_entries(tmp_path, monkeypatch):
     _write(merged_path, [curated_entry, discovered_entry])
 
     monkeypatch.setenv("IMAGEWORKS_REGISTRY_DIR", str(config_dir))
-    registry._REGISTRY_CACHE = None  # type: ignore[attr-defined]
+    _reset_registry_state()
     loaded = registry.load_registry(force=True)
 
     entry = loaded["curated-model"]
@@ -73,7 +81,7 @@ def test_save_registry_promotes_dynamic_entries(tmp_path, monkeypatch):
     registry.update_entries([entry], save=True)
 
     curated_raw = json.loads(curated_path.read_text(encoding="utf-8"))
-    assert curated_raw[0]["download_path"] is None
+    assert "download_path" not in curated_raw[0]
 
     discovered_raw = json.loads(discovered_path.read_text(encoding="utf-8"))
     names = {item["name"] for item in discovered_raw}
@@ -100,7 +108,7 @@ def test_duplicate_download_identity_raises(tmp_path, monkeypatch):
     _write(merged_path, [curated_entry])
 
     monkeypatch.setenv("IMAGEWORKS_REGISTRY_DIR", str(config_dir))
-    registry._REGISTRY_CACHE = None  # type: ignore[attr-defined]
+    _reset_registry_state()
     loaded = registry.load_registry(force=True)
 
     existing = loaded["base-model"]
@@ -108,3 +116,38 @@ def test_duplicate_download_identity_raises(tmp_path, monkeypatch):
 
     with pytest.raises(RegistryLoadError):
         registry.update_entries([duplicate], save=False)
+
+
+def test_curated_override_reload_without_force(tmp_path, monkeypatch):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    curated_path = config_dir / "model_registry.curated.json"
+    discovered_path = config_dir / "model_registry.discovered.json"
+    merged_path = config_dir / "model_registry.json"
+
+    curated_entry = _base_entry("override-model")
+    curated_entry["backend_config"]["extra_args"] = ["--initial", "1"]
+    curated_entry["metadata"] = {"registry_layer": "curated"}
+
+    discovered_entry = _base_entry("override-model")
+    discovered_entry["backend_config"]["extra_args"] = []
+    discovered_entry["metadata"] = {"created_from_download": True}
+
+    _write(curated_path, [curated_entry])
+    _write(discovered_path, [discovered_entry])
+    _write(merged_path, [curated_entry, discovered_entry])
+
+    monkeypatch.setenv("IMAGEWORKS_REGISTRY_DIR", str(config_dir))
+    _reset_registry_state()
+
+    first = registry.load_registry(force=True)
+    assert first["override-model"].backend_config.extra_args == ["--initial", "1"]
+
+    # Simulate manual curated edit
+    curated_entry["backend_config"]["extra_args"] = ["--updated", "flag"]
+    _write(curated_path, [curated_entry])
+    assert registry._layer_signature() != registry._REGISTRY_SIGNATURE  # type: ignore[attr-defined]
+
+    # Call without force; should detect change and reload
+    updated_entry = registry.get_entry("override-model")
+    assert updated_entry.backend_config.extra_args == ["--updated", "flag"]

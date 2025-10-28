@@ -59,6 +59,9 @@ _REGISTRY_CACHE: Dict[str, RegistryEntry] | None = None
 _REGISTRY_PATH: Path | None = None  # Path to merged snapshot (back-compat single file)
 _CURATED_NAMES: Set[str] = set()  # Names originating from curated layer (pre overlay)
 _SINGLE_FILE_MODE: bool = False  # Explicit path (legacy/simple) loading
+_REGISTRY_SIGNATURE: tuple[tuple[str, float, int], ...] | None = (
+    None  # File change marker
+)
 
 _TEMPLATE_CACHE_ENV = "IMAGEWORKS_TEMPLATE_CACHE_DIR"
 _DEFAULT_TEMPLATE_CACHE = Path("_staging") / "chat_templates"
@@ -141,6 +144,47 @@ _DYNAMIC_KEYS = {
     "probes",
     "version_lock",
 }
+
+
+def _file_stats(path: Path) -> tuple[float, int]:
+    try:
+        stat_result = path.stat()
+        try:
+            mtime = float(stat_result.st_mtime_ns)  # type: ignore[attr-defined]
+        except AttributeError:
+            mtime = float(stat_result.st_mtime)
+        size = int(stat_result.st_size)
+        return mtime, size
+    except FileNotFoundError:
+        return (-1.0, -1)
+    except Exception:  # noqa: BLE001
+        return (-1.0, -1)
+
+
+def _capture_signature(
+    paths: Iterable[Path],
+) -> tuple[tuple[str, float, int], ...]:
+    signature: list[tuple[str, float, int]] = []
+    for p in paths:
+        try:
+            expanded = p.expanduser()
+        except Exception:  # noqa: BLE001
+            expanded = p
+        mtime, size = _file_stats(expanded)
+        signature.append((str(expanded), mtime, size))
+    return tuple(signature)
+
+
+def _layer_signature() -> tuple[tuple[str, float, int], ...]:
+    return _capture_signature(
+        (_curated_path(), _discovered_path(), _merged_snapshot_path())
+    )
+
+
+def _single_file_signature(target: Path | None) -> tuple[tuple[str, float, int], ...]:
+    if target is None:
+        return tuple()
+    return _capture_signature((target,))
 
 
 def _is_dynamic(entry: RegistryEntry) -> bool:
@@ -440,10 +484,7 @@ def load_registry(
               backward compatibility; if given and layered files exist it's ignored.
         force: Force reload.
     """
-    global _REGISTRY_CACHE, _REGISTRY_PATH, _CURATED_NAMES, _SINGLE_FILE_MODE  # noqa: PLW0603
-
-    if _REGISTRY_CACHE is not None and not force:
-        return _REGISTRY_CACHE
+    global _REGISTRY_CACHE, _REGISTRY_PATH, _CURATED_NAMES, _SINGLE_FILE_MODE, _REGISTRY_SIGNATURE  # noqa: PLW0603
 
     merged_snapshot = _merged_snapshot_path()
     # Determine if caller requested explicit standalone path different from default merged snapshot.
@@ -455,7 +496,27 @@ def load_registry(
         _REGISTRY_PATH = Path(path)  # type: ignore[arg-type]
         _CURATED_NAMES = set()
         _SINGLE_FILE_MODE = True
+        _REGISTRY_SIGNATURE = _single_file_signature(_REGISTRY_PATH)
         return entries
+
+    if (
+        _REGISTRY_CACHE is not None
+        and not force
+        and not explicit_path
+        and no_layering
+        and path is not None
+    ):
+        signature = _single_file_signature(Path(path))
+        if signature == _REGISTRY_SIGNATURE:
+            return _REGISTRY_CACHE
+
+    if _REGISTRY_CACHE is not None and not force and not explicit_path:
+        if _SINGLE_FILE_MODE:
+            signature = _single_file_signature(_REGISTRY_PATH)
+        else:
+            signature = _layer_signature()
+        if signature == _REGISTRY_SIGNATURE:
+            return _REGISTRY_CACHE
 
     # If no_layering requested but no explicit path provided, fall back to layered default
     # Layered mode (default path)
@@ -484,12 +545,12 @@ def load_registry(
     _CURATED_NAMES = curated_names
     _REGISTRY_CACHE = entries
     _REGISTRY_PATH = merged_snapshot
+    _REGISTRY_SIGNATURE = _layer_signature()
     return entries
 
 
 def get_entry(name: str) -> RegistryEntry:
-    if _REGISTRY_CACHE is None:
-        load_registry()
+    load_registry()
     assert _REGISTRY_CACHE is not None  # for type checker
     try:
         return _REGISTRY_CACHE[name]
@@ -675,8 +736,7 @@ def _parse_entry(raw: dict) -> RegistryEntry:
 
 
 def list_models() -> List[str]:
-    if _REGISTRY_CACHE is None:
-        load_registry()
+    load_registry()
     assert _REGISTRY_CACHE is not None
     return sorted(_REGISTRY_CACHE.keys())
 
@@ -686,8 +746,7 @@ def find_by_download_identity(
 ) -> RegistryEntry | None:
     """Return the first registry entry matching the provided download identity."""
 
-    if _REGISTRY_CACHE is None:
-        load_registry()
+    load_registry()
     assert _REGISTRY_CACHE is not None
     identity = _build_download_identity(backend, download_path, checksum)
     if identity is None:
@@ -832,6 +891,7 @@ def save_registry(path: Path | None = None) -> Path:
         tmp.write_text(json.dumps(data, indent=2) + "\n")
         tmp.replace(target)
         _REGISTRY_PATH = target
+        _REGISTRY_SIGNATURE = _single_file_signature(_REGISTRY_PATH)
         return target
 
     curated_file = _curated_path()
@@ -893,6 +953,7 @@ def save_registry(path: Path | None = None) -> Path:
     mtmp.write_text(json.dumps(list(name_index.values()), indent=2) + "\n")
     mtmp.replace(merged_snapshot)
     _REGISTRY_PATH = merged_snapshot
+    _REGISTRY_SIGNATURE = _layer_signature()
     return merged_snapshot
 
 
