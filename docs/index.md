@@ -1,59 +1,44 @@
-# Imageworks Documentation Map
+# ImageWorks Documentation Index
 
-This index groups the documentation set into consistent categories so teams can
-quickly locate design references, domain guides, and operational procedures.
+The documentation set is now organised into four high-level categories:
 
-## Architecture & System Design
-- [Deterministic Model Serving](architecture/deterministic-model-serving.md)
-- [Model Loader Architecture & Integration](architecture/model-loader-overview.md)
-- [Layered Registry](architecture/layered-registry.md)
-- [Personal Tagger Architecture Overview](architecture/personal-tagger-architecture-overview.md)
-- [Project Structure](architecture/project-structure.md)
+- **Environment** – Workstation setup, tooling prerequisites, and global model
+  guidance.
+- **Reference** – Technical deep dives for every module plus historical
+  architecture, specs, and decisions.
+- **Runbooks** – Step-by-step operational guides for CLI and GUI workflows.
+- **Proposals** – Forward-looking plans and feature ideas awaiting execution.
+- **Unsure** – Temporary holding area when a document still needs reclassification.
 
-## Domain Guides
-### Mono (Competition Checker)
-- [Mono Overview](domains/mono/mono-overview.md)
-- [Mono Workflow](domains/mono/mono-workflow.md)
-- [Mono Technical Deep Dive](domains/mono/mono-technical.md)
-- [Processing Downloads Pipeline](domains/mono/processing-downloads.md)
+## Quick links
+- Environment: [`docs/environment/`](environment/)
+- Reference (module overviews, architecture, specs): [`docs/reference/`](reference/)
+- Runbooks: [`docs/runbooks/`](runbooks/)
+- Proposals: [`docs/proposals/`](proposals/)
+- Unsure: [`docs/unsure/`](unsure/)
 
-### Color Narrator
-- [Color Narrator Reference](domains/color-narrator/reference.md)
+## Module coverage
+Each ImageWorks module now has at least one reference document and one runbook:
 
-### Personal Tagger
-- [Overview](domains/personal-tagger/overview.md)
-- [Model Registry Notes](domains/personal-tagger/model-registry.md)
+| Module | Reference | Runbook |
+| --- | --- | --- |
+| Chat proxy | [`reference/chat-proxy.md`](reference/chat-proxy.md) | [`runbooks/chat-proxy.md`](runbooks/chat-proxy.md) |
+| Color narrator | [`reference/color-narrator.md`](reference/color-narrator.md) | [`runbooks/color-narrator.md`](runbooks/color-narrator.md) |
+| GUI control center | [`reference/gui.md`](reference/gui.md) | [`runbooks/gui.md`](runbooks/gui.md) |
+| Image similarity checker | [`reference/image-similarity-checker.md`](reference/image-similarity-checker.md) | [`runbooks/image-similarity-checker.md`](runbooks/image-similarity-checker.md) |
+| Model downloader | [`reference/model-downloader.md`](reference/model-downloader.md) | [`runbooks/model-downloader.md`](runbooks/model-downloader.md) |
+| Model loader | [`reference/model-loader.md`](reference/model-loader.md) | [`runbooks/model-loader.md`](runbooks/model-loader.md) |
+| Mono checker | [`reference/mono-checker.md`](reference/mono-checker.md) | [`runbooks/mono-checker.md`](runbooks/mono-checker.md) |
+| Personal tagger | [`reference/personal-tagger.md`](reference/personal-tagger.md) | [`runbooks/personal-tagger.md`](runbooks/personal-tagger.md) |
+| ZIP extractor | [`reference/zip-extract.md`](reference/zip-extract.md) | [`runbooks/zip-extract.md`](runbooks/zip-extract.md) |
 
-## How-To Guides
-- [AI Models and Prompting](guides/ai-models-and-prompting.md)
-- [IDE Setup (WSL/VSCode)](guides/ide-setup-wsl-vscode.md)
-- [Image Similarity Checker](guides/image-similarity-checker.md)
+Additional background material (architecture diagrams, ADRs, specs, and
+implementation reports) lives under `reference/` with subfolders for easy lookup.
 
-## Runbooks & Operational Playbooks
-- [Model Naming & Ollama Lingering Analysis](runbooks/model-naming-and-ollama-lingering.md)
-- [Ollama Summary and Actions](runbooks/ollama-summary-and-actions.md)
-- [OpenWebUI Setup](runbooks/openwebui-setup.md)
-- [vLLM Deployment Guide](runbooks/vllm-deployment-guide.md)
-
-## Reference Material
-- [Model Downloader Guide](reference/model-downloader.md)
-- [Chat Proxy (OpenAI-compatible)](reference/chat-proxy.md)
-- [Grounding Duplicate Detection Decisions](analysis/image-similarity-grounding.md)
-
-## Specifications & Proposals
-- [Imageworks Specification](spec/imageworks-specification.md)
-- [Color Narrator Specification](spec/imageworks-colour-narrator-specification.md)
-- [Imageworks Colour Narrator Design](spec/design/imageworks-colour-narrator-design.md)
-- [Proposals & Future Work](proposals/)
-
-## Decisions & Gaps
-- [ADR 0001 – Unified Model Identity and Registry Hygiene](decisions/0001-model-naming-and-registry.md)
-- Personal Tagger still needs dedicated operational runbooks (e.g. tips for XMP
-  integration, Lightroom workflows) to sit alongside the new overview and
-  registry notes.
-
-## Using This Map
-Start with the domain guides for workflow overviews, follow the architecture
-section for subsystem design, apply runbooks during operations, and consult the
-reference section for API or CLI specifics. Proposals house in-flight ideas and
-research that may evolve into future specs.
+## How to contribute
+1. Decide whether your change is environment, reference, runbook, or proposal
+   material. Use `unsure/` only if the document still needs triage.
+2. Update the relevant module reference and runbook when behaviour or CLI options
+   change.
+3. Link back to this index when adding new documents so future readers can find
+   them quickly.
