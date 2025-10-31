@@ -741,6 +741,8 @@ Options:
   --include-optional, -o     Include optional files (docs, examples)
   --force                    Force re-download even if model exists
   --non-interactive, -y      Non-interactive mode (use defaults)
+  --weights, -w TEXT         Comma-separated weight filenames to download (defaults to all variants)
+  --support-repo TEXT        Repository to fetch config/tokenizer assets from
 ```
 
 **What to expect:**
@@ -781,6 +783,11 @@ imageworks-download download "https://huggingface.co/microsoft/DialoGPT-medium" 
 
 # Non-interactive
 imageworks-download download "microsoft/DialoGPT-medium" --non-interactive
+
+# Download specific GGUF variant plus shared assets
+imageworks-download download "bartowski/cognitivecomputations_Dolphin-Mistral-24B-Venice-Edition-GGUF" \
+  --weights cognitivecomputations_Dolphin-Mistral-24B-Venice-Edition-Q4_K_M.gguf \
+  --support-repo dphn/Dolphin-Mistral-24B-Venice-Edition
 ```
 
 ### `list`

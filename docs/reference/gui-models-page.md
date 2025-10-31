@@ -33,6 +33,8 @@ The Models page (`2_🎯_Models.py`) has been completely reorganized to expose a
 - Model identifier input (owner/repo or URL)
 - Optional branch specification
 - Format preferences (gguf, awq, gptq, safetensors)
+- Weight variant picker (multi-select with select-all/none helpers)
+- Optional support repository input for shared config/tokenizer assets
 - Location selection (linux_wsl, windows_lmstudio, custom)
 - Include optional files checkbox
 - Force re-download checkbox
@@ -42,7 +44,7 @@ The Models page (`2_🎯_Models.py`) has been completely reorganized to expose a
 
 **CLI Equivalent:**
 ```bash
-uv run imageworks-download download <model> --format <fmt> --location <loc> [OPTIONS]
+uv run imageworks-download download <model> [--format <fmt>] [--weights "<file1,file2>"] [--support-repo <owner/repo>] [--location <loc>] [OPTIONS]
 ```
 
 #### Sub-tab: 📁 Scan Existing

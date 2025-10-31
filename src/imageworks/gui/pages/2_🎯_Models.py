@@ -5,6 +5,7 @@ import shlex
 import streamlit as st
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+import re
 
 from imageworks.gui.state import init_session_state
 from imageworks.gui.components.backend_monitor import (
@@ -19,6 +20,33 @@ from imageworks.gui.config import (
 )
 from imageworks.model_loader.registry import save_registry
 from imageworks.model_loader.registry import load_registry as load_model_registry
+
+
+_QUANT_TOKEN_PATTERN = re.compile(
+    r"(iq\d+_[a-z]+|q\d+_[a-z]+|q\d+|fp\d+|bf16|int\d+)", re.IGNORECASE
+)
+
+
+def _format_bytes(num: int) -> str:
+    """Convert bytes to human-readable string."""
+    if num <= 0:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(num)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.2f} {unit}"
+        value /= 1024
+    return f"{value:.2f} TB"
+
+
+def _guess_quant_label(filename: str) -> Optional[str]:
+    match = _QUANT_TOKEN_PATTERN.findall(filename)
+    if match:
+        return match[-1].upper()
+    return None
 
 
 def _classify_discovered_provider(entry: Dict[str, Any]) -> str:
@@ -1073,6 +1101,9 @@ def render_download_import_tab():
     with subtabs[0]:
         st.markdown("#### Download from HuggingFace")
 
+        weight_options: List[str] = []
+        support_repo_value = st.session_state.get("hf_support_repo", "").strip()
+
         # Initialize session state for analysis
         if "hf_analysis" not in st.session_state:
             st.session_state.hf_analysis = None
@@ -1255,6 +1286,69 @@ def render_download_import_tab():
             with col2:
                 st.metric("Optional Files", f"{optional_size / (1024**2):.2f} MB")
 
+            # Weight variants selection
+            weight_files = (
+                analysis.files.get("model_weights", []) if analysis.files else []
+            )
+            weight_options = [f.path for f in weight_files]
+            repo_key = f"{analysis.repository.owner}/{analysis.repository.repo}@{analysis.repository.branch}"
+            if st.session_state.get("hf_weight_variants_repo") != repo_key:
+                st.session_state["hf_weight_variants_repo"] = repo_key
+                st.session_state["hf_weight_variants_state"] = (
+                    weight_options[:1] if weight_options else []
+                )
+            st.session_state.setdefault(
+                "hf_weight_variants_state",
+                weight_options[:1] if weight_options else [],
+            )
+
+            if weight_files:
+                st.markdown("#### 🎚️ Weight Variants")
+                st.caption(
+                    "Select specific quantized weights to download. Leave empty to download all variants."
+                )
+                weight_labels = {
+                    option: f"{Path(option).name} ({_format_bytes(file_info.size)})"
+                    + (
+                        f" • {_guess_quant_label(Path(option).name)}"
+                        if _guess_quant_label(Path(option).name)
+                        else ""
+                    )
+                    for option, file_info in zip(weight_options, weight_files)
+                }
+                col_weights, col_weight_actions = st.columns([3, 1])
+                with col_weights:
+                    st.multiselect(
+                        "Weight files",
+                        options=weight_options,
+                        key="hf_weight_variants_state",
+                        format_func=lambda opt: weight_labels.get(opt, opt),
+                    )
+                with col_weight_actions:
+                    st.write("")
+                    if st.button("Select all", key="hf_weight_variants_all"):
+                        st.session_state["hf_weight_variants_state"] = list(
+                            weight_options
+                        )
+                        st.rerun()
+                    if st.button("Select none", key="hf_weight_variants_none"):
+                        st.session_state["hf_weight_variants_state"] = []
+                        st.rerun()
+            else:
+                st.info("No weight files detected in the repository analysis.")
+
+            st.markdown("#### 🧩 Support Repository (Optional)")
+            st.caption(
+                "Specify the original repository containing config/tokenizer files if this quantization repo omits them."
+            )
+            support_repo_value = st.text_input(
+                "Support repository",
+                value=st.session_state.get("hf_support_repo", ""),
+                key="hf_support_repo",
+                placeholder="owner/repo or owner/repo@branch",
+            ).strip()
+            support_repo_value = st.session_state.get("hf_support_repo", "").strip()
+
             # Warnings
             if warnings_list:
                 st.markdown("#### ⚠️ Warnings")
@@ -1265,6 +1359,8 @@ def render_download_import_tab():
                         st.warning(warning)
 
             st.markdown("---")
+
+        selected_weights = st.session_state.get("hf_weight_variants_state", [])
 
         # Download options
         col1, col2 = st.columns(2)
@@ -1317,6 +1413,11 @@ def render_download_import_tab():
                 cmd_parts.extend(["--location", location])
             elif custom_path:
                 cmd_parts.extend(["--location", custom_path])
+            if weight_options:
+                if selected_weights and 0 < len(selected_weights) < len(weight_options):
+                    cmd_parts.extend(["--weights", ",".join(selected_weights)])
+            if support_repo_value:
+                cmd_parts.extend(["--support-repo", support_repo_value])
             if include_optional:
                 cmd_parts.append("--include-optional")
             if force_redownload:
@@ -1336,6 +1437,11 @@ def render_download_import_tab():
                 command.extend(["--location", location])
             elif custom_path:
                 command.extend(["--location", custom_path])
+            if weight_options:
+                if selected_weights and 0 < len(selected_weights) < len(weight_options):
+                    command.extend(["--weights", ",".join(selected_weights)])
+            if support_repo_value:
+                command.extend(["--support-repo", support_repo_value])
             if include_optional:
                 command.append("--include-optional")
             if force_redownload:

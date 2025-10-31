@@ -166,6 +166,17 @@ def download_model(
     non_interactive: bool = typer.Option(
         False, "--non-interactive", "-y", help="Non-interactive mode (use defaults)"
     ),
+    weight_variants: Optional[str] = typer.Option(
+        None,
+        "--weights",
+        "-w",
+        help="Comma-separated list of weight filenames to download (defaults to all variants).",
+    ),
+    support_repo: Optional[str] = typer.Option(
+        None,
+        "--support-repo",
+        help="Optional repository to pull config/tokenizer assets from (e.g. original safetensors repo).",
+    ),
 ):
     """Download a model from HuggingFace or direct repository URL."""
 
@@ -179,6 +190,14 @@ def download_model(
                 fmt.strip() for fmt in format_preference.split(",") if fmt.strip()
             ]
 
+        selected_weights = None
+        if weight_variants:
+            selected_weights = [
+                variant.strip()
+                for variant in weight_variants.split(",")
+                if variant.strip()
+            ] or None
+
         entry = downloader.download(
             model_identifier=model,
             format_preference=preferred_formats,
@@ -187,6 +206,8 @@ def download_model(
             include_large_optional=include_large_optional,
             force_redownload=force,
             interactive=not non_interactive,
+            weight_variants=selected_weights,
+            support_repo=support_repo,
         )
         # Use registry display_name for user-facing confirmation
         display_name = entry.display_name or entry.name
@@ -937,11 +958,15 @@ def restore_ollama(
             return
         if dry_run:
             rprint(
-                f"Would restore {len(restore_objs)} entries: {', '.join(o.get('name') for o in restore_objs[:12])}{' ...' if len(restore_objs)>12 else ''}"
+                f"Would restore {len(restore_objs)} entries: {', '.join(o.get('name') for o in restore_objs[:12])}{' ...' if len(restore_objs) > 12 else ''}"
             )
             return
         # Convert minimal fields into RegistryEntry objects via parsing utility
-        from imageworks.model_loader.registry import _parse_entry, update_entries, save_registry  # type: ignore
+        from imageworks.model_loader.registry import (
+            _parse_entry,
+            update_entries,
+            save_registry,
+        )  # type: ignore
 
         restored_entries = []
         for obj in restore_objs:
@@ -1002,7 +1027,7 @@ def reset_discovered(
         remaining = [e for e in raw if e not in to_remove]
         if dry_run:
             rprint(
-                f"Would remove {len(to_remove)} discovered entries (backend={backend}): {', '.join(e.get('name') for e in to_remove[:10])}{' ...' if len(to_remove)>10 else ''}"
+                f"Would remove {len(to_remove)} discovered entries (backend={backend}): {', '.join(e.get('name') for e in to_remove[:10])}{' ...' if len(to_remove) > 10 else ''}"
             )
             return
         if backup:
@@ -1268,7 +1293,7 @@ def purge_deprecated(
             rprint("🛈 [cyan]No matching deprecated entries to purge[/cyan]")
             return
         rprint(
-            f"Will purge {len(to_delete)} deprecated entr{'y' if len(to_delete)==1 else 'ies'}:"
+            f"Will purge {len(to_delete)} deprecated entr{'y' if len(to_delete) == 1 else 'ies'}:"
         )
         for n in to_delete:
             rprint(f"  • {n}")
@@ -1330,7 +1355,7 @@ def purge_hf(
             rprint("🛈 [cyan]No HF (by path) entries to purge[/cyan]")
             return
         rprint(
-            f"Will purge {len(targets)} HF-path entr{'y' if len(targets)==1 else 'ies'} (root={root}):"
+            f"Will purge {len(targets)} HF-path entr{'y' if len(targets) == 1 else 'ies'} (root={root}):"
         )
         for n in targets:
             rprint(f"  • {n}")
@@ -1464,7 +1489,7 @@ def purge_logical_only(
             return
         if dry_run:
             rprint(
-                f"Would remove {len(removed)} logical-only entr{'y' if len(removed)==1 else 'ies'}: "
+                f"Would remove {len(removed)} logical-only entr{'y' if len(removed) == 1 else 'ies'}: "
                 + ", ".join(sorted(removed)[:12])
                 + (" ..." if len(removed) > 12 else "")
             )

@@ -13,7 +13,7 @@ import tempfile
 import shutil
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Sequence, Union
+from typing import Dict, List, Optional, Any, Sequence, Union, Set
 from dataclasses import dataclass
 
 from .config import get_config, DownloaderConfig
@@ -45,7 +45,11 @@ def _is_minimal_doc(path: str) -> bool:
 def _select_primary_readme(root: Path) -> Optional[Path]:
     """Pick the highest-priority README within the downloaded repo."""
 
-    candidates = [p for p in root.rglob("*") if p.is_file() and p.name.lower().startswith("readme")]
+    candidates = [
+        p
+        for p in root.rglob("*")
+        if p.is_file() and p.name.lower().startswith("readme")
+    ]
     if not candidates:
         return None
 
@@ -411,6 +415,8 @@ class ModelDownloader:
         include_large_optional: bool = False,
         force_redownload: bool = False,
         interactive: bool = True,
+        weight_variants: Optional[Sequence[str]] = None,
+        support_repo: Optional[str] = None,
     ) -> RegistryEntry:
         """Download a model from a URL or HuggingFace identifier."""
 
@@ -434,18 +440,51 @@ class ModelDownloader:
             repo_meta.storage_repo_name,
         )
 
-        required_files, optional_files, large_optional_files = self._partition_files(
-            analysis
+        weight_filter: Optional[Set[str]] = None
+        if weight_variants:
+            weight_filter = {v.strip() for v in weight_variants if v and v.strip()}
+            if not weight_filter:
+                weight_filter = None
+
+        primary_categories = self._partition_files(
+            analysis, weight_filter=weight_filter
         )
-        all_files = self._download_selected_files(
-            required_files,
-            optional_files,
-            large_optional_files,
-            include_optional,
-            include_large_optional,
-            repo_meta,
-            target_dir,
+        if not primary_categories["weights"]:
+            raise ValueError(
+                "No model weight files matched the requested variants."
+                if weight_filter
+                else "No model weight files were detected in the repository."
+            )
+
+        support_categories: Optional[Dict[str, List[Any]]] = None
+        support_repo_meta: Optional[RepositoryMetadata] = None
+        if support_repo:
+            self._log(f"🔗 Fetching support assets from {support_repo}")
+            support_analysis = self.url_analyzer.analyze_url(support_repo)
+            support_repo_meta = self._build_repository_metadata(support_analysis)
+            support_categories = self._partition_files(
+                support_analysis, weight_filter=set()
+            )
+
+        all_files = self._download_repository_assets(
+            repo_meta=repo_meta,
+            categories=primary_categories,
+            target_dir=target_dir,
+            include_optional=include_optional,
+            include_large_optional=include_large_optional,
+            include_weights=True,
         )
+
+        if support_categories and support_repo_meta:
+            support_files = self._download_repository_assets(
+                repo_meta=support_repo_meta,
+                categories=support_categories,
+                target_dir=target_dir,
+                include_optional=include_optional,
+                include_large_optional=False,
+                include_weights=False,
+            )
+            all_files.extend(support_files)
 
         self._ensure_verified(all_files, target_dir)
         chat_template_info = self._inspect_chat_templates(target_dir)
@@ -459,6 +498,8 @@ class ModelDownloader:
             target_dir,
             analysis,
             chat_template_info,
+            support_repo=support_repo if support_repo else None,
+            selected_weights=[f.path for f in primary_categories["weights"]],
         )
 
         return entry
@@ -590,39 +631,72 @@ class ModelDownloader:
         self._log(f"📁 Target directory: {target_dir}")
         return target_dir
 
-    def _partition_files(self, analysis: Any) -> tuple[List[Any], List[Any], List[Any]]:
-        required_files: List[Any] = []
-        optional_files: List[Any] = []
-        large_optional_files: List[Any] = []
+    def _partition_files(
+        self, analysis: Any, weight_filter: Optional[Set[str]] = None
+    ) -> Dict[str, List[Any]]:
+        categories = {
+            "weights": [],
+            "config": [],
+            "tokenizer": [],
+            "optional": [],
+            "large_optional": [],
+        }
+
+        filter_targets: Optional[Set[str]] = None
+        if weight_filter:
+            filter_targets = {item.lower() for item in weight_filter if item}
+
+        def _matches_weight(file_info: Any) -> bool:
+            if not filter_targets:
+                return True
+            path_lower = file_info.path.lower()
+            if path_lower in filter_targets:
+                return True
+            name_lower = Path(file_info.path).name.lower()
+            return name_lower in filter_targets
+
         for category, file_list in analysis.files.items():
-            if category in ["model_weights", "config", "tokenizer"]:
-                required_files.extend(file_list)
-            elif category in ["optional", "large_optional"]:
-                if category == "optional":
-                    optional_files.extend(file_list)
-                else:
-                    large_optional_files.extend(file_list)
+            if category == "model_weights":
+                for file_info in file_list:
+                    if _matches_weight(file_info):
+                        categories["weights"].append(file_info)
+                continue
+            if category == "config":
+                categories["config"].extend(file_list)
+                continue
+            if category == "tokenizer":
+                categories["tokenizer"].extend(file_list)
+                continue
+            if category == "optional":
+                categories["optional"].extend(file_list)
+                continue
+            if category == "large_optional":
+                categories["large_optional"].extend(file_list)
+                continue
 
-        if not required_files:
-            raise RuntimeError("No essential model files found")
+        return categories
 
-        return required_files, optional_files, large_optional_files
-
-    def _download_selected_files(
+    def _download_repository_assets(
         self,
-        required_files: List[Any],
-        optional_files: List[Any],
-        large_optional_files: List[Any],
+        *,
+        repo_meta: RepositoryMetadata,
+        categories: Dict[str, List[Any]],
+        target_dir: Path,
         include_optional: bool,
         include_large_optional: bool,
-        repo_meta: RepositoryMetadata,
-        target_dir: Path,
+        include_weights: bool,
     ) -> List[Any]:
         base_url = f"https://huggingface.co/{repo_meta.repository_id}/resolve/{repo_meta.branch}"
 
+        weights = categories.get("weights", []) if include_weights else []
+        config_files = categories.get("config", [])
+        tokenizer_files = categories.get("tokenizer", [])
+        optional_files = list(categories.get("optional", []))
+        large_optional_files = list(categories.get("large_optional", []))
+
         minimal_docs: List[Any] = []
+        seen_required = {f.path for f in weights + config_files + tokenizer_files}
         filtered_optional: List[Any] = []
-        seen_required = {f.path for f in required_files}
         for file_info in optional_files:
             if _is_minimal_doc(file_info.path) and file_info.path not in seen_required:
                 minimal_docs.append(file_info)
@@ -630,26 +704,36 @@ class ModelDownloader:
                 filtered_optional.append(file_info)
         optional_files = filtered_optional
 
-        self._log(f"📥 Downloading {len(required_files)} required files...")
-        if required_files:
-            self._download_files_with_aria2c(required_files, base_url, target_dir)
+        required_files: List[Any] = []
+        required_files.extend(weights)
+        required_files.extend(config_files)
+        required_files.extend(tokenizer_files)
 
-        if minimal_docs:
-            self._log(
-                f"📥 Downloading {len(minimal_docs)} repository docs (README/LICENSE)..."
-            )
-            self._download_files_with_aria2c(minimal_docs, base_url, target_dir)
+        def _download_if_needed(file_list: List[Any], description: str) -> None:
+            if not file_list:
+                return
+            files_to_fetch = []
+            for info in file_list:
+                target_path = target_dir / info.path
+                if target_path.exists():
+                    continue
+                files_to_fetch.append(info)
+            if not files_to_fetch:
+                return
+            self._log(f"📥 Downloading {len(files_to_fetch)} {description}...")
+            self._download_files_with_aria2c(files_to_fetch, base_url, target_dir)
 
-        if include_optional and optional_files:
-            self._log(f"📥 Downloading {len(optional_files)} optional files...")
-            self._download_files_with_aria2c(optional_files, base_url, target_dir)
+        _download_if_needed(required_files, "required files")
+        _download_if_needed(minimal_docs, "repository docs (README/LICENSE)")
 
-        if include_large_optional and large_optional_files:
-            self._log(
-                f"📥 Downloading {len(large_optional_files)} large optional files..."
-            )
-            self._download_files_with_aria2c(large_optional_files, base_url, target_dir)
-        combined = list(required_files)
+        if include_optional:
+            _download_if_needed(optional_files, "optional files")
+
+        if include_large_optional:
+            _download_if_needed(large_optional_files, "large optional files")
+
+        combined: List[Any] = []
+        combined.extend(required_files)
         combined.extend(minimal_docs)
         if include_optional:
             combined.extend(optional_files)
@@ -761,6 +845,8 @@ class ModelDownloader:
         target_dir: Path,
         analysis: Any,
         chat_template_info: Dict[str, Any],
+        support_repo: Optional[str],
+        selected_weights: Sequence[str],
     ) -> RegistryEntry:
         location_label = self._determine_location_label(target_dir)
         downloaded_files = [f.path for f in files]
@@ -790,11 +876,18 @@ class ModelDownloader:
         if license_candidates:
             try:
                 license_rel = (
-                    sorted(
-                        license_candidates,
-                        key=lambda p: (len(p.relative_to(target_dir).parts), p.as_posix()),
-                    )[0]
-                ).relative_to(target_dir).as_posix()
+                    (
+                        sorted(
+                            license_candidates,
+                            key=lambda p: (
+                                len(p.relative_to(target_dir).parts),
+                                p.as_posix(),
+                            ),
+                        )[0]
+                    )
+                    .relative_to(target_dir)
+                    .as_posix()
+                )
             except Exception:  # noqa: BLE001
                 license_rel = license_candidates[0].name
 
@@ -843,6 +936,16 @@ class ModelDownloader:
             )
             if producer_value and not entry.metadata.get("producer"):
                 entry.metadata["producer"] = producer_value
+
+            if support_repo:
+                entry.metadata["support_repository"] = support_repo
+            else:
+                entry.metadata.pop("support_repository", None)
+
+            if selected_weights:
+                entry.metadata["selected_weight_files"] = list(selected_weights)
+            else:
+                entry.metadata.pop("selected_weight_files", None)
 
             entry.metadata.update(
                 {
