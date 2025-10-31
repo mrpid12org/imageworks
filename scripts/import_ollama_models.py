@@ -3,10 +3,6 @@
 Usage:
   uv run python scripts/import_ollama_models.py [--backend ollama] [--location linux_wsl] [--dry-run]
 
-Requirements:
-  - Ollama CLI installed and accessible in PATH.
-  - `ollama list --format json` supported (Ollama >= 0.1.32).
-
 This script maps each Ollama model to a variant name using the unified naming
 rules (family derived from the model name reported by Ollama). Since Ollama
 stores models in its internal store, we cannot trivially map to an external
@@ -14,20 +10,21 @@ path; we still record a pseudo path pointing to the Ollama models directory
 if discoverable, otherwise we set download_path to None (meaning not directly
 filesystem-managed by us). For reproducibility, you may later augment entries
 with explicit artifact hashes once exported.
+
+The importer talks to the Ollama daemon over HTTP (`OLLAMA_BASE_URL`,
+defaulting to `http://127.0.0.1:11434`). No local CLI installation is
+required as long as the API endpoint is reachable.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
-import subprocess
 import sys
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from imageworks.model_loader.download_adapter import (
     record_download,
@@ -38,10 +35,9 @@ from imageworks.model_loader.naming import build_identity, ModelIdentity
 from imageworks.model_loader.simplified_naming import simplified_slug_for_fields
 from imageworks.model_loader import registry as unified_registry
 from imageworks.tools.model_downloader.quant_utils import is_quant_token
+from imageworks.tools.ollama_api import OllamaClient, OllamaError
 
 DEFAULT_BACKEND = "ollama"
-
-_TAGS_CACHE: Dict[str, Dict] | None = None
 
 # Minimal sample dataset used when the Ollama CLI is unavailable during dry runs.
 # This allows unit tests and documentation examples to exercise the normalization
@@ -73,132 +69,27 @@ class OllamaModelData:
     capabilities: Optional[List[str]]
 
 
-def _fetch_tags() -> Dict[str, Dict]:
-    global _TAGS_CACHE
-    if _TAGS_CACHE is not None:
-        return _TAGS_CACHE
-    tags_index: Dict[str, Dict] = {}
-    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    # HTTP first
-    try:
-        with urllib.request.urlopen(
-            f"{base_url}/api/tags", timeout=1.5
-        ) as resp:  # nosec B310
-            data = json.loads(resp.read().decode())
-            if isinstance(data, dict) and isinstance(data.get("models"), list):
-                for m in data["models"]:
-                    name = m.get("name")
-                    if not name:
-                        continue
-                    tags_index[name] = m
-    except Exception:  # noqa: BLE001
-        pass
-    # Fallback: use list_ollama_models() parsed output for size only (we already do elsewhere)
-    _TAGS_CACHE = tags_index
-    return tags_index
+def list_ollama_models(
+    client: OllamaClient,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """Return models reported by the daemon alongside a lookup index."""
 
-
-def find_ollama_store() -> Optional[Path]:
-    # Common Linux location ~/.ollama/models
-    candidates = [
-        Path(os.environ.get("OLLAMA_MODELS", "")),
-        Path.home() / ".ollama" / "models",
-    ]
-    for c in candidates:
-        if c and c.exists():
-            return c
-    return None
-
-
-SIZE_UNITS = {"KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
-
-
-def _parse_size(value: str, unit: str) -> int:
-    try:
-        return int(float(value) * SIZE_UNITS[unit.upper()])
-    except Exception:  # noqa: BLE001
-        return 0
-
-
-def _fallback_parse_plain_list(output: str) -> List[Dict]:
-    """Parse the legacy plain-text table output of `ollama list`.
-
-    Expected format (columns separated by variable spaces):
-
-    NAME    ID    SIZE    MODIFIED
-    qwen2.5vl:7b  5ced39dfa4ba  6.0 GB  7 hours ago
-    """
-    lines = [line.rstrip() for line in output.splitlines() if line.strip()]
-    if not lines:
-        return []
-    # Remove header if first line starts with NAME
-    if lines and lines[0].lower().startswith("name"):
-        lines = lines[1:]
-    models: List[Dict] = []
-    pattern = re.compile(
-        r"^(?P<name>\S+)\s+(?P<id>[0-9a-f]{6,})\s+(?P<size_val>\d+(?:\.\d+)?)\s+(?P<size_unit>[KMGTP]B)\s+(?P<modified>.+)$"
-    )
-    for line in lines:
-        m = pattern.match(line)
-        if not m:
-            # Skip lines we cannot parse; continue
+    models = client.list_models()
+    tags_index: Dict[str, Dict[str, Any]] = {}
+    normalized: List[Dict[str, Any]] = []
+    for item in models:
+        name = item.get("name") or item.get("model")
+        if not name:
             continue
-        size_bytes = _parse_size(m.group("size_val"), m.group("size_unit"))
-        models.append(
-            {
-                "name": m.group("name"),
-                "id": m.group("id"),
-                "size": size_bytes,
-                "modified": m.group("modified"),
-            }
-        )
-    return models
-
-
-def list_ollama_models() -> list[dict]:
-    """Return ollama models, trying JSON first then falling back to plain text.
-
-    Older Ollama versions do not support `--format json`; we detect this and
-    parse the textual table instead.
-    """
-    # First attempt JSON mode
-    try:
-        proc = subprocess.run(
-            ["ollama", "list", "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except FileNotFoundError as exc:  # noqa: BLE001
-        raise RuntimeError("'ollama' binary not found in PATH") from exc
-    except subprocess.CalledProcessError:
-        proc = None  # fall back
-
-    if proc and proc.returncode == 0:
-        try:
-            data = json.loads(proc.stdout)
-            if isinstance(data, list):
-                return data
-        except Exception:
-            # fall through to plaintext parsing
-            pass
-
-    # Plain text fallback
-    try:
-        proc_txt = subprocess.run(
-            ["ollama", "list"], capture_output=True, text=True, check=True
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:  # noqa: BLE001
-        raise RuntimeError(
-            "Failed to run 'ollama list' in either JSON or plain modes"
-        ) from exc
-
-    models = _fallback_parse_plain_list(proc_txt.stdout)
-    if not models:
-        raise RuntimeError(
-            "Could not parse output of 'ollama list' (no models parsed). Consider upgrading Ollama."
-        )
-    return models
+        size = item.get("size")
+        if isinstance(size, str):
+            try:
+                size = int(size)
+            except ValueError:
+                size = None
+        normalized.append({"name": name, "size": size, "raw": item})
+        tags_index[name] = item
+    return normalized, tags_index
 
 
 def _normalize_segment(seg: str, *, preserve_underscores: bool = False) -> str:
@@ -233,29 +124,62 @@ def _split_name(name: str) -> tuple[str, Optional[str]]:
 
 def _derive_family_and_quant(full_name: str) -> tuple[str, Optional[str]]:
     base, tag = _split_name(full_name)
-    base_norm = _normalize_segment(base)
+    path_segments = [seg for seg in re.split(r"[\\/]", base) if seg]
+    if path_segments:
+        base_candidate = path_segments[-1]
+    else:
+        base_candidate = base
+
+    lower = base_candidate.lower()
+    quant_from_base: Optional[str] = None
+
+    for pattern in (
+        r"q[0-9](?:[_-][a-z0-9]+)*",
+        r"mxfp[0-9]+",
+        r"mx?fp[0-9]+",
+        r"int[0-9]+",
+        r"fp[0-9]+",
+    ):
+        match = re.search(pattern, lower)
+        if match:
+            quant_from_base = match.group(0).replace("-", "_")
+            lower = lower[: match.start()] + " " + lower[match.end() :]
+            break
+
+    lower = re.sub(r"(gguf|ggml|safetensors)", " ", lower)
+    base_norm = _normalize_segment(lower)
+    family_norm = base_norm or _normalize_segment(base_candidate)
+
     if tag is None:
-        return base_norm, None
-    # For quant detection we preserve underscores first
+        return family_norm, quant_from_base.lower() if quant_from_base else None
+
     tag_raw_norm = _normalize_segment(tag, preserve_underscores=True)
     tag_norm_for_family = _normalize_segment(tag)
-    # Strategy A: if tag is quant token → quant; else tag becomes part of family
     if is_quant_token(tag_raw_norm):
-        return base_norm, tag_raw_norm
-    # treat long tag names similarly (e.g., 7b, latest)
-    family = f"{base_norm}-{tag_norm_for_family}"
-    return family, None
+        return family_norm, tag_raw_norm
+
+    family = f"{family_norm}-{tag_norm_for_family}"
+    quant = quant_from_base.lower() if quant_from_base else None
+    return family, quant
 
 
 def _collect_model_data(
-    model: dict, tags_index: Dict[str, Dict]
+    client: Optional[OllamaClient],
+    model: dict,
+    tags_index: Dict[str, Dict[str, Any]],
 ) -> OllamaModelData | None:
     name = model.get("name") or model.get("model")
     size_bytes = model.get("size") or 0
     if not name:
         return None
 
-    detail = _ollama_show(name) or {}
+    detail: Dict[str, Any] = {}
+    if client is not None:
+        try:
+            detail = client.show_model(name) or {}
+        except OllamaError:
+            detail = {}
+
     detail_size = 0
     layers = detail.get("layers") or []
     if isinstance(layers, list):
@@ -350,8 +274,9 @@ def _collect_model_data(
         "ollama_capabilities": capabilities,
     }
 
-    if not quant and name in tags_index:
-        tag_details = tags_index[name].get("details") or {}
+    tag_entry = tags_index.get(name) or {}
+    if not quant and isinstance(tag_entry, dict):
+        tag_details = tag_entry.get("details") or {}
         if isinstance(tag_details, dict):
             # Keep this as an additional fallback
             quant_candidate = tag_details.get("quantization_level")
@@ -388,113 +313,6 @@ def _print_dry_run(data: OllamaModelData) -> None:
             "         arch="
             f"{data.architecture or '-'} params={data.parameters or '-'} ctx={data.context_length or '-'}"
         )
-
-
-def _show_via_http(name: str) -> dict | None:
-    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    try:
-        req = urllib.request.Request(
-            f"{base_url}/api/show",
-            data=json.dumps({"model": name}).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=1.5) as resp:  # nosec B310
-            body = resp.read().decode()
-            data = json.loads(body)
-            if isinstance(data, dict):
-                return data
-    except Exception:  # noqa: BLE001
-        return None
-    return None
-
-
-def _show_via_python(name: str) -> dict | None:
-    try:
-        import importlib
-
-        spec = importlib.util.find_spec("ollama")  # type: ignore[attr-defined]
-        if spec is None:
-            return None
-        from ollama import show as _py_show  # type: ignore
-
-        data = _py_show(name)
-        if isinstance(data, dict):
-            return data
-    except Exception:  # noqa: BLE001
-        return None
-    return None
-
-
-def _show_via_cli_json(name: str) -> dict | None:
-    try:
-        proc = subprocess.run(
-            ["ollama", "show", name, "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except Exception:  # noqa: BLE001
-        return None
-    try:
-        data = json.loads(proc.stdout or "{}")
-    except Exception:  # noqa: BLE001
-        return None
-    if isinstance(data, dict):
-        return data
-    return None
-
-
-def _show_via_cli_text(name: str) -> dict | None:
-    try:
-        proc_txt = subprocess.run(
-            ["ollama", "show", name], capture_output=True, text=True, check=True
-        )
-    except Exception:  # noqa: BLE001
-        return None
-    lines = proc_txt.stdout.splitlines()
-    quant = None
-    arch = None
-    params = None
-    ctx = None
-    for line in lines:
-        lower = line.strip().lower()
-        if lower.startswith("quantization"):
-            parts = line.split()
-            if len(parts) >= 2:
-                quant = parts[-1]
-        elif lower.startswith("architecture"):
-            arch = line.split()[-1]
-        elif lower.startswith("parameters"):
-            tokens = line.split()
-            if tokens:
-                params = tokens[-1]
-        elif lower.startswith("context length"):
-            tokens = line.split()
-            if tokens:
-                ctx = tokens[-1]
-    return {
-        "details": {
-            "architecture": arch,
-            "parameters": params,
-            "context_length": ctx,
-            "quantization": quant,
-        }
-    }
-
-
-def _ollama_show(name: str) -> dict | None:
-    """Return detailed metadata for a model using layered fallbacks."""
-
-    for resolver in (
-        _show_via_http,
-        _show_via_python,
-        _show_via_cli_json,
-        _show_via_cli_text,
-    ):
-        data = resolver(name)
-        if isinstance(data, dict):
-            return data
-    return None
 
 
 def _purge_existing_ollama_entries(backend: str) -> int:
@@ -584,7 +402,7 @@ def _persist_existing_entry(
         existing.backend_config, "host", None
     ):
         existing.backend_config.host = os.environ.get(
-            "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+            "IMAGEWORKS_OLLAMA_HOST", "imageworks-ollama"
         )
     unified_registry.update_entries([existing], save=True)
 
@@ -674,6 +492,7 @@ def _deprecate_placeholder_entries(backend: str) -> None:
 
 
 def import_models(
+    client: Optional[OllamaClient],
     models: list[dict],
     *,
     backend: str,
@@ -681,12 +500,13 @@ def import_models(
     dry_run: bool,
     deprecate_placeholders: bool,
     purge: bool,
+    tags_index: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> int:
     imported = 0
-    tags_index = _fetch_tags()
+    tags_index = tags_index or {}
     registry = _prepare_registry_for_import(backend, purge=purge, dry_run=dry_run)
     for model in models:
-        data = _collect_model_data(model, tags_index)
+        data = _collect_model_data(client, model, tags_index)
         if data is None:
             continue
         if dry_run:
@@ -703,6 +523,58 @@ def import_models(
     if not dry_run and deprecate_placeholders:
         _deprecate_placeholder_entries(backend)
     return imported
+
+
+def run_import(
+    *,
+    backend: str = DEFAULT_BACKEND,
+    location: str = "linux_wsl",
+    dry_run: bool = False,
+    deprecate_placeholders: bool = False,
+    purge_existing: bool = False,
+    client: Optional[OllamaClient] = None,
+) -> int:
+    """Programmatic entry point, optionally reusing an existing OllamaClient."""
+
+    owns_client = client is None
+    local_client = client or OllamaClient()
+    tags_index: Dict[str, Dict[str, Any]] = {}
+
+    try:
+        models, tags_index = list_ollama_models(local_client)
+    except OllamaError:
+        if not dry_run:
+            if owns_client:
+                local_client.close()
+            raise
+        print(
+            "[import-ollama] Ollama API unavailable; using sample dataset for dry run.",
+            file=sys.stderr,
+        )
+        models = [dict(item) for item in _FALLBACK_SAMPLE_MODELS]
+        tags_index = {
+            item["name"]: {} for item in models if isinstance(item.get("name"), str)
+        }
+        if owns_client:
+            local_client.close()
+            local_client = None
+
+    try:
+        count = import_models(
+            local_client,
+            models,
+            backend=backend,
+            location=location,
+            dry_run=dry_run,
+            deprecate_placeholders=deprecate_placeholders,
+            purge=purge_existing,
+            tags_index=tags_index,
+        )
+    finally:
+        if owns_client and local_client is not None:
+            local_client.close()
+
+    return count
 
 
 def main() -> int:
@@ -724,25 +596,16 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
-        models = list_ollama_models()
-    except RuntimeError as exc:
-        if args.dry_run:
-            print(
-                f"[import-ollama] {exc}. Using sample dataset for dry run output.",
-                file=sys.stderr,
-            )
-            models = [dict(item) for item in _FALLBACK_SAMPLE_MODELS]
-        else:
-            print(f"Error listing Ollama models: {exc}", file=sys.stderr)
-            return 1
-    count = import_models(
-        models,
-        backend=args.backend,
-        location=args.location,
-        dry_run=args.dry_run,
-        deprecate_placeholders=args.deprecate_placeholders,
-        purge=args.purge_existing,
-    )
+        count = run_import(
+            backend=args.backend,
+            location=args.location,
+            dry_run=args.dry_run,
+            deprecate_placeholders=args.deprecate_placeholders,
+            purge_existing=args.purge_existing,
+        )
+    except OllamaError as exc:
+        print(f"Error listing Ollama models: {exc}", file=sys.stderr)
+        return 1
     print(f"Imported {count} Ollama model(s){' (dry run)' if args.dry_run else ''}.")
     return 0
 

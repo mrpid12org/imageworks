@@ -494,7 +494,7 @@ When `autostart_enabled = True` (default):
 ```json
 {
   "backend_config": {
-    "host": "host.docker.internal",  // For Docker → host
+    "host": "imageworks-ollama",  // Default container service (override via IMAGEWORKS_OLLAMA_HOST)
     "port": 11434
   }
 }

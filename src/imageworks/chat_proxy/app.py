@@ -13,6 +13,7 @@ from .autostart import AutostartManager
 from .logging_utils import JsonlLogger
 from .forwarder import ChatForwarder
 from .vllm_manager import VllmManager
+from .ollama_manager import OllamaManager
 from .capabilities import supports_vision
 from .errors import ProxyError
 from .profile_manager import ProfileManager
@@ -33,9 +34,17 @@ logging.basicConfig(level=logging.INFO)
 _cfg = ProxyConfig.load()
 _metrics = MetricsAggregator()
 _vllm_manager = VllmManager(_cfg)
+_ollama_manager = OllamaManager(_cfg)
 _autostart = AutostartManager(_cfg.autostart_map_raw, _cfg, _vllm_manager)
 _logger = JsonlLogger(_cfg.log_path, _cfg.max_log_bytes)
-_forwarder = ChatForwarder(_cfg, _metrics, _autostart, _logger, _vllm_manager)
+_forwarder = ChatForwarder(
+    _cfg,
+    _metrics,
+    _autostart,
+    _logger,
+    _vllm_manager,
+    _ollama_manager,
+)
 
 # Phase 2: Profile management and role-based model selection
 _profile_manager: ProfileManager | None = None
@@ -151,6 +160,16 @@ async def _startup():  # pragma: no cover
             pass
 
 
+@app.on_event("shutdown")
+async def _shutdown():  # pragma: no cover
+    try:
+        await _vllm_manager.deactivate()
+    except Exception:  # noqa: BLE001
+        pass
+    await _ollama_manager.unload_all()
+    await _ollama_manager.aclose()
+
+
 @app.get("/v1/models")
 async def list_models_api():
     # Hot-reload registry if the file changed on disk
@@ -185,6 +204,13 @@ async def list_models_api():
         ):
             # Hide entries that neither have local weights nor a configured backend when strict mode is on.
             continue
+        if entry.backend == "ollama" and not _cfg.include_non_installed:
+            metadata = getattr(entry, "metadata", {}) or {}
+            created_from_download = bool(metadata.get("created_from_download"))
+            has_download = bool(getattr(entry, "download_path", None))
+            if not created_from_download and not has_download:
+                # Skip curated Ollama placeholders without local installs
+                continue
         # Use registry display_name for UI display
         display = entry.display_name or entry.name or ""
         if _cfg.suppress_decorations:

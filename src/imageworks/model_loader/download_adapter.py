@@ -522,7 +522,7 @@ def record_download(
             entry.backend_config, "host", None
         ):
             entry.backend_config.host = _os.environ.get(
-                "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+                "IMAGEWORKS_OLLAMA_HOST", "imageworks-ollama"
             )
         # Refresh auto-managed display names so CLI/proxy stay concise.
         should_refresh_display = False
@@ -691,7 +691,7 @@ def record_download(
         entry.backend_config.port = default_backend_port(entry.backend)
     if entry.backend == "ollama" and not entry.backend_config.host:
         entry.backend_config.host = _os.environ.get(
-            "IMAGEWORKS_OLLAMA_HOST", "host.docker.internal"
+            "IMAGEWORKS_OLLAMA_HOST", "imageworks-ollama"
         )
     entry = compute_artifact_hashes(entry)
     entry.capabilities = derive_capabilities(

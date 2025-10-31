@@ -154,9 +154,15 @@ def write_summary(summary_path: Path, results: List[dict]):
             f.write("\n")
 
 
-@app.command()
+@app.command("run")
 def run(
-    zip_dir: Optional[str] = typer.Option(None, help="Directory containing ZIP files."),
+    zip_dir: Optional[str] = typer.Option(
+        None, help="Directory containing ZIP files (ignored if --zip-file is set)."
+    ),
+    zip_file: Optional[str] = typer.Option(
+        None,
+        help="Path to a single ZIP file to extract (takes precedence over --zip-dir).",
+    ),
     extract_root: Optional[str] = typer.Option(
         None, help="Directory to extract images to."
     ),
@@ -172,11 +178,24 @@ def run(
     # Use defaults from pyproject.toml if not provided
     default_zip_dir, default_extract_root = get_zip_extract_defaults()
     zip_dir = Path(zip_dir or default_zip_dir)
+    zip_file_path: Optional[Path] = Path(zip_file).resolve() if zip_file else None
+    if zip_file_path:
+        if not zip_file_path.exists():
+            raise typer.BadParameter(f"ZIP file does not exist: {zip_file_path}")
+        if not zip_file_path.is_file():
+            raise typer.BadParameter(f"Not a file: {zip_file_path}")
+        if zip_file_path.suffix.lower() != ".zip":
+            raise typer.BadParameter(
+                f"Unsupported file type for --zip-file (expected .zip): {zip_file_path}"
+            )
     extract_root = Path(extract_root or default_extract_root)
     output_file = Path(output_file)
     extract_root.mkdir(parents=True, exist_ok=True)
 
-    zip_files = list(zip_dir.glob("*.zip"))
+    if zip_file_path:
+        zip_files = [zip_file_path]
+    else:
+        zip_files = list(zip_dir.glob("*.zip"))
     results = []
     total_images = 0
     for zip_path in zip_files:

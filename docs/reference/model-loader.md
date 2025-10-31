@@ -118,9 +118,10 @@ the switch fails.
 
 The downloader/importer layer also sets sensible defaults for Ollama entries.
 When an Ollama model is recorded and no host is provided, the tooling now
-injects `backend_config.host = "host.docker.internal"` (overridable with
-`IMAGEWORKS_OLLAMA_HOST`) so proxy containers can talk to the host daemon
-without additional manual curation.
+injects `backend_config.host = "imageworks-ollama"` (overridable with
+`IMAGEWORKS_OLLAMA_HOST`) so proxy containers talk to the bundled Ollama
+service without additional curation. Point the environment variable at a host
+daemon if you run Ollama outside Docker.
 
 ### `current-model`
 

@@ -139,7 +139,7 @@ def test_select_model_respects_host_override(tmp_path: Path, monkeypatch):
             "backend_config": {
                 "port": 8126,
                 "model_path": "/m",
-                "host": "host.docker.internal",
+                "host": "imageworks-ollama",
             },
             "capabilities": {"vision": True},
             "artifacts": {"aggregate_sha256": "", "files": []},
@@ -155,7 +155,7 @@ def test_select_model_respects_host_override(tmp_path: Path, monkeypatch):
     registry.load_registry(path, force=True)
 
     sel = select_model("custom-host")
-    assert sel.endpoint_url.startswith("http://host.docker.internal:8126")
+    assert sel.endpoint_url.startswith("http://imageworks-ollama:8126")
 
 
 def test_select_model_respects_base_url_override(tmp_path: Path, monkeypatch):

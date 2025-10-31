@@ -12,7 +12,7 @@ services:
       - CHAT_PROXY_SUPPRESS_DECORATIONS=1
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
       - CHAT_PROXY_AUTOSTART_ENABLED=1
-      - CHAT_PROXY_LOOPBACK_ALIAS=
+      - CHAT_PROXY_OLLAMA_BASE_URL=http://imageworks-ollama:11434
     ports:
       - "8100:8100"
     volumes:
@@ -27,3 +27,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: imageworks-ollama
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - OLLAMA_ORIGINS=*
+    volumes:
+      - ./ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"

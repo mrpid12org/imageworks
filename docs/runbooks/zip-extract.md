@@ -11,7 +11,7 @@ syncing metadata.
 
 ## 2. Dry run
 ```bash
-uv run imageworks-zip run --dry-run \
+uv run imageworks-zip --dry-run \
   --zip-dir /mnt/c/Users/me/Downloads/ccc \
   --extract-root /mnt/d/Competition/images
 ```
@@ -20,12 +20,15 @@ uv run imageworks-zip run --dry-run \
 
 ## 3. Extract with metadata
 ```bash
-uv run imageworks-zip run \
+uv run imageworks-zip \
   --include-xmp --update-all-metadata \
   --summary outputs/zip_extract_summary.md
 ```
 - `--include-xmp` loads sidecars for title/author sync; `--update-all-metadata`
   overwrites existing JPEG metadata rather than skipping duplicates.【F:src/imageworks/tools/zip_extract.py†L70-L140】
+- `--zip-file /path/to/archive.zip` targets a single archive when you need to
+  reprocess one submission without touching the rest of the directory (takes
+  precedence over `--zip-dir`).【F:src/imageworks/tools/zip_extract.py†L70-L190】
 - Default behaviour ensures the `ccc` keyword exists on every image for Lightroom
   organisation.【F:src/imageworks/tools/zip_extract.py†L70-L140】
 

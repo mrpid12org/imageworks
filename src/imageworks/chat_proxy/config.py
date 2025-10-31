@@ -72,6 +72,8 @@ class ProxyConfig:
     reasoning_truncate_history: bool = False  # Opt-in for now
     reasoning_keep_system: bool = True
     reasoning_keep_last_n_turns: int = 1  # Keep 1 turn of context
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_stop_timeout_s: int = 30
 
     @classmethod
     def load(cls) -> "ProxyConfig":
@@ -124,4 +126,8 @@ class ProxyConfig:
             reasoning_keep_last_n_turns=_get_int(
                 "CHAT_PROXY_REASONING_KEEP_LAST_N_TURNS", 1
             ),
+            ollama_base_url=os.environ.get(
+                "CHAT_PROXY_OLLAMA_BASE_URL", "http://127.0.0.1:11434"
+            ),
+            ollama_stop_timeout_s=_get_int("CHAT_PROXY_OLLAMA_STOP_TIMEOUT_S", 30),
         )

@@ -36,7 +36,7 @@ This document explains how models are named across backends, how display names d
 Even if you haven’t deleted any Ollama models manually, lingering entries can appear because of these factors:
 
 1) Importer is additive unless purged
-- The Ollama importer (`scripts/import_ollama_models.py`) creates/updates entries based on `ollama list` and `ollama show`.
+- The Ollama importer (`scripts/import_ollama_models.py`) creates/updates entries via the Ollama HTTP API (`/api/tags`, `/api/show`).
 - It does not remove older Ollama entries unless you pass `--purge-existing`. Over time, renamed tags or format/quant changes leave old entries behind in the registry.
 
 2) Proxy does not validate Ollama tags (current behavior)
@@ -69,7 +69,8 @@ Even if you haven’t deleted any Ollama models manually, lingering entries can 
 Pick any subset of these; they’re independent.
 
 1) Importer reconciliation (recommended)
-- During each import, compute the set of current Ollama tags from `ollama list` / `/api/tags`.
+- During each import, compute the set of current Ollama tags from `/api/tags`
+  (the same data surfaced by `ollama list`).
 - Remove (or deprecate) any registry entries where `backend == 'ollama'` and `served_model_id` is not present in the tags set.
 - Benefit: The registry reflects the current local Ollama state after each import, without needing `--purge-existing`.
 

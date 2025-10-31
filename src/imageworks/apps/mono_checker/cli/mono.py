@@ -519,6 +519,27 @@ def _generate_heatmap_image(
         os.utime(out_path, (st.st_atime, st.st_mtime))
     except Exception:
         pass
+
+    # Copy XMP/keyword metadata from the original image so overlays inherit verdict tags.
+    try:
+        cmd = [
+            "exiftool",
+            "-overwrite_original",
+            "-TagsFromFile",
+            str(path),
+            "-XMP:all",
+            "-IPTC:Keywords",
+        ]
+        if description:
+            cmd.append(f"-ImageDescription={description}")
+        cmd.append(str(out_path))
+        subprocess.run(
+            cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        # If ExifTool is unavailable or copying fails, fall back to the EXIF written above.
+        pass
+
     return out_path
 
 
@@ -850,52 +871,6 @@ def check(
         (summary_text + "\n") if summary_text else "", encoding="utf-8"
     )
 
-    if auto_heatmap:
-        fail_infos: List[Tuple[Path, Optional[str]]] = []
-        for entry in results_by_file.values():
-            base_path = entry.get("_path")
-            if not base_path:
-                continue
-            result_dict = entry.get("lab")
-            if isinstance(result_dict, dict):
-                verdict = result_dict.get("verdict")
-                if verdict in {"fail", "pass_with_query"}:
-                    desc = result_dict.get("reason_summary")
-                    fail_infos.append(
-                        (Path(base_path), desc if verdict != "pass" else desc)
-                    )
-        if fail_infos:
-            generated = 0
-            skipped = 0
-            for p, summary in fail_infos:
-                for mode in auto_heatmap_modes:
-                    out_path = _generate_heatmap_image(
-                        p,
-                        mode,
-                        final_neutral_tol,
-                        auto_heatmap_sat_threshold,
-                        auto_heatmap_chroma_clip,
-                        auto_heatmap_alpha,
-                        auto_heatmap_quality,
-                        auto_heatmap_suffix or "",
-                        summary,
-                    )
-                    if out_path:
-                        generated += 1
-                    else:
-                        skipped += 1
-
-            if generated > 0 and skipped > 0:
-                typer.echo(
-                    f"Generated {generated} heatmap overlay(s) for review images ({skipped} already existed)"
-                )
-            elif generated > 0:
-                typer.echo(
-                    f"Generated {generated} heatmap overlay(s) for review images"
-                )
-            elif skipped > 0:
-                typer.echo(f"Overlays already exist for {skipped} review images")
-
     if csv_writer:
         csv_methods = ["lab"]
         for name in sorted(results_by_file.keys()):
@@ -1030,6 +1005,52 @@ def check(
         subprocess.run(cmd, check=True)
         typer.echo(f"Running {script_path} ...")
         subprocess.run(["bash", str(script_path)], check=True)
+
+    if auto_heatmap:
+        fail_infos: List[Tuple[Path, Optional[str]]] = []
+        for entry in results_by_file.values():
+            base_path = entry.get("_path")
+            if not base_path:
+                continue
+            result_dict = entry.get("lab")
+            if isinstance(result_dict, dict):
+                verdict = result_dict.get("verdict")
+                if verdict in {"fail", "pass_with_query"}:
+                    desc = result_dict.get("reason_summary")
+                    fail_infos.append(
+                        (Path(base_path), desc if verdict != "pass" else desc)
+                    )
+        if fail_infos:
+            generated = 0
+            skipped = 0
+            for p, summary in fail_infos:
+                for mode in auto_heatmap_modes:
+                    out_path = _generate_heatmap_image(
+                        p,
+                        mode,
+                        final_neutral_tol,
+                        auto_heatmap_sat_threshold,
+                        auto_heatmap_chroma_clip,
+                        auto_heatmap_alpha,
+                        auto_heatmap_quality,
+                        auto_heatmap_suffix or "",
+                        summary,
+                    )
+                    if out_path:
+                        generated += 1
+                    else:
+                        skipped += 1
+
+            if generated > 0 and skipped > 0:
+                typer.echo(
+                    f"Generated {generated} heatmap overlay(s) for review images ({skipped} already existed)"
+                )
+            elif generated > 0:
+                typer.echo(
+                    f"Generated {generated} heatmap overlay(s) for review images"
+                )
+            elif skipped > 0:
+                typer.echo(f"Overlays already exist for {skipped} review images")
 
     if csv_file:
         csv_file.close()

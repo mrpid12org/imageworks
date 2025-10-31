@@ -18,7 +18,7 @@ first seen signal of the same level.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Any
 import json
 import re
 from contextlib import suppress
@@ -33,6 +33,11 @@ try:  # pragma: no cover - optional dependency
     from gguf import GGUFReader  # type: ignore
 except Exception:  # noqa: BLE001
     GGUFReader = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency
+    import yaml  # type: ignore
+except Exception:  # noqa: BLE001
+    yaml = None  # type: ignore[assignment]
 
 _GGUF_SUFFIX = ".gguf"
 _SAFETENSORS_SUFFIX = ".safetensors"
@@ -150,6 +155,123 @@ def _detect_gguf_quant_from_header(gguf_path: Path) -> Optional[str]:
         if counts:
             # Choose the token with highest score
             return sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[0][0]
+    return None
+
+
+def _parse_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        token = value.strip()
+        if token.startswith(("+", "-")):
+            sign = -1 if token[0] == "-" else 1
+            token = token[1:]
+        else:
+            sign = 1
+        if token.isdigit():
+            with suppress(Exception):
+                return sign * int(token)
+    return None
+
+
+def _infer_fp_block(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    bits = _parse_int(
+        payload.get("num_bits")
+        or payload.get("bits")
+        or payload.get("precision")
+        or payload.get("nbits")
+    )
+    dtype = payload.get("type") or payload.get("format")
+    if dtype is None:
+        return None
+    dtype_str = str(dtype).strip().lower()
+    if bits in {4, 8} and dtype_str in {"float", "fp", "fp8", "fp4", "float-quantized"}:
+        return f"fp{bits}"
+    if bits == 16 and dtype_str in {"float", "fp"}:
+        return "fp16"
+    if bits == 16 and dtype_str in {"bfloat", "bf16"}:
+        return "bf16"
+    if bits in {4, 8} and dtype_str in {"int", "integer"}:
+        return f"int{bits}"
+    return None
+
+
+def _find_scheme_token(obj: Any) -> Optional[str]:
+    if isinstance(obj, dict):
+        if "scheme" in obj and obj["scheme"]:
+            return obj["scheme"]
+        for value in obj.values():
+            token = _find_scheme_token(value)
+            if token:
+                return token
+    elif isinstance(obj, list):
+        for item in obj:
+            token = _find_scheme_token(item)
+            if token:
+                return token
+    return None
+
+
+def _infer_llmc_quant(cfg: Dict[str, Any], repo_path: Path) -> Optional[str]:
+    """Derive a concrete quantization label for LLMCompressor exports."""
+
+    def _scan_sections(container: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(container, dict):
+            return None
+        for section in ("weights", "input_activations", "output_activations"):
+            maybe = _infer_fp_block(container.get(section))
+            if maybe:
+                return maybe
+        return None
+
+    candidate = _scan_sections(cfg)
+    if candidate:
+        return candidate
+
+    groups = cfg.get("config_groups")
+    if isinstance(groups, dict):
+        for entry in groups.values():
+            if isinstance(entry, dict):
+                candidate = _scan_sections(entry)
+                if candidate:
+                    return candidate
+
+    kv_scheme = cfg.get("kv_cache_scheme")
+    if isinstance(kv_scheme, str):
+        lowered = kv_scheme.strip().lower()
+        if lowered in {"fp8", "fp4"}:
+            return lowered
+
+    recipe_path = repo_path / "recipe.yaml"
+    if not recipe_path.exists():
+        recipe_path = repo_path / "recipe.yml"
+    if recipe_path.exists():
+        if yaml is not None:
+            with suppress(Exception):
+                data = yaml.safe_load(recipe_path.read_text(encoding="utf-8"))
+                token = _find_scheme_token(data)
+                if isinstance(token, str):
+                    lowered = token.strip().lower()
+                    if "fp8" in lowered:
+                        return "fp8"
+                    if "fp4" in lowered:
+                        return "fp4"
+                    if "int8" in lowered:
+                        return "int8"
+        else:
+            with suppress(Exception):
+                raw = recipe_path.read_text(encoding="utf-8", errors="ignore")
+                lowered = raw.lower()
+                for token in ("fp8", "fp4", "int8"):
+                    if token in lowered:
+                        return token
+
     return None
 
 
@@ -360,14 +482,20 @@ def detect_format_and_quant(path: Path) -> Tuple[Optional[str], Optional[str]]:
             qcfg = data.get("quantization_config") or {}
             if isinstance(qcfg, dict):
                 qmethod = qcfg.get("quant_method")
+                derived = _infer_llmc_quant(qcfg, path)
                 if isinstance(qmethod, str) and qmethod.strip():
                     qm = qmethod.strip().lower()
                     # Normalize known values directly; keep unknowns as-is (lowercase)
-                    if qm in {"mxfp4", "mxfp8", "bitsandbytes"}:
+                    if derived:
+                        quant = derived
+                    elif qm in {"mxfp4", "mxfp8", "bitsandbytes"}:
                         quant = qm
                     else:
                         # Future-proof: accept vendor-provided method token verbatim
                         quant = qm
+                    quant_level = 5
+                elif derived:
+                    quant = derived
                     quant_level = 5
                 elif qcfg.get("load_in_4bit") is True:
                     quant = "bitsandbytes-4bit"

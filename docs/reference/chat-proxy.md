@@ -50,6 +50,8 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 | CHAT_PROXY_VLLM_HEALTH_TIMEOUT_S | Per-request timeout when polling vLLM health | 120 |
 | CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION | Fraction of GPU memory vLLM should claim when launched by the orchestrator | 0.75 |
 | CHAT_PROXY_VLLM_MAX_MODEL_LEN | Override max sequence length passed to vLLM (`--max-model-len`) | *(unset)* |
+| CHAT_PROXY_OLLAMA_BASE_URL | Override the Ollama service base URL when different from the host default | http://127.0.0.1:11434 |
+| CHAT_PROXY_OLLAMA_STOP_TIMEOUT_S | Timeout budget (seconds) when waiting for Ollama to unload models | 30 |
 
 ### Logging & autostart
 - Requests are appended to `CHAT_PROXY_LOG_PATH` in JSONL format. When the file
@@ -87,11 +89,10 @@ The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks regi
 - Mount your model weights into the container at the same absolute path used on
   the host so `start_vllm_server.py` resolves entries correctly.
 - Ollama entries imported via `imageworks-download` automatically set
-  `backend_config.host=host.docker.internal` (configurable via the
-  `IMAGEWORKS_OLLAMA_HOST` environment variable). This keeps the container’s
-  proxy talking to the host Ollama daemon without extra manual edits. You only
-  need to set `CHAT_PROXY_LOOPBACK_ALIAS` if your environment uses a different
-  name.
+  `backend_config.host=imageworks-ollama` (configurable via the
+  `IMAGEWORKS_OLLAMA_HOST` environment variable). This keeps the proxy pointing
+  at the bundled Ollama container. Export a different host value before
+  rediscovery/import if you want to target a host-level daemon instead.
 - To fall back to a host-managed vLLM process, set
   `CHAT_PROXY_VLLM_SINGLE_PORT=0` (for example by exporting the environment
   variable before invoking `docker compose up`).
@@ -111,14 +112,13 @@ services:
       - CHAT_PROXY_PORT=8100
       - CHAT_PROXY_SUPPRESS_DECORATIONS=1
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
-      - CHAT_PROXY_LOOPBACK_ALIAS=host.docker.internal
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8100/v1/health"]
     volumes:
       # Mount HF weights into the container at the same absolute path so installed-only checks pass
       - /home/you/ai-models/weights:/home/you/ai-models/weights:ro
     extra_hosts:
-      - host.docker.internal:host-gateway
+      - host.docker.internal:host-gateway  # Only required if you point back to a host daemon
 
   openwebui:
     image: ghcr.io/open-webui/open-webui:latest

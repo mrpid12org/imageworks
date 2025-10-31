@@ -53,7 +53,9 @@ DEFAULT_OVERLAYS_DIR = MONO_DEFAULT_OVERLAYS_DIR
 # Note: vLLM runs inside chat_proxy docker container, not as separate service
 DEFAULT_BACKENDS = {
     "chat_proxy": "http://localhost:8100/v1",
-    "ollama": "http://localhost:11434",
+    # Ollama defaults to the docker service exposed within the compose stack.
+    # Override via CHAT_PROXY_OLLAMA_BASE_URL / IMAGEWORKS_OLLAMA_HOST if needed.
+    "ollama": "http://imageworks-ollama:11434",
 }
 
 # File type filters

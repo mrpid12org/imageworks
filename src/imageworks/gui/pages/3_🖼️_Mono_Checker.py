@@ -50,12 +50,41 @@ def render_custom_overrides(preset, session_key_prefix):
     current_input = get_app_setting(
         st.session_state, "mono", "input_dir", DEFAULT_INPUT_DIR
     )
+    input_key = f"{session_key_prefix}_input"
+    pending_key = f"{session_key_prefix}_input_pending"
+    if pending_value := st.session_state.pop(pending_key, None):
+        st.session_state[input_key] = pending_value
+        current_input = pending_value
+    else:
+        current_input = st.session_state.get(input_key, current_input)
+
     input_dir = st.text_input(
         "Input Directory",
         value=current_input,
-        key=f"{session_key_prefix}_input",
+        key=input_key,
         help="Directory containing images to check",
     )
+    # Offer quick selection from extracted directories
+    extract_root_setting = get_app_setting(
+        st.session_state, "zip_extract", "extract_root", ZIP_DEFAULT_EXTRACT_ROOT
+    )
+    available_dirs: list[str] = []
+    if extract_root_setting:
+        extract_root_path = Path(extract_root_setting)
+        if extract_root_path.exists():
+            available_dirs = [
+                str(p) for p in sorted(extract_root_path.iterdir()) if p.is_dir()
+            ]
+    if available_dirs:
+        selected_dir = st.selectbox(
+            "Select from extracted folders",
+            options=["-- Keep current --"] + available_dirs,
+            key=f"{session_key_prefix}_input_selector",
+            help="Pick a folder produced by zip extraction. Subdirectories will be processed automatically.",
+        )
+        if selected_dir != "-- Keep current --" and selected_dir != input_dir:
+            st.session_state[pending_key] = selected_dir
+            st.rerun()
     if input_dir and input_dir != current_input:
         set_app_setting(st.session_state, "mono", "input_dir", input_dir)
     if input_dir:
@@ -89,7 +118,7 @@ def render_custom_overrides(preset, session_key_prefix):
         if output_jsonl and output_jsonl != current_jsonl:
             set_app_setting(st.session_state, "mono", "output_jsonl", output_jsonl)
         if output_jsonl:
-            overrides["output_jsonl"] = output_jsonl
+            overrides["jsonl_out"] = output_jsonl
 
     with col2:
         current_summary = get_app_setting(
@@ -103,7 +132,7 @@ def render_custom_overrides(preset, session_key_prefix):
         if summary_path and summary_path != current_summary:
             set_app_setting(st.session_state, "mono", "summary_path", summary_path)
         if summary_path:
-            overrides["summary"] = summary_path
+            overrides["summary_out"] = summary_path
 
         dry_run = st.checkbox(
             "Dry Run",
@@ -279,13 +308,37 @@ def main():
 
         # Show what will be processed
         zip_path = Path(zip_dir) if zip_dir else None
+        selected_zip: Path | None = None
+        process_single = False
         if zip_path and zip_path.exists():
             zip_files = list(zip_path.glob("*.zip"))
             if zip_files:
                 st.success(f"✅ Found {len(zip_files)} zip file(s) to process")
-                with st.expander("📋 Zip Files", expanded=False):
-                    for zf in zip_files:
-                        st.text(f"  • {zf.name}")
+                mode = st.radio(
+                    "Extraction Mode",
+                    ["All archives in directory", "Single archive"],
+                    horizontal=True,
+                    key="zip_extract_mode",
+                )
+                process_single = mode == "Single archive"
+                if process_single:
+                    selected_zip = st.selectbox(
+                        "Choose a single archive",
+                        options=[None] + zip_files,
+                        format_func=lambda p: (
+                            "-- Select a ZIP --"
+                            if p is None
+                            else f"{p.name} ({p.stat().st_size / (1024 * 1024):.1f} MB)"
+                        ),
+                        key="zip_extract_single_choice",
+                        help="Only the selected archive will be extracted.",
+                    )
+                    if selected_zip:
+                        st.info(f"📦 Selected archive: {selected_zip.name}")
+                else:
+                    with st.expander("📋 Zip Files", expanded=False):
+                        for zf in zip_files:
+                            st.text(f"  • {zf.name}")
             else:
                 st.warning(f"⚠️ No .zip files found in {zip_dir}")
         elif zip_path:
@@ -297,14 +350,17 @@ def main():
             "▶️ Extract Competition Zips",
             type="primary",
             key="run_zip_extract",
-            disabled=not (zip_path and zip_path.exists()),
+            disabled=not (zip_path and zip_path.exists())
+            or (process_single and selected_zip is None),
         ):
             import subprocess
 
-            cmd = ["imageworks-zip", "run"]
+            cmd = ["imageworks-zip"]
 
             if zip_dir:
                 cmd.extend(["--zip-dir", zip_dir])
+            if selected_zip:
+                cmd.extend(["--zip-file", str(selected_zip)])
             if extract_root:
                 cmd.extend(["--extract-root", extract_root])
             if summary_output:
@@ -413,7 +469,13 @@ def main():
                 st.success("✅ Mono check completed!")
 
                 # Show quick stats
-                output_jsonl = config.get("output_jsonl")
+                output_jsonl = config.get("jsonl_out")
+                # After successful run, refresh overlay directory listing (if auto_heatmap)
+                if config.get("auto_heatmap"):
+                    overlays_dir = config.get("overlays")
+                    if overlays_dir and Path(overlays_dir).exists():
+                        st.session_state["mono_last_overlay_scan"] = None
+                    st.session_state["mono_last_overlay_scan"] = None
                 if output_jsonl and Path(output_jsonl).exists():
                     results = parse_jsonl(output_jsonl)
 
@@ -443,8 +505,8 @@ def main():
         # Render unified results browser
         render_unified_results_browser(
             key_prefix="mono_results_view",
-            default_jsonl=config.get("output_jsonl"),
-            default_markdown=config.get("summary"),
+            default_jsonl=config.get("jsonl_out"),
+            default_markdown=config.get("summary_out"),
         )
 
     # === REVIEW IMAGES TAB ===
@@ -452,8 +514,19 @@ def main():
         st.markdown("### Review Images")
 
         config = st.session_state.get("mono_config", {})
-        output_jsonl = config.get("output_jsonl")
+        output_jsonl = config.get("jsonl_out")
         overlays_dir = config.get("overlays")
+
+        fallback_map: dict[str, str] = {}
+        if config.get("input"):
+            candidate = Path(config["input"][0])
+            if candidate.exists():
+                fallback_map = {
+                    p.name: str(p)
+                    for p in candidate.rglob("*")
+                    if p.is_file()
+                    and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+                }
 
         if not output_jsonl or not Path(output_jsonl).exists():
             st.info("Run mono check to review results")
@@ -490,7 +563,9 @@ def main():
                     # Prepare image data for grid
                     images = []
                     for r in filtered_results:
-                        img_path = r.get("image_path")
+                        img_path = r.get("image_path") or r.get("path")
+                        if img_path and not Path(img_path).exists() and fallback_map:
+                            img_path = fallback_map.get(Path(img_path).name, img_path)
                         if img_path:
                             # Find corresponding overlay
                             overlay_path = None
@@ -529,14 +604,13 @@ def main():
                             st.markdown("### Image Detail")
 
                             # Find the result data
-                            result_data = next(
-                                (
-                                    r
-                                    for r in filtered_results
-                                    if r.get("image_path") == selected_image
-                                ),
-                                None,
-                            )
+                            result_data = None
+                            selected_name = Path(selected_image).name
+                            for r in filtered_results:
+                                record_path = r.get("image_path") or r.get("path") or ""
+                                if Path(record_path).name == selected_name:
+                                    result_data = r
+                                    break
 
                             if result_data:
                                 overlay_path = next(

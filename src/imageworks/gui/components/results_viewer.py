@@ -6,13 +6,23 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 
+def _cache_version(file_path: str) -> float:
+    path = Path(file_path)
+    if path.exists():
+        return path.stat().st_mtime
+    return 0.0
+
+
 @st.cache_data(show_spinner="Loading results...")
-def parse_jsonl(file_path: str) -> List[Dict[str, Any]]:
+def parse_jsonl(
+    file_path: str, version: Optional[float] = None
+) -> List[Dict[str, Any]]:
     """
     Parse JSONL file (CACHED).
 
     Args:
         file_path: Path to JSONL file
+        version: Cache-busting version (use file mtime)
 
     Returns:
         List of parsed JSON objects
@@ -35,12 +45,13 @@ def parse_jsonl(file_path: str) -> List[Dict[str, Any]]:
 
 
 @st.cache_data(show_spinner="Loading markdown...")
-def load_markdown(file_path: str) -> str:
+def load_markdown(file_path: str, version: Optional[float] = None) -> str:
     """
     Load markdown file (CACHED).
 
     Args:
         file_path: Path to markdown file
+        version: Cache-busting version (use file mtime)
 
     Returns:
         Markdown content as string
@@ -76,7 +87,7 @@ def render_jsonl_viewer(
         return []
 
     # Load results (cached)
-    results = parse_jsonl(jsonl_path)
+    results = parse_jsonl(jsonl_path, _cache_version(jsonl_path))
 
     if not results:
         st.info("No results found in file")
@@ -164,7 +175,7 @@ def render_markdown_viewer(
         return
 
     # Load markdown (cached)
-    md_content = load_markdown(markdown_path)
+    md_content = load_markdown(markdown_path, _cache_version(markdown_path))
 
     if use_columns:
         col1, col2 = st.columns([1, 1])

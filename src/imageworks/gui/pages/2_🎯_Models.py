@@ -1,5 +1,7 @@
 """Models management hub page with comprehensive CLI parity."""
 
+import json
+import shlex
 import streamlit as st
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -10,9 +12,60 @@ from imageworks.gui.components.backend_monitor import (
     render_system_resources,
     render_gpu_monitor,
 )
-from imageworks.gui.config import DEFAULT_BACKENDS, PROJECT_ROOT
+from imageworks.gui.config import (
+    DEFAULT_BACKENDS,
+    MODEL_REGISTRY_DISCOVERED_PATH,
+    PROJECT_ROOT,
+)
 from imageworks.model_loader.registry import save_registry
 from imageworks.model_loader.registry import load_registry as load_model_registry
+
+
+def _classify_discovered_provider(entry: Dict[str, Any]) -> str:
+    """Classify a discovered entry into provider buckets used in purge previews."""
+
+    backend = (entry.get("backend") or "").lower()
+    download_path = (entry.get("download_path") or "").lower()
+    metadata = entry.get("metadata") or {}
+    source = entry.get("source") or {}
+    provider = (
+        (entry.get("source_provider") or source.get("provider") or "").strip().lower()
+    )
+
+    if (
+        backend == "ollama"
+        or download_path.startswith("ollama:")
+        or provider == "ollama"
+    ):
+        return "ollama"
+    if provider in {"hf", "huggingface"} or metadata.get("created_from_download"):
+        return "hf"
+    if provider:
+        return provider
+    return "other"
+
+
+def summarize_discovered_layer() -> Optional[Dict[str, int]]:
+    """Return counts of discovered entries per provider for registry maintenance hints."""
+
+    try:
+        if not MODEL_REGISTRY_DISCOVERED_PATH.exists():
+            return None
+        data = json.loads(MODEL_REGISTRY_DISCOVERED_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    if not isinstance(data, list):
+        return None
+
+    summary: Dict[str, int] = {"ollama": 0, "hf": 0, "other": 0, "total": len(data)}
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        bucket = _classify_discovered_provider(entry)
+        summary[bucket] = summary.get(bucket, 0) + 1
+    summary["total"] = len(data)
+    return summary
 
 
 def run_command_with_progress(
@@ -66,7 +119,7 @@ def run_command_with_progress(
             status_placeholder.success(f"✅ {description} - Complete")
             if show_output and output_lines:
                 with output_placeholder.container():
-                    with st.expander("📄 Full Output", expanded=False):
+                    with st.expander("📄 Full Output", expanded=True):
                         st.code("\n".join(output_lines), language="bash")
         else:
             status_placeholder.error(f"❌ {description} - Failed")
@@ -1398,6 +1451,237 @@ def render_registry_maintenance_tab():
         "⚠️ These operations modify the registry. Always review dry-run output first."
     )
 
+    st.markdown("#### ♻️ Drop & Rebuild Shortcuts")
+    st.caption(
+        "Hard reset the discovered layer for a provider, then repopulate it using the "
+        "adapter-backed tooling. Run a dry-run first to understand the impact."
+    )
+
+    col_hf, col_ollama = st.columns(2)
+
+    # --- Hugging Face rebuild ---
+    with col_hf:
+        st.markdown("##### Hugging Face (local weights)")
+        hf_root_default = str(Path.home() / "ai-models" / "weights")
+        hf_root = st.text_input(
+            "Weights root",
+            value=hf_root_default,
+            key="rebuild_hf_root",
+            help="Root directory containing <owner>/<repo> folders downloaded from Hugging Face.",
+        )
+        hf_backend = st.selectbox(
+            "Assign backend",
+            options=["vllm", "ollama"],
+            index=0,
+            key="rebuild_hf_backend",
+            help="Backend to associate with the regenerated entries.",
+        )
+        hf_backup = st.checkbox(
+            "Backup discovered layer before purge",
+            value=True,
+            key="rebuild_hf_backup",
+        )
+        hf_dry = st.checkbox(
+            "Dry run only (no writes)", value=True, key="rebuild_hf_dry"
+        )
+
+        purge_hf_cmd = [
+            "uv",
+            "run",
+            "imageworks-loader",
+            "purge-imported",
+            "--providers",
+            "hf",
+        ]
+        if hf_dry:
+            purge_hf_cmd.append("--dry-run")
+        else:
+            purge_hf_cmd.append("--apply")
+        if not hf_backup:
+            purge_hf_cmd.append("--no-backup")
+
+        ingest_hf_cmd = [
+            "uv",
+            "run",
+            "imageworks-loader",
+            "ingest-local-hf",
+            "--root",
+            hf_root,
+            "--backend",
+            hf_backend,
+        ]
+        if hf_dry:
+            ingest_hf_cmd.append("--dry-run")
+
+        with st.expander("🔍 Command Preview (HF)", expanded=False):
+            preview = "\n\n".join(
+                [
+                    " ".join(shlex.quote(part) for part in purge_hf_cmd),
+                    " ".join(shlex.quote(part) for part in ingest_hf_cmd),
+                ]
+            )
+            st.code(preview, language="bash")
+
+        hf_confirmed = True
+        if not hf_dry:
+            hf_confirmed = confirm_destructive_operation(
+                "Drop & Rebuild Hugging Face entries",
+                (
+                    "This will remove all discovered Hugging Face records, then "
+                    f"re-ingest models from `{hf_root}` using the `{hf_backend}` backend."
+                ),
+            )
+
+        if st.button(
+            "♻️ Drop & Rebuild HF",
+            type="primary",
+            key="rebuild_hf_btn",
+            disabled=not hf_confirmed,
+        ):
+            commands = [
+                (purge_hf_cmd, "Purging discovered Hugging Face entries"),
+                (ingest_hf_cmd, "Re-ingesting local Hugging Face models"),
+            ]
+            overall_success = True
+            for cmd, description in commands:
+                result = run_command_with_progress(cmd, description, timeout=900)
+                if not result["success"]:
+                    overall_success = False
+                    break
+            if overall_success and not hf_dry:
+                load_model_registry(force=True)
+                st.success("Hugging Face registry entries rebuilt.")
+
+    # --- Ollama rebuild ---
+    with col_ollama:
+        st.markdown("##### Ollama (container service)")
+
+        discovered_summary = summarize_discovered_layer() or {}
+        ollama_count = discovered_summary.get("ollama", 0)
+        hf_count = discovered_summary.get("hf", 0)
+        other_count = discovered_summary.get("other", 0)
+        if discovered_summary:
+            keep_count = hf_count + other_count
+            message = (
+                f"Discovered layer currently tracks **{ollama_count}** Ollama entr"
+                f"{'y' if ollama_count == 1 else 'ies'}."
+            )
+            if keep_count:
+                message += (
+                    f" {keep_count} other entries (HF/local={hf_count}, other={other_count}) "
+                    "remain untouched — shown as keep=N in the purge dry run."
+                )
+            else:
+                message += " Purge dry runs will report keep=0 for other providers."
+            st.info(message)
+
+        ollama_location = st.text_input(
+            "Location label",
+            value="linux_wsl",
+            key="rebuild_ollama_location",
+            help="Populates the location field on imported entries.",
+        )
+        ollama_backup = st.checkbox(
+            "Backup discovered layer before purge",
+            value=True,
+            key="rebuild_ollama_backup",
+        )
+        ollama_show = st.checkbox(
+            "Show imported list after rebuild",
+            value=False,
+            key="rebuild_ollama_show",
+        )
+        ollama_dry = st.checkbox(
+            "Dry run only (no writes)", value=True, key="rebuild_ollama_dry"
+        )
+
+        purge_ollama_cmd = [
+            "uv",
+            "run",
+            "imageworks-loader",
+            "purge-imported",
+            "--providers",
+            "ollama",
+        ]
+        if ollama_dry:
+            purge_ollama_cmd.append("--dry-run")
+        else:
+            purge_ollama_cmd.append("--apply")
+        if not ollama_backup:
+            purge_ollama_cmd.append("--no-backup")
+
+        rebuild_ollama_cmd = [
+            "uv",
+            "run",
+            "imageworks-loader",
+            "rebuild-ollama",
+            "--location",
+            ollama_location,
+        ]
+        if ollama_dry:
+            rebuild_ollama_cmd.append("--dry-run")
+        if not ollama_show:
+            rebuild_ollama_cmd.append("--no-show")
+
+        with st.expander("🔍 Command Preview (Ollama)", expanded=False):
+            preview = "\n\n".join(
+                [
+                    " ".join(shlex.quote(part) for part in purge_ollama_cmd),
+                    " ".join(shlex.quote(part) for part in rebuild_ollama_cmd),
+                ]
+            )
+            st.code(preview, language="bash")
+
+        ollama_confirmed = True
+        if not ollama_dry:
+            ollama_confirmed = confirm_destructive_operation(
+                "Drop & Rebuild Ollama entries",
+                (
+                    "This will remove all discovered Ollama entries and repopulate them "
+                    f"by querying the running Ollama service (location `{ollama_location}`)."
+                ),
+            )
+
+        if st.button(
+            "♻️ Drop & Rebuild Ollama",
+            type="primary",
+            key="rebuild_ollama_btn",
+            disabled=not ollama_confirmed,
+        ):
+            commands = [(purge_ollama_cmd, "Purging discovered Ollama entries")]
+            if ollama_dry:
+                preview_cmd = [
+                    "uv",
+                    "run",
+                    "python",
+                    "scripts/import_ollama_models.py",
+                    "--dry-run",
+                    "--location",
+                    ollama_location,
+                ]
+                commands.append(
+                    (preview_cmd, "Dry-run: querying Ollama for import preview")
+                )
+            else:
+                commands.append((rebuild_ollama_cmd, "Re-importing models from Ollama"))
+
+            overall_success = True
+            for idx, (cmd, description) in enumerate(commands):
+                result = run_command_with_progress(cmd, description, timeout=900)
+                if not result["success"]:
+                    overall_success = False
+                    break
+                if ollama_dry and idx == 0 and discovered_summary:
+                    keep_count = hf_count + other_count
+                    st.caption(
+                        f"Dry-run summary: would remove {ollama_count} Ollama entries "
+                        f"from the discovered layer and keep {keep_count} other entries "
+                        f"(HF/local={hf_count}, other={other_count})."
+                    )
+            if overall_success and not ollama_dry:
+                load_model_registry(force=True)
+                st.success("Ollama registry entries rebuilt.")
+
     # Sub-sections
     subtabs = st.tabs(["🔄 Normalize", "🗑️ Purge", "🔨 Cleanup"])
 
@@ -1611,20 +1895,46 @@ def render_backends_tab():
     # Backend management
     st.markdown("---")
     st.markdown("### Backend Management")
-    st.info("ℹ️ Start/stop controls coming in future phase")
+    st.info(
+        "ℹ️ Use the controls below to restart the bundled chat proxy service or review manual commands."
+    )
+
+    with st.expander("♻️ Restart Chat Proxy", expanded=False):
+        st.markdown(
+            "Restarting the proxy frees GPU memory and reloads the latest registry metadata. "
+            "Existing downloads or Ollama pulls continue running."
+        )
+        confirm_restart = st.checkbox(
+            "I understand the API will briefly go offline during the restart",
+            key="restart_proxy_confirm",
+        )
+        if st.button(
+            "🔄 Restart Chat Proxy",
+            type="primary",
+            key="restart_proxy_btn",
+            disabled=not confirm_restart,
+        ):
+            run_command_with_progress(
+                ["docker", "restart", "imageworks-chat-proxy"],
+                "Restarting chat proxy",
+                timeout=120,
+            )
 
     # Show commands for manual starting
     with st.expander("📝 Manual Start Commands", expanded=False):
         st.code(
             """
-# Start vLLM
+# Start vLLM (local process)
 uv run vllm serve <model_name> --port 24001
 
-# Start LMDeploy
+# Start LMDeploy (local process)
 uv run lmdeploy serve api <model_name> --port 24001
 
-# Start Ollama
-ollama serve
+# Start Ollama (docker compose service)
+docker compose -f docker-compose.chat-proxy.yml up -d imageworks-ollama
+
+# Open Ollama shell inside the container
+docker exec -it imageworks-ollama ollama ps
 
 # Start Chat Proxy
 uv run imageworks-chat-proxy
@@ -1647,10 +1957,26 @@ def render_advanced_tab():
 
         # Get list of models
         registry = load_model_registry()
-        model_names = sorted(registry.keys())
+
+        show_installed_only = st.checkbox(
+            "Show installed variants only",
+            value=False,
+            key="remove_show_installed_only",
+            help="Filters to entries whose download directory exists on disk.",
+        )
+
+        filtered_items = [
+            (name, entry)
+            for name, entry in registry.items()
+            if not show_installed_only
+            or (entry.download_path and Path(entry.download_path).exists())
+        ]
+        model_names = [name for name, _ in sorted(filtered_items, key=lambda x: x[0])]
 
         if not model_names:
-            st.warning("No models found in registry")
+            st.warning(
+                "No models match the current filter. Disable the installer-only toggle to view logical entries."
+            )
         else:
             selected_variant = st.selectbox(
                 "Select model to remove",
@@ -1761,6 +2087,21 @@ def render_advanced_tab():
                     # Refresh
                     from imageworks.gui.components.registry_table import load_registry
 
+                    # Reset selection & confirmation toggles to avoid accidental repeat deletions
+                    st.session_state.pop("remove_variant", None)
+                    st.session_state["removal_mode"] = (
+                        "Metadata only (keep files & logical entry)"
+                    )
+                    if delete_files:
+                        confirm_key = (
+                            "confirm_purge_model" if purge else "confirm_delete_files"
+                        )
+                        st.session_state.pop(confirm_key, None)
+                    else:
+                        st.session_state.pop("confirm_metadata", None)
+                    # Also clear the generic destructive confirmation cache key if present
+                    st.session_state.pop("confirm_purge_model", None)
+                    st.session_state.pop("confirm_delete_files", None)
                     load_registry.clear()
                     st.rerun()
 

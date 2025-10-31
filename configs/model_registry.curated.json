@@ -6,8 +6,13 @@
     "backend_config": {
       "port": 11434,
       "model_path": "ollama:/aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
-      "extra_args": [],
-      "host": "host.docker.internal"
+      "extra_args": [
+        "--num-ctx",
+        "4096",
+        "--num-gpu",
+        "35"
+      ],
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -59,9 +64,11 @@
       "deepseek": false
     },
     "generation_defaults": {
+      "max_tokens": 2048,
       "temperature": 0.95,
       "top_p": 0.95,
-      "top_k": 64
+      "top_k": 64,
+      "context_window": 4096
     },
     "chat_template": {
       "source": "embedded",
@@ -117,7 +124,7 @@
     },
     "capabilities": {
       "text": true,
-      "vision": true,
+      "vision": false,
       "embedding": false,
       "audio": false,
       "thinking": false,
@@ -125,11 +132,11 @@
       "tools": false,
       "language": true,
       "chat": true,
-      "visual": true,
-      "multimodal": true,
-      "mm": true,
-      "image": true,
-      "vl": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
       "speech": false,
       "voice": false,
       "asr": false,
@@ -226,7 +233,7 @@
       "port": 11434,
       "model_path": "ollama:/aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -322,9 +329,9 @@
       "model_path": "/home/stewa/ai-models/weights/openai/gpt-oss-20b",
       "extra_args": [
         "--gpu-memory-utilization",
-        "0.90",
+        "0.87",
         "--max-model-len",
-        "8192",
+        "7168",
         "--max-num-seqs",
         "1"
       ]
@@ -411,6 +418,141 @@
     "role_priority": {}
   },
   {
+    "name": "huihui-qwen3-vl-8b-instruct-abliterated_(FP8)",
+    "display_name": "huihui-qwen3-vl-8b-instruct-abliterated (FP8)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8",
+      "extra_args": [
+        "--tensor-parallel-size",
+        "1",
+        "--dtype",
+        "auto",
+        "--kv-cache-dtype",
+        "fp8",
+        "--gpu-memory-utilization",
+        "0.90",
+        "--max-model-len",
+        "5120",
+        "--max-num-seqs",
+        "1",
+        "--max-num-batched-tokens",
+        "1024",
+        "--swap-space",
+        "4",
+        "--limit-mm-per-prompt",
+        "{\"image\":1,\"video\":0}",
+        "--chat-template",
+        "/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/chat_template.jinja"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/chat_template.jinja",
+      "sha256": "3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4"
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "producer": "huihui-ai",
+      "model_type": "image-text-to-text",
+      "library": "transformers",
+      "files_downloaded": 16,
+      "has_chat_template": true,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [
+        "chat_template.jinja"
+      ],
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4",
+      "quant_schemes": [
+        "fp8"
+      ],
+      "registry_layer": "curated"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8"
+    ],
+    "roles": [
+      "caption",
+      "keywords",
+      "description",
+      "narration",
+      "vision_general"
+    ],
+    "license": null,
+    "source": {
+      "huggingface_id": "huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8"
+    },
+    "deprecated": false,
+    "family": "huihui-qwen3-vl-8b-instruct-abliterated-fp8",
+    "source_provider": "hf",
+    "quantization": "fp8",
+    "backend_alternatives": [],
+    "role_priority": {
+      "caption": 85,
+      "description": 90,
+      "keywords": 80,
+      "narration": 90,
+      "vision_general": 85
+    }
+  },
+  {
     "name": "llama3.1-local-latest_(Q5_K_M)",
     "display_name": "llama3.1-local-latest (Q5 K M)",
     "backend": "ollama",
@@ -418,7 +560,7 @@
       "port": 11434,
       "model_path": "ollama:/llama3.1-local:latest",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -513,7 +655,7 @@
       "port": 11434,
       "model_path": "ollama:/llama3.1-local:latest",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -621,7 +763,7 @@
       "audio": false,
       "thinking": false,
       "reasoning": false,
-      "tools": false,
+      "tools": true,
       "language": true,
       "chat": true,
       "visual": true,
@@ -636,23 +778,23 @@
       "embed": false,
       "text-embedding": false,
       "representation": false,
-      "tool_use": false,
-      "tool-use": false,
-      "tool_call": false,
-      "tool-call": false,
-      "toolcalls": false,
-      "tool_calls": false,
-      "toolchoice": false,
-      "tool_choice": false,
-      "function_call": false,
-      "function-call": false,
-      "function_calls": false,
-      "function_calling": false,
-      "function-calling": false,
-      "function_tools": false,
-      "functioncalling": false,
-      "toolcalling": false,
-      "auto_tool_choice": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
       "reason": false,
       "think": false,
       "chain_of_thought": false,
@@ -667,35 +809,63 @@
       "temperature": 0.7,
       "top_p": 0.95,
       "top_k": 40,
-      "min_tokens": 32,
-      "presence_penalty": 0.6,
       "frequency_penalty": 0.2,
+      "presence_penalty": 0.6,
       "stop_sequences": [
         "<tool_call>"
       ]
     },
-  "chat_template": {
-    "source": "external",
-    "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/qwen_template.jinja",
-    "sha256": null
-  },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/qwen_template.jinja",
+      "sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7"
+    },
     "profiles_placeholder": null,
     "metadata": {
+      "readme_file": "README.md",
+      "readme_sha256": "e674a38d66374a0b7f9053dbe15d496586820f66eb6ae016dc5d837e9f627941",
+      "readme_signals": {
+        "quant_schemes": [
+          "awq",
+          "bf16",
+          "gptq"
+        ],
+        "tool_calls": true,
+        "license_hint": "apache-2.0"
+      },
+      "license_file": "LICENSE",
+      "producer": "qwen",
+      "model_type": "image-text-to-text",
+      "library": "transformers",
+      "files_downloaded": 16,
+      "verified_complete": true,
+      "has_chat_template": true,
+      "has_embedded_chat_template": true,
+      "external_chat_template_files": [
+        "chat_template.json"
+      ],
+      "embedded_chat_template_preview": "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}{% if loop.first and message['role'] != 'system...",
+      "branch": "main",
+      "primary_chat_template_file": "chat_template.json",
+      "primary_chat_template_sha256": "94174d7176c52a7192f96fc34eb2cf23c7c2059d63cdbfadca1586ba89731fb7",
+      "default_system_prompt": "You are a helpful assistant. Answer in concise English.",
       "format": "awq",
       "quantization": "awq",
       "vision": true,
       "parameter_size": "7B",
       "context_length": 32768,
-      "registry_layer": "curated",
-      "default_system_prompt": "You are a helpful assistant. Answer in concise English."
+      "registry_layer": "curated"
     },
-    "model_aliases": [],
+    "served_model_id": "None",
+    "model_aliases": [
+      "Qwen/Qwen2.5-VL-7B-Instruct-AWQ"
+    ],
     "roles": [],
     "license": "Apache-2.0",
-    "source": "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    "source": null,
     "deprecated": false,
-    "family": "qwen2.5-vl",
-    "source_provider": "huggingface",
+    "family": "qwen2.5-vl-7b-instruct-awq",
+    "source_provider": "hf",
     "quantization": "awq",
     "backend_alternatives": [],
     "role_priority": {}
@@ -708,7 +878,7 @@
       "port": 11434,
       "model_path": "ollama:/qwen2.5vl:7b",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -804,7 +974,7 @@
       "port": 11434,
       "model_path": "ollama:/qwen2.5vl:7b",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -902,6 +1072,141 @@
       "description": 85,
       "narration": 85,
       "vision_general": 80
+    }
+  },
+  {
+    "name": "qwen3-vl-8b-instruct-abliterated_(FP8)",
+    "display_name": "qwen3-vl-8b-instruct-abliterated (FP8)",
+    "backend": "vllm",
+    "backend_config": {
+      "port": 24001,
+      "model_path": "/home/stewa/ai-models/weights/prithivMLmods/Qwen3-VL-8B-Instruct-abliterated-fp8",
+      "extra_args": [
+        "--tensor-parallel-size",
+        "1",
+        "--dtype",
+        "auto",
+        "--kv-cache-dtype",
+        "fp8",
+        "--gpu-memory-utilization",
+        "0.90",
+        "--max-model-len",
+        "5120",
+        "--max-num-seqs",
+        "1",
+        "--max-num-batched-tokens",
+        "1024",
+        "--swap-space",
+        "4",
+        "--limit-mm-per-prompt",
+        "{\"image\":1,\"video\":0}",
+        "--chat-template",
+        "/home/stewa/ai-models/weights/prithivMLmods/Qwen3-VL-8B-Instruct-abliterated-fp8/chat_template.jinja"
+      ]
+    },
+    "capabilities": {
+      "text": true,
+      "vision": true,
+      "embedding": false,
+      "audio": false,
+      "thinking": false,
+      "reasoning": false,
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": true,
+      "multimodal": true,
+      "mm": true,
+      "image": true,
+      "vl": true,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": false,
+      "think": false,
+      "chain_of_thought": false,
+      "cot": false,
+      "reasoner": false,
+      "o1": false,
+      "o3": false,
+      "r1": false,
+      "deepseek": false
+    },
+    "generation_defaults": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20
+    },
+    "chat_template": {
+      "source": "external",
+      "path": "/home/stewa/ai-models/weights/prithivMLmods/Qwen3-VL-8B-Instruct-abliterated-fp8/chat_template.jinja",
+      "sha256": "3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4"
+    },
+    "profiles_placeholder": null,
+    "metadata": {
+      "producer": "prithivMLmods",
+      "model_type": "image-text-to-text",
+      "library": "transformers",
+      "files_downloaded": 16,
+      "has_chat_template": true,
+      "has_embedded_chat_template": false,
+      "external_chat_template_files": [
+        "chat_template.jinja"
+      ],
+      "primary_chat_template_file": "chat_template.jinja",
+      "primary_chat_template_sha256": "3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4",
+      "quant_schemes": [
+        "fp8"
+      ],
+      "registry_layer": "curated"
+    },
+    "served_model_id": "None",
+    "model_aliases": [
+      "prithivMLmods/Qwen3-VL-8B-Instruct-abliterated-fp8"
+    ],
+    "roles": [
+      "caption",
+      "keywords",
+      "description",
+      "narration",
+      "vision_general"
+    ],
+    "license": null,
+    "source": {
+      "huggingface_id": "prithivMLmods/Qwen3-VL-8B-Instruct-abliterated-fp8"
+    },
+    "deprecated": false,
+    "family": "qwen3-vl-8b-instruct-abliterated-fp8",
+    "source_provider": "hf",
+    "quantization": "fp8",
+    "backend_alternatives": [],
+    "role_priority": {
+      "caption": 85,
+      "description": 90,
+      "keywords": 80,
+      "narration": 90,
+      "vision_general": 85
     }
   },
   {
@@ -1061,7 +1366,7 @@
       "port": 11434,
       "model_path": "ollama:/qwen3:8b",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,
@@ -1159,7 +1464,7 @@
       "port": 11434,
       "model_path": "ollama:/qwen3:8b",
       "extra_args": [],
-      "host": "host.docker.internal"
+      "host": "imageworks-ollama"
     },
     "capabilities": {
       "text": true,

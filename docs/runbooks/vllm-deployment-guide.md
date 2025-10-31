@@ -144,7 +144,9 @@ host operating system. Configure the registry entry for vLLM (and other OpenAI-c
   address or the gateway IP advertised by Docker (`ip route | grep default`).
 - `backend_config.host` is sufficient for on-host deployments (the proxy will append `/v1`). Specify `base_url` only when the
   backend is exposed behind an alternate path or TLS terminator.
-- Ollama continues to default to `http://127.0.0.1:11434`; override `host` if the daemon is bound elsewhere.
+- In the containerized proxy stack, Ollama entries default to
+  `http://imageworks-ollama:11434`. Override `IMAGEWORKS_OLLAMA_HOST` if the
+  daemon resides outside that service (for example, a host-level install).
 
 ## Troubleshooting
 

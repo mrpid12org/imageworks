@@ -122,29 +122,38 @@ def render_process_runner(
 
     # Execute command
     if execute:
-        with st.spinner("⏳ Executing command..."):
+        with st.status(
+            "⏳ Running command...", state="running", expanded=True
+        ) as status:
             result = execute_command(command, capture_output=True, timeout=timeout)
+            if result["success"]:
+                status.update(label="✅ Command completed", state="complete")
+            else:
+                status.update(
+                    label=f"❌ Command failed (exit {result['exit_code']})",
+                    state="error",
+                )
 
-            # Store in session state
-            st.session_state[result_key] = result
-            st.session_state["last_command"] = result["command"]
-            st.session_state["last_exit_code"] = result["exit_code"]
+        # Store in session state
+        st.session_state[result_key] = result
+        st.session_state["last_command"] = result["command"]
+        st.session_state["last_exit_code"] = result["exit_code"]
 
-            # Add to job history
-            job_entry = {
-                "timestamp": result["timestamp"],
-                "module": key_prefix.split("_")[0] if "_" in key_prefix else key_prefix,
-                "command": result["command"],
-                "config": config.copy(),
-                "status": "success" if result["success"] else "failed",
-                "description": button_label,
-            }
+        # Add to job history
+        job_entry = {
+            "timestamp": result["timestamp"],
+            "module": key_prefix.split("_")[0] if "_" in key_prefix else key_prefix,
+            "command": result["command"],
+            "config": config.copy(),
+            "status": "success" if result["success"] else "failed",
+            "description": button_label,
+        }
 
-            if "job_history" not in st.session_state:
-                st.session_state["job_history"] = []
-            st.session_state["job_history"].append(job_entry)
+        if "job_history" not in st.session_state:
+            st.session_state["job_history"] = []
+        st.session_state["job_history"].append(job_entry)
 
-            return result
+        return result
 
     # Display previous result if exists
     if result_key in st.session_state and st.session_state[result_key]:

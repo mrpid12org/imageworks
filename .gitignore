@@ -74,3 +74,6 @@ _staging/openwebui-webui.db.bak
 _staging/chat_templates/
 _staging/
 /home/
+ollama-data/
+configs/*.bak.json
+.codex_review/

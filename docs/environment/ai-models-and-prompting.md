@@ -49,7 +49,7 @@ This document consolidates all AI model usage, experiments, and lessons learned 
 - **Total VRAM Usage**: ~11 GB on RTX 4080
 - **Inference Speed**: <1 s per image
 - **Quality**: Still solid for contamination calls; kept for lightweight setups or as a regression check
-- **Server**: vLLM OpenAI API (`scripts/start_vllm_server.py`)
+- **Server**: ImageWorks chat proxy container (autostarted vLLM backend on port 24001)
 - **Registry Roles**: `caption`, `description` (lightweight alternative)
 
 #### Alternative Models Tested
@@ -404,40 +404,49 @@ uv run imageworks-color-narrator analyze-regions \
 
 ### Recommended Configurations
 
+The chat proxy manages vLLM launch parameters via each model's `extra_args` in
+`configs/model_registry.curated.json`. Tune those values per logical entry
+instead of invoking helper scripts directly.
+
 #### Development Setup (RTX 4080 16GB)
-```bash
-# Optimal vLLM configuration
---gpu-memory-utilization 0.8    # Use 80% of available VRAM
---max-model-len 4096            # Sufficient for image+text context
---trust-remote-code             # Required for Qwen2-VL
---served-model-name "Qwen2-VL-2B-Instruct"
-# (Note) For new pipelines prefer registry role-based resolution; direct --served-model-name
-# remains for backend launch scripts & low-level tuning.
+```json
+"extra_args": [
+  "--gpu-memory-utilization", "0.87",
+  "--max-model-len", "7168",
+  "--max-num-seqs", "1"
+]
 ```
+These values match the current `gpt-oss-20b_(MXFP4)` profile and leave safe headroom on a 16 GB card.
 
 #### Production Setup (RTX 6000 Pro 48GB)
-```bash
-# Can run larger models
---gpu-memory-utilization 0.9    # Higher utilization safe with more VRAM
---max-model-len 8192            # Larger context window
---max-num-seqs 4                # Higher concurrency
+```json
+"extra_args": [
+  "--gpu-memory-utilization", "0.92",
+  "--max-model-len", "8192",
+  "--max-num-seqs", "4"
+]
 ```
+High-memory systems can raise concurrency and context once monitoring confirms
+there is still KV-cache headroom.
 
 ### Server Deployment Best Practices
 
-#### 1. Background Process Management
+#### 1. Chat Proxy + vLLM Orchestration
 ```bash
-# vLLM helper (fallback Qwen2-VL-2B)
-uv run python scripts/start_vllm_server.py
+# Start or update the containerised proxy (includes vLLM autostart)
+docker compose -f docker-compose.chat-proxy.yml up -d chat-proxy
 
-# LMDeploy helper (tQwen2.5-VL-7B eager mode)
-uv run python scripts/start_lmdeploy_server.py --eager
+# Reload after registry edits (applies new extra_args)
+docker compose -f docker-compose.chat-proxy.yml restart chat-proxy
+
+# Inspect recent logs
+docker logs --tail 200 imageworks-chat-proxy
 ```
 
 #### 2. Health Monitoring
 ```python
 # Automated health checks
-def check_backend_health(base_url="http://localhost:8000/v1"):
+def check_backend_health(base_url="http://127.0.0.1:8100/v1"):
     try:
         response = requests.get(f"{base_url}/models", timeout=10)
         return response.status_code == 200
@@ -446,10 +455,11 @@ def check_backend_health(base_url="http://localhost:8000/v1"):
 ```
 
 #### 3. Startup Time Management
+- **Autostart Sequence**: Proxy spawns vLLM after first request for the model
 - **Model Loading**: ~30 seconds
 - **CUDA Graph Compilation**: ~30 seconds
-- **Total Initialization**: ~60-90 seconds
-- **Recommendation**: Wait 60+ seconds before first API call
+- **Total Initialization**: ~60–90 seconds
+- **Recommendation**: Allow at least one minute after the first request (or after a proxy restart) before retesting
 
 ---
 
@@ -552,10 +562,10 @@ Image → Mono-Checker (CV) → Color-Narrator (VLM) → Description-LLM (LLM) �
 **Symptoms**: Server exits immediately or fails to bind to port
 
 **Solutions**:
-- Verify model path exists and is readable
-- Check port availability: `netstat -tlnp | grep 8000`
-- Ensure `trust-remote-code` flag is set for custom models
-- Check Python environment has vLLM properly installed
+- Tail proxy logs for the failing launch: `docker logs --tail 200 imageworks-chat-proxy`
+- Confirm the registry entry's `extra_args` leave enough headroom (e.g., lower `--gpu-memory-utilization` or `--max-model-len`)
+- Ensure weights are mounted inside the container at the same path referenced by `backend_config.model_path`
+- Restart the proxy after edits: `docker compose -f docker-compose.chat-proxy.yml restart chat-proxy`
 
 #### 3. API Connection Timeouts
 **Symptoms**: Client requests timeout or fail to connect
@@ -563,7 +573,7 @@ Image → Mono-Checker (CV) → Color-Narrator (VLM) → Description-LLM (LLM) �
 **Solutions**:
 - Increase client timeout values (default 120s may be insufficient)
 - Wait longer after server startup (CUDA graph compilation takes time)
-- Verify server health: `curl http://localhost:8000/v1/models`
+- Verify server health: `curl http://127.0.0.1:8100/v1/models`
 - Check firewall and network configuration
 
 #### 4. Poor Quality Responses

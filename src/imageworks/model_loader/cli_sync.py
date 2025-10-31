@@ -682,16 +682,37 @@ def rebuild_ollama(
     if dry_run:
         typer.echo("Dry run complete (skipping import)")
         return
-    # Run importer
-    import subprocess as _sp
 
-    cmd = ["python", "scripts/import_ollama_models.py", f"--location={location}"]
     try:
-        out = _sp.check_output(cmd, stderr=_sp.STDOUT, text=True)
-        typer.echo(out.rstrip())
-    except _sp.CalledProcessError as exc:
-        typer.echo(f"Ollama import failed: {exc.output}")
-        raise typer.Exit(code=exc.returncode)
+        from importlib import util as _import_util
+        import sys as _sys
+
+        _root = Path(__file__).resolve().parents[3]
+        script_path = _root / "scripts" / "import_ollama_models.py"
+        spec = _import_util.spec_from_file_location("import_ollama_models", script_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load spec for {script_path}")
+        _ollama_import = _import_util.module_from_spec(spec)
+        _sys.modules[spec.name] = _ollama_import
+        spec.loader.exec_module(_ollama_import)  # type: ignore[arg-type]
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Failed to import Ollama importer module: {exc}")
+        raise typer.Exit(code=1)
+
+    from imageworks.tools.ollama_api import OllamaError as _OllamaError
+
+    try:
+        count = _ollama_import.run_import(
+            backend="ollama",
+            location=location,
+            dry_run=False,
+            deprecate_placeholders=False,
+            purge_existing=True,
+        )
+        typer.echo(f"Imported {count} Ollama model(s).")
+    except _OllamaError as exc:
+        typer.echo(f"Ollama import failed: {exc}")
+        raise typer.Exit(code=1)
     if show:
         from . import registry as _reg
 

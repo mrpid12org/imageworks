@@ -229,6 +229,9 @@ Import for real:
 ```bash
 uv run python scripts/import_ollama_models.py
 ```
+The importer calls the Ollama HTTP API directly; no host-side CLI install is
+required. Ensure the daemon is reachable at `OLLAMA_BASE_URL`
+(default `http://127.0.0.1:11434` when running the bundled container).
 
 Options:
 ```bash
@@ -240,11 +243,12 @@ uv run python scripts/import_ollama_models.py --deprecate-placeholders
 Environment:
 ```bash
 # Override the host written into backend_config for Ollama entries
-IMAGEWORKS_OLLAMA_HOST=host.docker.internal
+IMAGEWORKS_OLLAMA_HOST=imageworks-ollama
 ```
 
-(`host.docker.internal` is the default when the variable is unset so proxy
-containers can talk to the host daemon without extra edits.)
+(`imageworks-ollama` is the default when the variable is unset so Ollama-backed
+models target the bundled container service. Point this at a host daemon if you
+run Ollama outside the compose stack.)
 
 The importer also migrates existing Strategy A entries that were previously stored
 without a quant suffix. When a quantization tag is detected, any matching

@@ -4,7 +4,7 @@ import asyncio
 import base64
 import re
 import time
-from typing import Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Dict, Optional, TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -26,6 +26,9 @@ from .vllm_manager import VllmManager
 from ..model_loader.registry import get_entry
 from .capabilities import supports_vision, supports_reasoning
 
+if TYPE_CHECKING:  # pragma: no cover
+    from .ollama_manager import OllamaManager
+
 
 class ChatForwarder:
     def __init__(
@@ -35,6 +38,7 @@ class ChatForwarder:
         autostart: AutostartManager,
         logger: JsonlLogger,
         vllm_manager: VllmManager | None = None,
+        ollama_manager: Optional["OllamaManager"] = None,
     ):
         self.cfg = cfg
         self.metrics = metrics
@@ -42,6 +46,8 @@ class ChatForwarder:
         self.logger = logger
         self.client = httpx.AsyncClient(timeout=cfg.backend_timeout_ms / 1000)
         self.vllm_manager = vllm_manager
+        self.ollama_manager = ollama_manager
+        self._last_backend: str | None = None
 
     @staticmethod
     def _clean_generation_text(text: str | None) -> str | None:
@@ -131,9 +137,10 @@ class ChatForwarder:
     @staticmethod
     def _strip_images_for_text_model(
         messages: list[Any],
-    ) -> tuple[list[Any], int]:
+    ) -> tuple[list[Any], int, int]:
         sanitized: list[Any] = []
         removed_count = 0
+        missing_alt = 0
         placeholder = "[Image omitted: model does not support vision content]"
 
         for m in messages:
@@ -162,6 +169,7 @@ class ChatForwarder:
                         if alt_text:
                             text_segments.append(f"{placeholder} (alt: {alt_text})")
                         else:
+                            missing_alt += 1
                             text_segments.append(placeholder)
                     elif ptype == "text":
                         text_segments.append(str(part.get("text", "")))
@@ -178,7 +186,7 @@ class ChatForwarder:
             else:
                 sanitized.append(m)
 
-        return sanitized, removed_count
+        return sanitized, removed_count, missing_alt
 
     def _truncate_history_for_vision(self, messages: list[Any]) -> list[Any]:
         """
@@ -433,8 +441,8 @@ class ChatForwarder:
         has_vision = supports_vision(entry)
         has_images, image_bytes = self._detect_images(messages)
         if has_images and not has_vision:
-            sanitized_messages, removed_count = self._strip_images_for_text_model(
-                messages
+            sanitized_messages, removed_count, missing_alt = (
+                self._strip_images_for_text_model(messages)
             )
             if removed_count:
                 messages = sanitized_messages
@@ -448,6 +456,10 @@ class ChatForwarder:
                     removed_count,
                     model,
                 )
+                if missing_alt:
+                    raise err_capability_mismatch(
+                        f"Model '{model}' does not support vision/image content"
+                    )
             if has_images:
                 raise err_capability_mismatch(
                     f"Model '{model}' does not support vision/image content"
@@ -513,6 +525,23 @@ class ChatForwarder:
             served = None
         backend_id = served or entry.name
         # Backend-specific base URL and API path
+        backend = getattr(entry, "backend", "")
+        previous_backend = self._last_backend
+
+        if backend == "ollama":
+            if self.vllm_manager and previous_backend and previous_backend != "ollama":
+                try:
+                    await self.vllm_manager.deactivate()
+                except Exception:  # noqa: BLE001
+                    pass
+            if self.ollama_manager:
+                await self.ollama_manager.ensure_available()
+        else:
+            if self.ollama_manager and (
+                previous_backend == "ollama" or previous_backend is None
+            ):
+                await self.ollama_manager.unload_all()
+
         base_url, api_path = self._resolve_backend_base(entry)
         vllm_started = False
         if self.cfg.autostart_enabled and entry.backend == "vllm" and self.autostart:
@@ -534,6 +563,8 @@ class ChatForwarder:
             except Exception:
                 # If payload isn't a dict, fall back without rewrite (defensive)
                 pass
+
+        self._last_backend = backend
 
         # Apply registry generation defaults when caller did not set explicit sampling params.
         defaults = getattr(entry, "generation_defaults", None)
@@ -613,6 +644,7 @@ class ChatForwarder:
 
                     nonlocal first_token_at, collected_tokens, estimated
                     logger = logging.getLogger("ollama-stream")
+                    stream_started = False
                     raw_accum = ""
                     clean_accum = ""
 
@@ -739,6 +771,7 @@ class ChatForwarder:
                                         first_token_at = time.time()
                                     collected_tokens += len(new_segment) // 4
                                     estimated = True
+                                    stream_started = True
                                     oai = {
                                         "id": obj.get("id") or "cmpl-ollama",
                                         "object": "chat.completion.chunk",
@@ -764,6 +797,98 @@ class ChatForwarder:
                                     )
                                     # Unknown data; pass through as generic SSE data
                                     yield f"data: {raw}\n\n".encode()
+                    except httpx.HTTPError as e:
+                        logger.warning(
+                            "[Ollama] HTTP error during streaming: %s",
+                            e,
+                            exc_info=True,
+                        )
+                        protocol_error = isinstance(e, httpx.RemoteProtocolError) or (
+                            "TransferEncodingError" in str(e)
+                        )
+                        if protocol_error:
+                            if stream_started:
+                                logger.warning(
+                                    "[Ollama] Protocol error after streaming began; terminating stream gracefully"
+                                )
+                                yield b"data: [DONE]\n\n"
+                                done = True
+                                return
+                            logger.warning(
+                                "[Ollama] Protocol issue detected; attempting non-streaming fallback"
+                            )
+                            fallback_payload = dict(opayload)
+                            fallback_payload["stream"] = False
+                            try:
+                                resp = await self.client.post(
+                                    url, json=fallback_payload
+                                )
+                                if resp.status_code >= 400:
+                                    hint = resp.text[:200]
+                                    logger.error(
+                                        "[Ollama] Fallback request failed: %s", hint
+                                    )
+                                    raise err_backend_unavailable(model, hint=hint)
+                                try:
+                                    import json as _json
+
+                                    obj = resp.json()
+                                except Exception as parse_exc:  # noqa: BLE001
+                                    hint = resp.text[:200]
+                                    logger.error(
+                                        "[Ollama] Failed to parse fallback JSON: %s",
+                                        parse_exc,
+                                    )
+                                    raise err_backend_unavailable(model, hint=hint)
+                                delta_raw = (
+                                    (obj.get("message") or {}).get("content")
+                                ) or ""
+                                if delta_raw:
+                                    new_segment = consume(delta_raw)
+                                    if new_segment:
+                                        if first_token_at is None:
+                                            first_token_at = time.time()
+                                        collected_tokens += len(new_segment) // 4
+                                        estimated = False
+                                        stream_started = True
+                                        oai = {
+                                            "id": obj.get("id") or "cmpl-ollama",
+                                            "object": "chat.completion.chunk",
+                                            "choices": [
+                                                {
+                                                    "index": 0,
+                                                    "delta": {"content": new_segment},
+                                                    "finish_reason": None,
+                                                }
+                                            ],
+                                        }
+                                        out = _json.dumps(oai, ensure_ascii=False)
+                                        logger.info(
+                                            "[Ollama] Yielding fallback chunk: %s",
+                                            out[:200],
+                                        )
+                                        yield f"data: {out}\n\n".encode()
+                                logger.info(
+                                    "[Ollama] Yielding [DONE] after fallback request"
+                                )
+                                yield b"data: [DONE]\n\n"
+                                done = True
+                                return
+                            except Exception as fallback_exc:  # noqa: BLE001
+                                logger.error(
+                                    "[Ollama] Unexpected error during fallback: %s",
+                                    fallback_exc,
+                                    exc_info=True,
+                                )
+                                raise err_backend_unavailable(
+                                    model, hint=str(fallback_exc)
+                                ) from fallback_exc
+                        logger.error(
+                            "[Ollama] Exception in streaming block after fallback handling: %s",
+                            e,
+                            exc_info=True,
+                        )
+                        raise
                     except Exception as e:
                         logger.error(
                             "[Ollama] Exception in streaming block: %s",
