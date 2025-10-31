@@ -1159,6 +1159,7 @@ def render_download_import_tab():
                     st.session_state.hf_analysis = None
 
         # Display analysis results
+        warnings_list: List[str] = []
         if st.session_state.hf_analysis:
             result = st.session_state.hf_analysis
             analysis = result["analysis"]
