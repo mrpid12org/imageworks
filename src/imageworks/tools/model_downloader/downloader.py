@@ -475,6 +475,10 @@ class ModelDownloader:
             include_weights=True,
         )
 
+        selected_weight_paths: Sequence[str] = []
+        if weight_filter:
+            selected_weight_paths = [f.path for f in primary_categories["weights"]]
+
         if support_categories and support_repo_meta:
             support_files = self._download_repository_assets(
                 repo_meta=support_repo_meta,
@@ -499,7 +503,7 @@ class ModelDownloader:
             analysis,
             chat_template_info,
             support_repo=support_repo if support_repo else None,
-            selected_weights=[f.path for f in primary_categories["weights"]],
+            selected_weights=selected_weight_paths,
         )
 
         return entry
@@ -655,11 +659,14 @@ class ModelDownloader:
             name_lower = Path(file_info.path).name.lower()
             return name_lower in filter_targets
 
+        matched_weight = False
+
         for category, file_list in analysis.files.items():
             if category == "model_weights":
                 for file_info in file_list:
                     if _matches_weight(file_info):
                         categories["weights"].append(file_info)
+                        matched_weight = True
                 continue
             if category == "config":
                 categories["config"].extend(file_list)
@@ -673,6 +680,11 @@ class ModelDownloader:
             if category == "large_optional":
                 categories["large_optional"].extend(file_list)
                 continue
+
+        # If the caller supplied a filter but nothing matched, fall back to the full
+        # weight set so we never end up with an incomplete checkpoint.
+        if filter_targets and not matched_weight:
+            categories["weights"] = list(analysis.files.get("model_weights", []))
 
         return categories
 
