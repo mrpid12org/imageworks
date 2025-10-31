@@ -1218,6 +1218,25 @@ def render_download_import_tab():
             else:
                 st.warning("⚠️ No formats detected")
 
+            support_analysis = st.session_state.get("hf_support_analysis")
+            if support_analysis and isinstance(support_analysis, dict):
+                support_files = support_analysis["analysis"].files
+            else:
+                support_files = (
+                    getattr(support_analysis, "files", {}) if support_analysis else {}
+                )
+
+            def support_has_file(filename: str) -> bool:
+                if not support_files:
+                    return False
+                pools = []
+                pools.extend(support_files.get("config", []))
+                pools.extend(support_files.get("tokenizer", []))
+                pools.extend(support_files.get("optional", []))
+                return any(Path(info.path).name == filename for info in pools)
+
+            selected_weights = st.session_state.get("hf_weight_variants_state", [])
+
             # Critical files status
             st.markdown("#### 🔍 Critical Files Status")
 
@@ -1227,11 +1246,17 @@ def render_download_import_tab():
                 # Config files
                 if critical["config.json"] == "found":
                     st.success("✅ config.json")
+                elif support_has_file("config.json"):
+                    st.info("ℹ️ config.json will be downloaded from support repository")
                 else:
                     st.error("❌ config.json - MISSING (REQUIRED)")
 
                 if critical["tokenizer_config.json"] == "found":
                     st.success("✅ tokenizer_config.json")
+                elif support_has_file("tokenizer_config.json"):
+                    st.info(
+                        "ℹ️ tokenizer_config.json will be downloaded from support repository"
+                    )
                 else:
                     st.warning("⚠️ tokenizer_config.json - Missing (recommended)")
 
@@ -1241,12 +1266,22 @@ def render_download_import_tab():
                     "tokenizer.model",
                 ]:
                     st.success(f"✅ {critical['tokenizer.json or tokenizer.model']}")
+                elif support_has_file("tokenizer.json") or support_has_file(
+                    "tokenizer.model"
+                ):
+                    st.info(
+                        "ℹ️ Tokenizer files will be downloaded from support repository"
+                    )
                 else:
                     st.error("❌ Tokenizer file - MISSING (REQUIRED)")
 
                 # Generation config
                 if critical["generation_config.json"] == "found":
                     st.success("✅ generation_config.json")
+                elif support_has_file("generation_config.json"):
+                    st.info(
+                        "ℹ️ generation_config.json will be downloaded from support repository"
+                    )
                 else:
                     st.warning(
                         "⚠️ generation_config.json - Missing (may affect generation)"
@@ -1259,6 +1294,12 @@ def render_download_import_tab():
                     st.info(
                         "ℹ️ chat_template - Not found as standalone (may be embedded in tokenizer_config)"
                     )
+                elif support_has_file("chat_template.jinja") or support_has_file(
+                    "chat_template.json"
+                ):
+                    st.info(
+                        "ℹ️ chat_template will be downloaded from support repository"
+                    )
                 else:
                     st.warning("⚠️ chat_template - Status unknown")
 
@@ -1266,19 +1307,51 @@ def render_download_import_tab():
                 # File counts
                 files = analysis.files
                 st.metric("Weights", len(files.get("model_weights", [])))
-                st.metric("Config", len(files.get("config", [])))
-                st.metric("Tokenizer", len(files.get("tokenizer", [])))
+                config_count = len(files.get("config", [])) + len(
+                    support_files.get("config", []) if support_files else []
+                )
+                tokenizer_count = len(files.get("tokenizer", [])) + len(
+                    support_files.get("tokenizer", []) if support_files else []
+                )
+                st.metric("Config", config_count)
+                st.metric("Tokenizer", tokenizer_count)
 
             # Size breakdown
             st.markdown("#### 💾 Download Size")
 
-            required_size = sum(
-                f.size
-                for f in files.get("model_weights", [])
-                + files.get("config", [])
-                + files.get("tokenizer", [])
+            weight_sizes = {
+                info.path: info.size for info in files.get("model_weights", [])
+            }
+            if selected_weights:
+                required_weight_size = sum(
+                    weight_sizes.get(path, 0) for path in selected_weights
+                )
+            else:
+                required_weight_size = sum(weight_sizes.values())
+            required_config_size = sum(f.size for f in files.get("config", []))
+            required_tokenizer_size = sum(f.size for f in files.get("tokenizer", []))
+            support_config_size = (
+                sum(f.size for f in support_files.get("config", []))
+                if support_files
+                else 0
             )
+            support_tokenizer_size = (
+                sum(f.size for f in support_files.get("tokenizer", []))
+                if support_files
+                else 0
+            )
+
+            required_size = (
+                required_weight_size
+                + required_config_size
+                + required_tokenizer_size
+                + support_config_size
+                + support_tokenizer_size
+            )
+
             optional_size = sum(f.size for f in files.get("optional", []))
+            if support_files:
+                optional_size += sum(f.size for f in support_files.get("optional", []))
 
             col1, col2 = st.columns(2)
             with col1:
@@ -1347,20 +1420,59 @@ def render_download_import_tab():
                 key="hf_support_repo",
                 placeholder="owner/repo or owner/repo@branch",
             ).strip()
-            support_repo_value = st.session_state.get("hf_support_repo", "").strip()
+            support_repo_value = support_repo_value.strip()
 
-            # Warnings
-            if warnings_list:
-                st.markdown("#### ⚠️ Warnings")
-                for warning in warnings_list:
-                    if warning.startswith("❌"):
-                        st.error(warning)
-                    else:
-                        st.warning(warning)
+            cached_support_repo = st.session_state.get("hf_support_repo_cached")
+            if support_repo_value:
+                if support_repo_value != cached_support_repo:
+                    with st.spinner("🔍 Analyzing support repository..."):
+                        try:
+                            support_result = analyze_hf_repository(support_repo_value)
+                            st.session_state["hf_support_repo_cached"] = (
+                                support_repo_value
+                            )
+                            st.session_state["hf_support_analysis"] = support_result
+                            st.success("Support repository analysis complete")
+                            st.rerun()
+                        except Exception as exc:  # noqa: BLE001
+                            st.error(f"❌ Support repository analysis failed: {exc}")
+                            st.session_state["hf_support_repo_cached"] = (
+                                support_repo_value
+                            )
+                            st.session_state["hf_support_analysis"] = None
+            else:
+                st.session_state.pop("hf_support_repo_cached", None)
+                st.session_state.pop("hf_support_analysis", None)
+
+        # Warnings
+        if warnings_list:
+            st.markdown("#### ⚠️ Warnings")
+            for warning in warnings_list:
+                normalized = warning.lower()
+                if "config.json" in normalized and support_has_file("config.json"):
+                    st.info("ℹ️ config.json will be downloaded from support repository")
+                    continue
+                if "tokenizer" in normalized and (
+                    support_has_file("tokenizer.json")
+                    or support_has_file("tokenizer.model")
+                ):
+                    st.info(
+                        "ℹ️ Tokenizer artifacts will be downloaded from support repository"
+                    )
+                    continue
+                if "generation_config.json" in normalized and support_has_file(
+                    "generation_config.json"
+                ):
+                    st.info(
+                        "ℹ️ generation_config.json will be downloaded from support repository"
+                    )
+                    continue
+                if warning.startswith("❌"):
+                    st.error(warning)
+                else:
+                    st.warning(warning)
 
             st.markdown("---")
-
-        selected_weights = st.session_state.get("hf_weight_variants_state", [])
 
         # Download options
         col1, col2 = st.columns(2)
