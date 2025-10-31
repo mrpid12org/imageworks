@@ -322,6 +322,31 @@ def analyze_hf_repository(model_id: str) -> Dict[str, Any]:
     }
 
 
+def categorize_support_file_list(files: Any) -> Dict[str, List[Any]]:
+    """Fallback categorization when analyzer.files is a list rather than dict."""
+    categories = {"config": [], "tokenizer": [], "optional": []}
+    for info in files or []:
+        path = info.path.lower()
+        if path.endswith("config.json") or path.endswith("generation_config.json"):
+            categories["config"].append(info)
+        elif path.endswith("tokenizer_config.json"):
+            categories["config"].append(info)
+        elif any(
+            key in path
+            for key in [
+                "tokenizer.json",
+                "tokenizer.model",
+                "vocab",
+                "merges",
+                "spiece",
+            ]
+        ):
+            categories["tokenizer"].append(info)
+        else:
+            categories["optional"].append(info)
+    return categories
+
+
 def check_critical_files(analysis) -> Dict[str, Any]:
     """Check which critical files are present/missing."""
     files = analysis.files
@@ -1221,20 +1246,56 @@ def render_download_import_tab():
 
             support_analysis = st.session_state.get("hf_support_analysis")
             if support_analysis and isinstance(support_analysis, dict):
-                support_files = support_analysis["analysis"].files
+                support_obj = support_analysis.get("analysis")
             else:
-                support_files = (
-                    getattr(support_analysis, "files", {}) if support_analysis else {}
-                )
+                support_obj = support_analysis
+            raw_support_files = (
+                getattr(support_obj, "files", {}) if support_obj is not None else {}
+            )
+            if isinstance(raw_support_files, dict):
+                support_files = raw_support_files
+            elif isinstance(raw_support_files, list):
+                support_files = categorize_support_file_list(raw_support_files)
+            else:
+                support_files = {}
+            support_config_files = (
+                support_files.get("config", [])
+                if isinstance(support_files, dict)
+                else []
+            )
+            support_tokenizer_files = (
+                support_files.get("tokenizer", [])
+                if isinstance(support_files, dict)
+                else []
+            )
+            support_optional_files = (
+                support_files.get("optional", [])
+                if isinstance(support_files, dict)
+                else []
+            )
+            if not isinstance(support_files, dict):
+                support_config_files = []
+                support_tokenizer_files = []
+                support_optional_files = []
+                if isinstance(raw_support_files, list):
+                    categorized = categorize_support_file_list(raw_support_files)
+                    support_files = categorized
+                    support_config_files = categorized.get("config", [])
+                    support_tokenizer_files = categorized.get("tokenizer", [])
+                    support_optional_files = categorized.get("optional", [])
 
             def support_has_file(filename: str) -> bool:
-                if not support_files:
+                if not filename:
                     return False
-                pools = []
-                pools.extend(support_files.get("config", []))
-                pools.extend(support_files.get("tokenizer", []))
-                pools.extend(support_files.get("optional", []))
-                return any(Path(info.path).name == filename for info in pools)
+                target = filename.lower()
+                for file_info in (
+                    support_config_files
+                    + support_tokenizer_files
+                    + support_optional_files
+                ):
+                    if Path(file_info.path).name.lower() == target:
+                        return True
+                return False
 
             selected_weights = st.session_state.get("hf_weight_variants_state", [])
 
