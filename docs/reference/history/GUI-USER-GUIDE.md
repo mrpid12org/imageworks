@@ -178,11 +178,13 @@ Click "Show Advanced Options" to access all CLI flags:
 **Workflow** (4-stage):
 
 1. **Configure Tab**: Select images and options
+   - Optional *Critique Prompt Options* expander configures title templates,
+     default categories, and judge briefing notes for competition scoring workflows.
 2. **Preview Tab**: Run dry-run to see proposed tags
 3. **Edit Tab**: Review and modify tags
    - Approve/reject individual tags
    - Bulk find/replace
-   - Edit tag values
+   - Edit tag values (caption, keywords, description, critique, title/category, score)
 4. **Commit Tab**: Write approved tags to files
 
 **IMPORTANT**: Always preview before committing!
@@ -192,6 +194,7 @@ Click "Show Advanced Options" to access all CLI flags:
 - Bulk operations (find/replace, approve all)
 - Pagination for large batches
 - Backup originals option
+- Competition critique mode with structured score/title/category controls
 
 **Output**: Tags written to image EXIF/XMP metadata
 

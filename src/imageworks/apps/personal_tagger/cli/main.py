@@ -85,6 +85,21 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
         "--prompt-profile",
         help="Prompt profile name to apply (defaults to configuration).",
     ),
+    critique_title_template: Optional[str] = typer.Option(
+        None,
+        "--critique-title-template",
+        help="Template for critique titles (placeholders: {stem}, {name}, {caption}, {parent}).",
+    ),
+    critique_category: Optional[str] = typer.Option(
+        None,
+        "--critique-category",
+        help="Default competition category to supply to the critique prompt.",
+    ),
+    critique_notes: Optional[str] = typer.Option(
+        None,
+        "--critique-notes",
+        help="Additional notes or judging brief forwarded to the critique prompt.",
+    ),
     batch_size: Optional[int] = typer.Option(
         None, "--batch-size", help="Number of images per inference batch."
     ),
@@ -101,7 +116,7 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
     dry_run: Optional[bool] = typer.Option(
         None,
         "--dry-run/--no-dry-run",
-        help="Skip AI inference and metadata writes, use fake test data.",
+        help="Run full inference but skip metadata writes (source files untouched).",
     ),
     no_meta: bool = typer.Option(
         False,
@@ -194,6 +209,9 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
             temperature=temperature,
             top_p=top_p,
             prompt_profile=prompt_profile,
+            critique_title_template=critique_title_template,
+            critique_category=critique_category,
+            critique_notes=critique_notes,
             batch_size=batch_size,
             max_workers=max_workers,
             recursive=recursive,
@@ -308,6 +326,21 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "--prompt-profile",
         help="Prompt profile name to apply (defaults to configuration).",
     ),
+    critique_title_template: Optional[str] = typer.Option(
+        None,
+        "--critique-title-template",
+        help="Template for critique titles (placeholders: {stem}, {name}, {caption}, {parent}).",
+    ),
+    critique_category: Optional[str] = typer.Option(
+        None,
+        "--critique-category",
+        help="Default competition category to supply to the critique prompt.",
+    ),
+    critique_notes: Optional[str] = typer.Option(
+        None,
+        "--critique-notes",
+        help="Additional notes or judging brief forwarded to the critique prompt.",
+    ),
     batch_size: Optional[int] = typer.Option(
         None,
         "--batch-size",
@@ -326,7 +359,7 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
     dry_run: Optional[bool] = typer.Option(  # noqa: FBT001 - clarity over style
         None,
         "--dry-run/--no-dry-run",
-        help="Skip AI inference and metadata writes, use fake test data.",
+        help="Run full inference but skip metadata writes (source files untouched).",
     ),
     no_meta: bool = typer.Option(
         False,
@@ -463,6 +496,9 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "temperature": temperature,
         "top_p": top_p,
         "prompt_profile": prompt_profile,
+        "critique_title_template": critique_title_template,
+        "critique_category": critique_category,
+        "critique_notes": critique_notes,
         "batch_size": batch_size,
         "max_workers": max_workers,
         "recursive": recursive,

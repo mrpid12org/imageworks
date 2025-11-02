@@ -1,8 +1,35 @@
 """Metadata editor component for tag preview and editing."""
 
-import streamlit as st
-from typing import List, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List
+
+import numpy as np
+import streamlit as st
+
+
+def _normalize_keywords(raw_keywords: Any) -> List[str]:
+    """Convert keyword payload into a list of plain strings."""
+
+    normalized: List[str] = []
+    if isinstance(raw_keywords, list):
+        for item in raw_keywords:
+            if isinstance(item, dict):
+                value = item.get("keyword")
+                if value:
+                    normalized.append(str(value))
+            elif item is not None:
+                text = str(item).strip()
+                if text:
+                    normalized.append(text)
+    elif raw_keywords:
+        normalized.extend(
+            [
+                part.strip()
+                for part in str(raw_keywords).split(",")
+                if part and part.strip()
+            ]
+        )
+    return normalized
 
 
 def render_metadata_editor(
@@ -104,23 +131,29 @@ def render_metadata_editor(
     # Edit each image
     for i, img_data in enumerate(page_images):
         actual_idx = start_idx + i
-        img_path = img_data.get("path", "")
+        img_path = img_data.get("path") or img_data.get("image", "")
+        display_name = Path(str(img_path)).name if img_path else "<unknown>"
 
-        with st.expander(f"📷 {Path(img_path).name}", expanded=False):
-            col1, col2 = st.columns([1, 2])
+        with st.expander(f"📷 {display_name}", expanded=False):
+            col_thumb, col_meta = st.columns([1, 2])
 
-            with col1:
-                # Show image thumbnail
-                if Path(img_path).exists():
+            with col_thumb:
+                # Show image thumbnail or placeholder
+                if img_path and Path(str(img_path)).exists():
                     try:
                         from imageworks.gui.components.image_viewer import load_image
 
                         img_array = load_image(img_path, max_size=300)
                         st.image(img_array, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Failed to load image: {e}")
+                    except Exception as exc:  # pragma: no cover - display only
+                        st.warning(f"Failed to load image: {exc}")
+                else:
+                    placeholder = np.full((220, 330, 3), 230, dtype=np.uint8)
+                    st.image(
+                        placeholder, caption="Dry run preview", use_container_width=True
+                    )
 
-            with col2:
+            with col_meta:
                 # Caption editor
                 caption = img_data.get("caption", "")
                 edited_caption = st.text_area(
@@ -133,9 +166,8 @@ def render_metadata_editor(
                     images_with_tags[actual_idx]["caption"] = edited_caption
 
                 # Keywords editor
-                keywords = img_data.get("keywords", "")
-                if isinstance(keywords, list):
-                    keywords = ", ".join(keywords)
+                keywords_list = _normalize_keywords(img_data.get("keywords", []))
+                keywords = ", ".join(keywords_list)
 
                 edited_keywords = st.text_area(
                     "Keywords (comma-separated)",
@@ -155,11 +187,71 @@ def render_metadata_editor(
                 edited_description = st.text_area(
                     "Description",
                     value=description,
-                    height=100,
+                    height=160,
                     key=f"{key_prefix}_description_{actual_idx}",
                 )
                 if edited_description != description:
                     images_with_tags[actual_idx]["description"] = edited_description
+
+                critique = img_data.get("critique", "")
+                edited_critique = st.text_area(
+                    "Critique",
+                    value=critique,
+                    height=140,
+                    key=f"{key_prefix}_critique_{actual_idx}",
+                )
+                if edited_critique != critique:
+                    images_with_tags[actual_idx]["critique"] = edited_critique
+
+                critique_title = img_data.get("critique_title") or ""
+                edited_title = st.text_input(
+                    "Critique title",
+                    value=critique_title,
+                    key=f"{key_prefix}_critique_title_{actual_idx}",
+                )
+                if edited_title != critique_title:
+                    images_with_tags[actual_idx]["critique_title"] = (
+                        edited_title.strip() or None
+                    )
+
+                category_options = ["", "Open", "Nature", "Creative", "Themed"]
+                current_category = img_data.get("critique_category") or ""
+                try:
+                    category_index = category_options.index(current_category)
+                except ValueError:
+                    category_index = 0
+                edited_category = st.selectbox(
+                    "Critique category",
+                    options=category_options,
+                    index=category_index,
+                    key=f"{key_prefix}_critique_category_{actual_idx}",
+                )
+                if edited_category != current_category:
+                    images_with_tags[actual_idx]["critique_category"] = (
+                        edited_category or None
+                    )
+
+                existing_score = (
+                    img_data.get("critique_score")
+                    if isinstance(img_data.get("critique_score"), int)
+                    else None
+                )
+                clear_score = st.checkbox(
+                    "No score",
+                    value=existing_score is None,
+                    key=f"{key_prefix}_critique_score_toggle_{actual_idx}",
+                )
+                default_score = existing_score if existing_score is not None else 18
+                score_value = st.number_input(
+                    "Score (0–20)",
+                    min_value=0,
+                    max_value=20,
+                    step=1,
+                    value=int(default_score),
+                    key=f"{key_prefix}_critique_score_{actual_idx}",
+                )
+                updated_score = None if clear_score else int(score_value)
+                images_with_tags[actual_idx]["critique_score"] = updated_score
 
             # Approval checkbox
             approved = img_data.get("approved", True)
@@ -202,20 +294,21 @@ def render_compact_tag_list(
     # Display as table
     rows = []
     for img_data in display_images:
-        img_name = Path(img_data.get("path", "")).name
+        img_path = img_data.get("path") or img_data.get("image", "")
+        img_name = Path(str(img_path)).name if img_path else "<unknown>"
         caption = (
             img_data.get("caption", "")[:50] + "..."
             if len(img_data.get("caption", "")) > 50
             else img_data.get("caption", "")
         )
 
-        keywords = img_data.get("keywords", [])
-        if isinstance(keywords, list):
-            keywords_str = ", ".join(keywords[:5])
-            if len(keywords) > 5:
-                keywords_str += f" (+{len(keywords)-5} more)"
+        keywords_list = _normalize_keywords(img_data.get("keywords", []))
+        if keywords_list:
+            keywords_str = ", ".join(keywords_list[:5])
+            if len(keywords_list) > 5:
+                keywords_str += f" (+{len(keywords_list)-5} more)"
         else:
-            keywords_str = str(keywords)[:50]
+            keywords_str = "<none>"
 
         approved_str = "✅" if img_data.get("approved", True) else "❌"
 
@@ -224,6 +317,15 @@ def render_compact_tag_list(
                 "Image": img_name,
                 "Caption": caption,
                 "Keywords": keywords_str,
+                "Critique": (img_data.get("critique", "") or "<none>")[:80],
+                "Critique Title": img_data.get("critique_title")
+                or (Path(str(img_path)).stem if img_path else ""),
+                "Category": img_data.get("critique_category") or "-",
+                "Score": (
+                    str(img_data.get("critique_score"))
+                    if img_data.get("critique_score") is not None
+                    else "-"
+                ),
                 "Approved": approved_str,
             }
         )

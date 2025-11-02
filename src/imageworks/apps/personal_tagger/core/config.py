@@ -91,25 +91,26 @@ class PersonalTaggerSettings:
     default_input_dirs: Tuple[Path, ...] = field(default_factory=tuple)
     default_output_jsonl: Path = Path("outputs/results/personal_tagger.jsonl")
     default_summary_path: Path = Path("outputs/summaries/personal_tagger_summary.md")
-    default_backend: str = "lmdeploy"
-    default_model: str = "Qwen2.5-VL-7B-AWQ"
-    default_base_url: str = "http://localhost:24001/v1"
+    default_backend: str = "vllm"
+    default_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+    default_base_url: str = "http://localhost:8100/v1"
     default_timeout: int = 120
     default_max_new_tokens: int = 512
     default_temperature: float = 0.2
     default_top_p: float = 0.9
-    default_prompt_profile: str = "default"
+    default_prompt_profile: str = "club_judge_json"
     default_batch_size: int = 2
     default_max_workers: int = 2
-    default_recursive: bool = True
+    default_recursive: bool = False
     default_dry_run: bool = False
     default_no_meta: bool = False
     default_preflight: bool = True
     default_backup_originals: bool = True
     default_overwrite_metadata: bool = False
-    caption_model: str = "Qwen2.5-VL-7B-AWQ"
-    keyword_model: str = "Qwen2.5-VL-7B-AWQ"
-    description_model: str = "Qwen2.5-VL-7B-AWQ"
+    default_use_registry: bool = True
+    caption_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+    keyword_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+    description_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
     default_api_key: str = "EMPTY"
     max_keywords: int = 15
     image_extensions: Tuple[str, ...] = (
@@ -123,6 +124,9 @@ class PersonalTaggerSettings:
         ".cr3",
     )
     json_schema_version: str = "1.0"
+    critique_title_template: str = "{stem}"
+    critique_default_category: Optional[str] = None
+    critique_default_notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,9 @@ class PersonalTaggerConfig:
     caption_role: str = "caption"
     keyword_role: str = "keywords"
     description_role: str = "description"
+    critique_title_template: str = "{stem}"
+    critique_category: Optional[str] = None
+    critique_notes: str = ""
 
 
 def _merge_dict(
@@ -211,6 +218,7 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         "default_summary_path": defaults.default_summary_path,
         "default_backend": defaults.default_backend,
         "default_model": defaults.default_model,
+        "default_no_meta": defaults.default_no_meta,
         "description_model": defaults.description_model,
         "caption_model": defaults.caption_model,
         "keyword_model": defaults.keyword_model,
@@ -225,10 +233,14 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         "default_max_workers": defaults.default_max_workers,
         "default_recursive": defaults.default_recursive,
         "default_dry_run": defaults.default_dry_run,
+        "default_use_registry": defaults.default_use_registry,
         "default_backup_originals": defaults.default_backup_originals,
         "default_overwrite_metadata": defaults.default_overwrite_metadata,
         "max_keywords": defaults.max_keywords,
         "image_extensions": defaults.image_extensions,
+        "critique_title_template": defaults.critique_title_template,
+        "critique_default_category": defaults.critique_default_category,
+        "critique_default_notes": defaults.critique_default_notes,
         "json_schema_version": defaults.json_schema_version,
         "default_preflight": defaults.default_preflight,
     }
@@ -309,6 +321,7 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         result.get("default_recursive"), defaults.default_recursive
     )
     dry_run = _coerce_bool(result.get("default_dry_run"), defaults.default_dry_run)
+    no_meta = _coerce_bool(result.get("default_no_meta"), defaults.default_no_meta)
     backup_originals = _coerce_bool(
         result.get("default_backup_originals"), defaults.default_backup_originals
     )
@@ -318,7 +331,26 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
     preflight = _coerce_bool(
         result.get("default_preflight"), defaults.default_preflight
     )
+    use_registry = _coerce_bool(
+        result.get("default_use_registry"), defaults.default_use_registry
+    )
     max_keywords = _coerce_int(result.get("max_keywords"), defaults.max_keywords)
+    critique_title_template = (
+        str(
+            result.get("critique_title_template", defaults.critique_title_template)
+        ).strip()
+        or defaults.critique_title_template
+    )
+    critique_category_raw = result.get(
+        "critique_default_category", defaults.critique_default_category
+    )
+    if critique_category_raw is None:
+        critique_category = defaults.critique_default_category
+    else:
+        critique_category = str(critique_category_raw).strip() or None
+    critique_notes = str(
+        result.get("critique_default_notes", defaults.critique_default_notes) or ""
+    ).strip()
 
     image_exts = _normalise_iterable(result.get("image_extensions"))
     if not image_exts:
@@ -345,9 +377,11 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         default_max_workers=max_workers,
         default_recursive=recursive,
         default_dry_run=dry_run,
+        default_no_meta=no_meta,
         default_backup_originals=backup_originals,
         default_overwrite_metadata=overwrite_metadata,
         default_preflight=preflight,
+        default_use_registry=use_registry,
         caption_model=caption_model,
         keyword_model=keyword_model,
         description_model=description_model,
@@ -357,6 +391,9 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
             result.get("json_schema_version", defaults.json_schema_version)
         ),
         default_api_key=api_key,
+        critique_title_template=critique_title_template,
+        critique_default_category=critique_category,
+        critique_default_notes=critique_notes,
     )
 
 
@@ -392,6 +429,9 @@ def build_runtime_config(
     caption_role: Optional[str] = None,
     keyword_role: Optional[str] = None,
     description_role: Optional[str] = None,
+    critique_title_template: Optional[str] = None,
+    critique_category: Optional[str] = None,
+    critique_notes: Optional[str] = None,
 ) -> PersonalTaggerConfig:
     """Compose a runtime configuration from defaults and CLI overrides."""
 
@@ -417,15 +457,6 @@ def build_runtime_config(
         or model
         or settings.description_model
         or settings.default_model
-    )
-    resolved_description_model = (
-        str(desc_candidate).strip() or settings.description_model
-    )
-    resolved_caption_model = (
-        str(caption_model or settings.caption_model).strip() or settings.caption_model
-    )
-    resolved_keyword_model = (
-        str(keyword_model or settings.keyword_model).strip() or settings.keyword_model
     )
     resolved_base_url = (base_url or settings.default_base_url).strip()
     resolved_api_key = (api_key or settings.default_api_key).strip()
@@ -468,6 +499,20 @@ def build_runtime_config(
     resolved_max_keywords = (
         max_keywords if max_keywords is not None else settings.max_keywords
     )
+    if isinstance(critique_title_template, str) and critique_title_template.strip():
+        resolved_critique_title_template = critique_title_template.strip()
+    else:
+        resolved_critique_title_template = settings.critique_title_template or "{stem}"
+    if not resolved_critique_title_template:
+        resolved_critique_title_template = "{stem}"
+    if critique_category is None:
+        resolved_critique_category = settings.critique_default_category
+    else:
+        resolved_critique_category = str(critique_category).strip() or None
+    if critique_notes is None:
+        resolved_critique_notes = settings.critique_default_notes
+    else:
+        resolved_critique_notes = str(critique_notes).strip()
 
     resolved_exts: Tuple[str, ...]
     if image_extensions:
@@ -482,12 +527,62 @@ def build_runtime_config(
     else:
         resolved_exts = settings.image_extensions
 
-    resolved_use_registry = bool(use_registry) if use_registry is not None else False
+    if use_registry is None:
+        resolved_use_registry = settings.default_use_registry
+    else:
+        resolved_use_registry = bool(use_registry)
     resolved_caption_role = (caption_role or "caption").strip() or "caption"
     resolved_keyword_role = (keyword_role or "keywords").strip() or "keywords"
     resolved_description_role = (
         description_role or "description"
     ).strip() or "description"
+
+    explicit_caption_model = (caption_model or "").strip()
+    explicit_keyword_model = (keyword_model or "").strip()
+    explicit_description_model = (description_model or "").strip()
+    explicit_unified_model = (model or "").strip()
+
+    resolved_caption_model = ""
+    resolved_keyword_model = ""
+    resolved_description_model = ""
+
+    if resolved_use_registry:
+        resolved_caption_model = explicit_caption_model or explicit_unified_model or ""
+        resolved_keyword_model = explicit_keyword_model or explicit_unified_model or ""
+        resolved_description_model = (
+            explicit_description_model or explicit_unified_model or ""
+        )
+    else:
+        resolved_caption_model = (
+            explicit_caption_model or explicit_unified_model or settings.caption_model
+        )
+        resolved_keyword_model = (
+            explicit_keyword_model or explicit_unified_model or settings.keyword_model
+        )
+        resolved_description_model = (
+            explicit_description_model
+            or explicit_unified_model
+            or str(desc_candidate).strip()
+            or settings.description_model
+        )
+
+    if resolved_use_registry:
+        from imageworks.model_loader.role_selection import select_by_role
+        from imageworks.model_loader.service import CapabilityError
+
+        def _resolve(role: str, current: str) -> str:
+            if current:
+                return current
+            try:
+                return select_by_role(role)
+            except CapabilityError as exc:
+                raise RuntimeError(
+                    f"No registry model available for role '{role}': {exc}"
+                ) from exc
+
+        resolved_caption_model = _resolve("caption", resolved_caption_model)
+        resolved_keyword_model = _resolve("keywords", resolved_keyword_model)
+        resolved_description_model = _resolve("description", resolved_description_model)
 
     return PersonalTaggerConfig(
         input_paths=tuple(resolved_inputs),
@@ -519,4 +614,7 @@ def build_runtime_config(
         caption_role=resolved_caption_role,
         keyword_role=resolved_keyword_role,
         description_role=resolved_description_role,
+        critique_title_template=resolved_critique_title_template,
+        critique_category=resolved_critique_category,
+        critique_notes=resolved_critique_notes,
     )

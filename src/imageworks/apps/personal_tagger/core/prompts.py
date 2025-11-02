@@ -2,10 +2,60 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Optional
+from dataclasses import dataclass, replace
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 from imageworks.libs.prompting import PromptLibrary, PromptProfileBase
+
+_LOGGER = logging.getLogger(__name__)
+
+_OVERRIDE_PATH = Path("configs/personal_tagger_prompts.user.json")
+
+
+def _stage_to_dict(stage: StagePrompt) -> Dict[str, object]:
+    return {
+        "system": stage.system,
+        "user_template": stage.user_template,
+        "max_new_tokens": stage.max_new_tokens,
+        "expects_json": stage.expects_json,
+    }
+
+
+def _stage_from_dict(data: Dict[str, object]) -> StagePrompt:
+    return StagePrompt(
+        system=str(data.get("system", "")),
+        user_template=str(data.get("user_template", "")),
+        max_new_tokens=data.get("max_new_tokens"),
+        expects_json=bool(data.get("expects_json", False)),
+    )
+
+
+def _profile_to_dict(profile: TaggerPromptProfile) -> Dict[str, object]:
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "description": profile.description,
+        "caption_stage": _stage_to_dict(profile.caption_stage),
+        "keyword_stage": _stage_to_dict(profile.keyword_stage),
+        "description_stage": _stage_to_dict(profile.description_stage),
+        "critique_stage": _stage_to_dict(profile.critique_stage),
+    }
+
+
+def _profile_from_dict(data: Dict[str, object]) -> TaggerPromptProfile:
+    return TaggerPromptProfile(
+        id=int(data.get("id")),
+        name=str(data.get("name", "")),
+        description=str(data.get("description", "")),
+        caption_stage=_stage_from_dict(data.get("caption_stage", {})),
+        keyword_stage=_stage_from_dict(data.get("keyword_stage", {})),
+        description_stage=_stage_from_dict(data.get("description_stage", {})),
+        critique_stage=_stage_from_dict(data.get("critique_stage", {})),
+    )
+
 
 __all__ = [
     "StagePrompt",
@@ -14,6 +64,10 @@ __all__ = [
     "DEFAULT_PROMPT_ID",
     "get_prompt_profile",
     "list_prompt_profiles",
+    "serialize_prompt_profile",
+    "save_prompt_profile_data",
+    "reset_prompt_profile",
+    "is_user_profile",
 ]
 
 
@@ -24,21 +78,30 @@ class StagePrompt:
     system: str
     user_template: str
     max_new_tokens: Optional[int] = None
+    expects_json: bool = False
 
     def render(self, **context: str) -> str:
-        return self.user_template.format(**context)
+        class _MissingDefault(dict):
+            def __missing__(self, key: str) -> str:
+                return ""
+
+        safe_context: Dict[str, Any] = {
+            key: "" if value is None else str(value) for key, value in context.items()
+        }
+        return self.user_template.format_map(_MissingDefault(safe_context))
 
 
 @dataclass(frozen=True)
 class TaggerPromptProfile(PromptProfileBase):
-    """Prompt variants used by the three tagging stages."""
+    """Prompt variants used by the tagging stages."""
 
     caption_stage: StagePrompt
     keyword_stage: StagePrompt
     description_stage: StagePrompt
+    critique_stage: StagePrompt
 
 
-PROFILES: Dict[int, TaggerPromptProfile] = {
+_BASE_PROFILES: Dict[int, TaggerPromptProfile] = {
     1: TaggerPromptProfile(
         id=1,
         name="default",
@@ -76,6 +139,17 @@ PROFILES: Dict[int, TaggerPromptProfile] = {
             ),
             max_new_tokens=512,
         ),
+        critique_stage=StagePrompt(
+            system=(
+                "You are a seasoned photography competition judge providing concise critiques. "
+                "Deliver actionable feedback covering technical quality, composition, and storytelling impact."
+            ),
+            user_template=(
+                "Provide a three-point critique of this photograph aimed at improving a competition entry. "
+                "Address strengths, weaknesses, and a suggestion for improvement in separate sentences."
+            ),
+            max_new_tokens=256,
+        ),
     ),
     2: TaggerPromptProfile(
         id=2,
@@ -110,6 +184,16 @@ PROFILES: Dict[int, TaggerPromptProfile] = {
                 "Caption context: {caption}. Keyword highlights: {keyword_preview}."
             ),
             max_new_tokens=512,
+        ),
+        critique_stage=StagePrompt(
+            system=(
+                "Judge the image as if reviewing entries for an art photography competition."
+            ),
+            user_template=(
+                "Offer a concise critique with three bullet-style sentences: (1) what works well, (2) what holds it back, "
+                "(3) the most impactful change the photographer could make."
+            ),
+            max_new_tokens=256,
         ),
     ),
     3: TaggerPromptProfile(
@@ -146,12 +230,128 @@ PROFILES: Dict[int, TaggerPromptProfile] = {
             ),
             max_new_tokens=512,
         ),
+        critique_stage=StagePrompt(
+            system=(
+                "Provide competition-grade critiques balancing encouragement with technical honesty."
+            ),
+            user_template=(
+                "Deliver an expert critique in three sentences: strengths, areas to improve, and guidance on how to elevate the image."
+            ),
+            max_new_tokens=256,
+        ),
     ),
 }
 
+_BASE_PROFILES[4] = replace(
+    _BASE_PROFILES[1],
+    id=4,
+    name="club_judge_json",
+    description=(
+        "Competition judging critique with structured JSON output and scoring rubric."
+    ),
+    critique_stage=StagePrompt(
+        system=(
+            "You are an experienced UK camera-club competition judge.\n"
+            "Your task is to provide a concise, constructive critique and a single numeric score out of 20.\n"
+            "\n"
+            "Judging rubric (apply in this order):\n"
+            "1. Impact & Communication — clarity of subject/intent; mood/story; originality.\n"
+            "2. Composition & Design — light and tone, focal point, balance/geometry, background control, timing.\n"
+            "3. Technical Quality & Presentation — exposure/contrast, colour/mono intent, sharpness where needed, noise/artefacts (halos, banding, CA), crop/borders.\n"
+            "\n"
+            "Guidelines:\n"
+            "* Prioritise impact and communication over minor technical quibbles; note specific faults only when they materially affect the image.\n"
+            "* Be constructive and specific; include one actionable improvement when appropriate.\n"
+            "* Respect the declared category (Open/Nature/Creative/Themed). If rules appear violated, mention it briefly but still give a fair score for what is on screen.\n"
+            "* Avoid personal taste statements such as “I like/don’t like.” Judge the photographer’s intent and the image’s effectiveness.\n"
+            "* Length target for the critique text: 80–120 words.\n"
+            "* Score must be an integer 0–20. At your club, most images fall in 14–20, but use the full scale when warranted.\n"
+            "\n"
+            "Output format (valid JSON only, no extra text):\n"
+            "{\n"
+            '  "title": "<string or null>",\n'
+            '  "category": "Open|Nature|Creative|Themed|null",\n'
+            '  "critique": "<80–120 words, specific and constructive>",\n'
+            '  "score": <integer 0–20>\n'
+            "}"
+        ),
+        user_template=(
+            "Judge the following entry using the rubric.\n"
+            "Title: {title}\n"
+            "Category: {category}\n"
+            "Notes: {notes}\n"
+            "Caption context: {caption}\n"
+            "Keyword highlights: {keyword_preview}\n"
+            "\n"
+            "Return only the JSON object defined in the system prompt."
+        ),
+        max_new_tokens=448,
+        expects_json=True,
+    ),
+)
+
 DEFAULT_PROMPT_ID = 1
 
-PROMPT_LIBRARY = PromptLibrary(PROFILES, default_id=DEFAULT_PROMPT_ID)
+
+def _load_user_overrides() -> (
+    Tuple[Dict[int, TaggerPromptProfile], Dict[int, Dict[str, object]]]
+):
+    if not _OVERRIDE_PATH.exists():
+        return {}, {}
+
+    try:
+        data = json.loads(_OVERRIDE_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.warning("Failed to load prompt overrides: %s", exc)
+        return {}, {}
+
+    overrides: Dict[int, TaggerPromptProfile] = {}
+    raw_data: Dict[int, Dict[str, object]] = {}
+    for entry in data.get("profiles", []):
+        try:
+            profile = _profile_from_dict(entry)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.warning("Invalid prompt override skipped: %s", exc)
+            continue
+        overrides[profile.id] = profile
+        raw_data[profile.id] = _profile_to_dict(profile)
+    return overrides, raw_data
+
+
+def _write_overrides(raw: Dict[int, Dict[str, object]]) -> None:
+    if not raw:
+        if _OVERRIDE_PATH.exists():
+            _OVERRIDE_PATH.unlink()
+        return
+
+    payload = {"profiles": list(raw.values())}
+    _OVERRIDE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _OVERRIDE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _combine_profiles(
+    overrides: Dict[int, TaggerPromptProfile],
+) -> Dict[int, TaggerPromptProfile]:
+    merged = dict(_BASE_PROFILES)
+    merged.update(overrides)
+    return merged
+
+
+_USER_OVERRIDE_PROFILES, _USER_OVERRIDE_RAW = _load_user_overrides()
+
+
+def _build_prompt_library() -> PromptLibrary:
+    return PromptLibrary(
+        _combine_profiles(_USER_OVERRIDE_PROFILES), default_id=DEFAULT_PROMPT_ID
+    )
+
+
+PROMPT_LIBRARY = _build_prompt_library()
+
+
+def _next_profile_id() -> int:
+    all_ids = set(_BASE_PROFILES.keys()) | set(_USER_OVERRIDE_PROFILES.keys())
+    return max(all_ids) + 1 if all_ids else 1
 
 
 def get_prompt_profile(identifier=None) -> TaggerPromptProfile:
@@ -164,3 +364,56 @@ def list_prompt_profiles():
     """List available prompt profiles."""
 
     return PROMPT_LIBRARY.list()
+
+
+def serialize_prompt_profile(identifier) -> Dict[str, object]:
+    profile = get_prompt_profile(identifier)
+    return _profile_to_dict(profile)
+
+
+def _refresh_library() -> None:
+    global PROMPT_LIBRARY
+    PROMPT_LIBRARY = _build_prompt_library()
+
+
+def save_prompt_profile_data(
+    data: Dict[str, object], *, as_new: bool = False
+) -> TaggerPromptProfile:
+    """Persist a prompt profile override and refresh the library.
+
+    Args:
+        data: Serialized prompt profile data (matching serialize_prompt_profile).
+        as_new: When True, allocate a new profile id; otherwise overwrite provided id.
+    """
+
+    global _USER_OVERRIDE_PROFILES, _USER_OVERRIDE_RAW
+
+    payload = dict(data)
+    target_id = payload.get("id")
+    if as_new or target_id is None:
+        payload["id"] = _next_profile_id()
+    else:
+        payload["id"] = int(target_id)
+
+    profile = _profile_from_dict(payload)
+    _USER_OVERRIDE_PROFILES[profile.id] = profile
+    _USER_OVERRIDE_RAW[profile.id] = _profile_to_dict(profile)
+    _write_overrides(_USER_OVERRIDE_RAW)
+    _refresh_library()
+    return profile
+
+
+def reset_prompt_profile(profile_id: int) -> None:
+    """Remove an override so the base definition is used."""
+
+    global _USER_OVERRIDE_PROFILES, _USER_OVERRIDE_RAW
+
+    if profile_id in _USER_OVERRIDE_PROFILES:
+        _USER_OVERRIDE_PROFILES.pop(profile_id, None)
+        _USER_OVERRIDE_RAW.pop(profile_id, None)
+        _write_overrides(_USER_OVERRIDE_RAW)
+        _refresh_library()
+
+
+def is_user_profile(profile_id: int) -> bool:
+    return profile_id in _USER_OVERRIDE_RAW

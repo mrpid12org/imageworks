@@ -34,11 +34,17 @@ Key switches:
   backends to avoid partial runs.【F:src/imageworks/apps/personal_tagger/core/runner.py†L105-L185】
 - `--dry-run` retains JSONL/summary output but skips metadata writes and marks
   records accordingly.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】
+- `--critique-title-template`, `--critique-category`, and `--critique-notes` feed
+  structured context into the competition-judge critique stage (e.g. with the
+  `club_judge_json` prompt profile) for consistent scoring output.【F:src/imageworks/apps/personal_tagger/cli/main.py†L85-L170】
 
 ## 4. Review results
 - Inspect the Markdown summary for keyword frequency, caption quality, and any
   errors flagged in the `notes` column.
 - JSONL entries contain raw text suitable for reformatting or follow-up prompts.
+- When a judging profile is active, review the `critique_title`,
+  `critique_category`, and `critique_score` fields alongside the narrative
+  critique in both JSONL and the Markdown summary.
 - Batch metrics append inference duration and throughput history to
   `outputs/metrics/personal_tagger_batch_metrics.json` for regression tracking.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】
 

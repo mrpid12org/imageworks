@@ -141,6 +141,10 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             ) or self._resolve_role_model(
                 self.config.description_role, self.config.description_model
             )
+            self._resolved_critique_model = (
+                getattr(self, "_resolved_critique_model", None)
+                or self._resolved_description_model
+            )
             logger.info(
                 "role_resolution",
                 extra={
@@ -151,17 +155,28 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                     "keyword_model": self._resolved_keyword_model,
                     "description_role": self.config.description_role,
                     "description_model": self._resolved_description_model,
+                    "critique_model": self._resolved_critique_model,
                 },
             )
         else:
             self._resolved_caption_model = self.config.caption_model
             self._resolved_keyword_model = self.config.keyword_model
             self._resolved_description_model = self.config.description_model
+            self._resolved_critique_model = self.config.description_model
 
         caption_text, caption_error = self._run_caption_stage(image_b64)
         keyword_strings, keyword_error = self._run_keyword_stage(image_b64)
         description_text, description_error = self._run_description_stage(
             image_b64, caption_text, keyword_strings
+        )
+        (
+            critique_text,
+            critique_score,
+            critique_title,
+            critique_category,
+            critique_error,
+        ) = self._run_critique_stage(
+            image_b64, image_path, caption_text, keyword_strings
         )
 
         keywords = self._convert_keywords(keyword_strings)
@@ -171,18 +186,25 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         for marker in (caption_error, keyword_error, description_error):
             if marker:
                 notes.append(marker)
+        if critique_error:
+            notes.append(critique_error)
 
         record = PersonalTaggerRecord(
             image=image_path,
             keywords=keywords,
             caption=caption_text,
             description=description_text,
+            critique=critique_text,
+            critique_score=critique_score,
+            critique_title=critique_title,
+            critique_category=critique_category,
             duration_seconds=duration,
             backend=self.config.backend,
             models=GenerationModels(
                 caption=self._resolved_caption_model,
                 keywords=self._resolved_keyword_model,
                 description=self._resolved_description_model,
+                critique=self._resolved_critique_model,
             ),
             metadata_written=False,
             notes="; ".join(notes),
@@ -301,9 +323,155 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         description = tidy_description(self._extract_text(result.content))
         return description, None if description else "description_empty"
 
+    def _run_critique_stage(
+        self,
+        image_b64: str,
+        image_path: Path,
+        caption: str,
+        keywords: List[str],
+    ) -> tuple[str, Optional[int], Optional[str], Optional[str], Optional[str]]:
+        stage = self._prompt_profile.critique_stage
+        try:
+            keyword_preview = ", ".join(keywords[:10]) if keywords else "none"
+            model_name = getattr(
+                self, "_resolved_critique_model", self.config.description_model
+            )
+            category_context = (self.config.critique_category or "").strip()
+            notes_context = self._build_critique_notes(image_path)
+            title_context = self._render_critique_title(image_path, caption)
+            result = self._chat(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": stage.system},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": stage.render(
+                                    caption=caption or "",
+                                    keyword_preview=keyword_preview,
+                                    title=title_context or "null",
+                                    category=category_context or "null",
+                                    notes=notes_context,
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                },
+                            },
+                        ],
+                    },
+                ],
+                max_tokens=stage.max_new_tokens or max(self.config.max_new_tokens, 400),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Critique generation failed")
+            return "", None, None, None, f"critique_error: {exc}"
+
+        raw_content = result.content.strip()
+        critique_text = self._extract_text(raw_content)
+        if stage.expects_json:
+            try:
+                parsed = json.loads(self._coerce_json_payload(raw_content))
+            except json.JSONDecodeError as exc:
+                logger.warning("Critique JSON parsing failed: %s", exc)
+                return critique_text.strip(), None, None, None, "critique_json_error"
+
+            critique_body = (parsed.get("critique") or "").strip()
+            score_val = parsed.get("score")
+            score = None
+            if isinstance(score_val, (int, float)):
+                score = int(score_val)
+            elif isinstance(score_val, str):
+                stripped = score_val.strip()
+                if stripped:
+                    try:
+                        score = int(float(stripped))
+                    except ValueError as exc:
+                        logger.debug(
+                            "Critique score not numeric: %s", stripped, exc_info=exc
+                        )
+            if score is not None and not 0 <= score <= 20:
+                logger.warning(
+                    "Critique score out of range (%s); clamping to 0-20", score
+                )
+                score = max(0, min(20, score))
+            title = self._normalise_optional_str(parsed.get("title"))
+            category = self._normalise_optional_str(parsed.get("category"))
+            critique_body = critique_body or critique_text.strip()
+            return (
+                critique_body,
+                score,
+                title or self._normalise_optional_str(title_context),
+                category or self._normalise_optional_str(category_context),
+                None if critique_body else "critique_empty",
+            )
+
+        critique_body = critique_text.strip()
+        return (
+            critique_body,
+            None,
+            None,
+            None,
+            None if critique_body else "critique_empty",
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _render_critique_title(self, image_path: Path, caption: str) -> str:
+        template = getattr(self.config, "critique_title_template", "{stem}") or "{stem}"
+        tokens = {
+            "stem": image_path.stem,
+            "name": image_path.name,
+            "caption": caption or "",
+            "parent": image_path.parent.name if image_path.parent else "",
+        }
+        try:
+            rendered = template.format(**tokens).strip()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Critique title template failed: %s", exc)
+            rendered = image_path.stem
+        return rendered or image_path.stem
+
+    def _build_critique_notes(self, image_path: Path) -> str:
+        configured = getattr(self.config, "critique_notes", "") or ""
+        configured = configured.strip()
+        if configured:
+            return configured
+        return f"Filename: {image_path.name}"
+
+    @staticmethod
+    def _coerce_json_payload(raw: str) -> str:
+        text = raw.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            buffer: List[str] = []
+            in_block = False
+            for line in lines:
+                if line.strip().startswith("```"):
+                    if in_block:
+                        break
+                    in_block = True
+                    continue
+                if in_block:
+                    buffer.append(line)
+            if buffer:
+                return "\n".join(buffer).strip()
+        return text
+
+    @staticmethod
+    def _normalise_optional_str(value: object) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text.lower() in {"null", "none", "n/a"}:
+            return None
+        return text
+
     def _chat(
         self,
         *,
@@ -329,14 +497,20 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                 raise RuntimeError(
                     f"Registry model '{model_name}' missing capabilities: {exc}"
                 ) from exc
-            endpoint = selected.endpoint_url
-            internal_name = selected.internal_model_id
-            cache_key = f"{model_name}@{endpoint}"
+            base_override = (self.config.base_url or "").strip()
+            if base_override:
+                base_url = base_override.rstrip("/")
+                target_model = selected.logical_name
+            else:
+                base_url = selected.endpoint_url.rstrip("/")
+                target_model = selected.internal_model_id or selected.logical_name
+
+            cache_key = f"{target_model}@{base_url}"
             client = self._clients.get(cache_key)
             if client is None:
                 client = OpenAIChatClient(
-                    base_url=endpoint,
-                    model_name=internal_name,
+                    base_url=base_url,
+                    model_name=target_model,
                     api_key=self.config.api_key,
                     backend=selected.backend,
                     timeout=self.config.timeout,
@@ -361,8 +535,9 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
     def _resolve_role_model(self, role: str, fallback: str) -> str:
         if not self.config.use_registry:
             return fallback
+        preferred = [fallback.strip()] if fallback and fallback.strip() else None
         try:
-            logical_name = select_by_role(role, preferred=[fallback])
+            logical_name = select_by_role(role, preferred=preferred)
             return logical_name
         except CapabilityError as exc:  # noqa: BLE001
             raise RuntimeError(f"Failed to resolve role '{role}': {exc}") from exc
@@ -434,7 +609,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
 
 
 class FakeInferenceEngine(BaseInferenceEngine):
-    """Test inference engine that generates fake data without AI calls."""
+    """Deterministic stub used by tests and fixtures (not used at runtime)."""
 
     def __init__(self, config: PersonalTaggerConfig) -> None:
         super().__init__(config)
@@ -442,6 +617,7 @@ class FakeInferenceEngine(BaseInferenceEngine):
             caption=f"fake/{config.caption_model}",
             keywords=f"fake/{config.keyword_model}",
             description=f"fake/{config.description_model}",
+            critique=f"fake/{config.description_model}",
         )
 
     def process(self, image_path: Path) -> PersonalTaggerRecord:
@@ -464,6 +640,7 @@ class FakeInferenceEngine(BaseInferenceEngine):
             ],
             caption="A rider in a red and white suit leans into a turn on a track, with a blurred background of another motorcycle.",
             description="A rider clad in a striking red and white suit, marked with the number 11, leans into a sharp turn on a racetrack, showcasing the precision and speed of motorcycle racing. The rider's helmet, adorned with a shark logo, adds to the intensity of the scene. The blurred background of another motorcycle emphasizes the high-speed motion, while the track's edge, lined with red and white, frames the action.",
+            critique="Competition critique placeholder: sharp action, background distraction, crop tighter for impact.",
             duration_seconds=0.01,
             backend=f"fake-{self.config.backend}",
             models=self._models,
@@ -473,9 +650,9 @@ class FakeInferenceEngine(BaseInferenceEngine):
 
 
 def create_inference_engine(config: PersonalTaggerConfig) -> BaseInferenceEngine:
-    """Factory to create the appropriate inference engine."""
+    """Factory to create the runtime inference engine.
 
-    if config.dry_run:
-        return FakeInferenceEngine(config)
-    else:
-        return OpenAIInferenceEngine(config)
+    Dry runs now execute full inference; the caller skips metadata writes.
+    """
+
+    return OpenAIInferenceEngine(config)

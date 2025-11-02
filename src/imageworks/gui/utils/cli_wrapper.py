@@ -2,6 +2,8 @@
 
 from typing import List, Dict, Any
 
+from imageworks.apps.personal_tagger.core.config import load_config
+
 
 def build_similarity_command(config: Dict[str, Any]) -> List[str]:
     """
@@ -132,7 +134,7 @@ def build_mono_command(config: Dict[str, Any]) -> List[str]:
         input_paths = [input_paths]
 
     for path in input_paths:
-        cmd.append(str(path))
+        cmd.extend(["--input-dir", str(path)])
 
     # LAB color space thresholds
     if "lab_neutral_chroma" in config:
@@ -186,71 +188,165 @@ def build_tagger_command(config: Dict[str, Any]) -> List[str]:
     Returns:
         Command as list of strings
     """
-    cmd = ["uv", "run", "imageworks-personal-tagger"]
+    settings = load_config()
+    cmd = ["uv", "run", "imageworks-personal-tagger", "run"]
 
     # Input paths (positional)
-    input_paths = config.get("input", [])
+    input_paths = config.get("input") or []
     if isinstance(input_paths, str):
         input_paths = [input_paths]
-
     for path in input_paths:
-        cmd.append(str(path))
+        cmd.extend(["--input-dir", str(path)])
 
-    # Registry mode
-    if config.get("use_registry"):
+    # Recursive toggle
+    recursive = config.get("recursive")
+    if recursive is True:
+        cmd.append("--recursive")
+    elif recursive is False:
+        cmd.append("--no-recursive")
+
+    # Preflight handling (explicit skip flag only)
+    skip_preflight = config.get("skip_preflight")
+    preflight_flag = config.get("preflight")
+    if skip_preflight or (preflight_flag is not None and not preflight_flag):
+        cmd.append("--skip-preflight")
+
+    # Backend + connection parameters (always emit explicit values)
+    backend = (config.get("backend") or settings.default_backend).strip()
+    base_url = (config.get("base_url") or settings.default_base_url).strip()
+    api_key = (config.get("api_key") or settings.default_api_key).strip()
+    timeout = config.get("timeout")
+    if timeout is None:
+        timeout = settings.default_timeout
+    max_new_tokens = config.get("max_new_tokens")
+    if max_new_tokens is None:
+        max_new_tokens = settings.default_max_new_tokens
+    temperature = config.get("temperature")
+    if temperature is None:
+        temperature = settings.default_temperature
+    top_p = config.get("top_p")
+    if top_p is None:
+        top_p = settings.default_top_p
+
+    if backend:
+        cmd.extend(["--backend", backend])
+    if base_url:
+        cmd.extend(["--base-url", base_url])
+    if api_key and api_key != "EMPTY":
+        cmd.extend(["--api-key", api_key])
+    if timeout is not None:
+        cmd.extend(["--timeout", str(timeout)])
+    if max_new_tokens is not None:
+        cmd.extend(["--max-new-tokens", str(max_new_tokens)])
+    if temperature is not None:
+        cmd.extend(["--temperature", str(temperature)])
+    if top_p is not None:
+        cmd.extend(["--top-p", str(top_p)])
+
+    prompt_profile = config.get("prompt_profile") or settings.default_prompt_profile
+    if prompt_profile:
+        cmd.extend(["--prompt-profile", prompt_profile])
+
+    if config.get("critique_title_template"):
+        cmd.extend(
+            [
+                "--critique-title-template",
+                str(config["critique_title_template"]),
+            ]
+        )
+    if config.get("critique_category"):
+        cmd.extend(["--critique-category", str(config["critique_category"])])
+    if config.get("critique_notes"):
+        cmd.extend(["--critique-notes", str(config["critique_notes"])])
+
+    batch_size = config.get("batch_size")
+    if batch_size is None:
+        batch_size = settings.default_batch_size
+    if batch_size is not None:
+        cmd.extend(["--batch-size", str(batch_size)])
+
+    max_workers = config.get("max_workers")
+    if max_workers is None:
+        max_workers = settings.default_max_workers
+    if max_workers is not None:
+        cmd.extend(["--max-workers", str(max_workers)])
+
+    use_registry = config.get("use_registry")
+    if use_registry is None:
+        use_registry = settings.default_use_registry
+
+    explicit_caption_model = config.get("caption_model")
+    explicit_keyword_model = config.get("keyword_model")
+    explicit_description_model = config.get("description_model")
+    unified_model = config.get("model")
+
+    if use_registry:
         cmd.append("--use-registry")
-
-        # Roles
         if config.get("caption_role"):
             cmd.extend(["--caption-role", config["caption_role"]])
+            if explicit_caption_model:
+                cmd.extend(["--caption-model", explicit_caption_model])
+            elif unified_model:
+                cmd.extend(["--caption-model", unified_model])
         if config.get("keyword_role"):
             cmd.extend(["--keyword-role", config["keyword_role"]])
+            if explicit_keyword_model:
+                cmd.extend(["--keyword-model", explicit_keyword_model])
+            elif unified_model:
+                cmd.extend(["--keyword-model", unified_model])
         if config.get("description_role"):
             cmd.extend(["--description-role", config["description_role"]])
+            if explicit_description_model:
+                cmd.extend(["--description-model", explicit_description_model])
+            elif unified_model:
+                cmd.extend(["--description-model", unified_model])
     else:
-        # Direct backend specification
-        if config.get("backend"):
-            cmd.extend(["--backend", config["backend"]])
-        if config.get("base_url"):
-            cmd.extend(["--base-url", config["base_url"]])
-        if config.get("model"):
-            cmd.extend(["--model", config["model"]])
+        if explicit_caption_model:
+            cmd.extend(["--caption-model", explicit_caption_model])
+        elif unified_model:
+            cmd.extend(["--caption-model", unified_model])
 
-    # Prompt profile
-    if config.get("prompt_profile"):
-        cmd.extend(["--prompt-profile", config["prompt_profile"]])
+        if explicit_keyword_model:
+            cmd.extend(["--keyword-model", explicit_keyword_model])
+        elif unified_model:
+            cmd.extend(["--keyword-model", unified_model])
 
-    # Batch settings
-    if "batch_size" in config:
-        cmd.extend(["--batch-size", str(config["batch_size"])])
-    if "max_workers" in config:
-        cmd.extend(["--max-workers", str(config["max_workers"])])
+        if explicit_description_model:
+            cmd.extend(["--description-model", explicit_description_model])
+        elif unified_model:
+            cmd.extend(["--description-model", unified_model])
 
-    # Options
-    if config.get("recursive"):
-        cmd.append("--recursive")
-
-    if config.get("preflight"):
-        cmd.append("--preflight")
+    # Metadata + behaviour toggles
+    dry_run = config.get("dry_run")
+    if dry_run is True:
+        cmd.append("--dry-run")
+    elif dry_run is False:
+        cmd.append("--no-dry-run")
 
     if config.get("no_meta"):
         cmd.append("--no-meta")
 
-    if config.get("backup_originals"):
+    backup_originals = config.get("backup_originals")
+    if backup_originals is True:
         cmd.append("--backup-originals")
+    elif backup_originals is False:
+        cmd.append("--no-backup-originals")
 
-    if config.get("overwrite_metadata"):
+    overwrite_metadata = config.get("overwrite_metadata")
+    if overwrite_metadata is True:
         cmd.append("--overwrite-metadata")
+    elif overwrite_metadata is False:
+        cmd.append("--no-overwrite-metadata")
+
+    max_keywords = config.get("max_keywords")
+    if max_keywords is not None:
+        cmd.extend(["--max-keywords", str(max_keywords)])
 
     # Output paths
     if config.get("output_jsonl"):
         cmd.extend(["--output-jsonl", str(config["output_jsonl"])])
     if config.get("summary"):
         cmd.extend(["--summary", str(config["summary"])])
-
-    # Dry run
-    if config.get("dry_run"):
-        cmd.append("--dry-run")
 
     return cmd
 
