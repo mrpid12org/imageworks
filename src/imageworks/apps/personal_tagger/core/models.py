@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 
 @dataclass(frozen=True)
@@ -25,12 +25,14 @@ class GenerationModels:
     caption: str
     keywords: str
     description: str
+    critique: str
 
     def to_dict(self) -> Dict[str, str]:
         return {
             "caption": self.caption,
             "keywords": self.keywords,
             "description": self.description,
+            "critique": self.critique,
         }
 
 
@@ -42,10 +44,14 @@ class PersonalTaggerRecord:
     keywords: List[KeywordPrediction] = field(default_factory=list)
     caption: str = ""
     description: str = ""
+    critique: str = ""
+    critique_score: Optional[int] = None
+    critique_title: Optional[str] = None
+    critique_category: Optional[str] = None
     duration_seconds: float = 0.0
     backend: str = ""
     models: GenerationModels = field(
-        default_factory=lambda: GenerationModels("", "", "")
+        default_factory=lambda: GenerationModels("", "", "", "")
     )
     metadata_written: bool = False
     notes: str = ""
@@ -59,6 +65,10 @@ class PersonalTaggerRecord:
             "keywords": [kp.to_json() for kp in self.keywords],
             "caption": self.caption,
             "description": self.description,
+            "critique": self.critique,
+            "critique_score": self.critique_score,
+            "critique_title": self.critique_title,
+            "critique_category": self.critique_category,
             "metadata_written": self.metadata_written,
             "backend": self.backend,
             "models": self.models.to_dict(),

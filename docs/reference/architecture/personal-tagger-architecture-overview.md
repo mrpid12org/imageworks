@@ -134,8 +134,8 @@ pyproject.toml defaults → Environment variables → CLI arguments
 - **Output generation**: JSONL audit logs and human-readable Markdown summaries
 - **Result annotation**: Captures metadata write outcomes and attaches notes per image
 - **Dual testing modes**:
-  - **Dry-run**: Uses fake test data, no AI inference, no metadata writes
-  - **No-meta**: Real AI inference but skips metadata writes
+  - **Dry-run**: Executes full AI inference but skips metadata writes (read-only)
+  - **No-meta**: Same as production inference while skipping metadata writes
 
 #### `model_registry.py` - Model Catalog
 **Purpose**: Structured catalog of supported AI models with metadata.
@@ -348,7 +348,7 @@ The Personal Tagger uses a sophisticated configuration system with multiple laye
 - Metadata writing behavior and backup options
 
 **Development Settings**:
-- Dry-run mode: Uses fake test data, no AI inference, no metadata writes
+- Dry-run mode: Executes full AI inference but leaves source image metadata untouched
 - No-meta mode: Real AI inference but skips metadata writes
 - Debug output levels and intermediate file saving
 - Prompt profile selection for experimentation

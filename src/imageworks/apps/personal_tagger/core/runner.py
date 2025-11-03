@@ -170,6 +170,7 @@ class PersonalTaggerRunner:
         import base64
         import requests
         import io
+        import time
         from PIL import Image
 
         base_url = self.config.base_url.rstrip("/")
@@ -180,10 +181,20 @@ class PersonalTaggerRunner:
             else {}
         )
 
+        # Align request timeout with backend spin-up expectations (vLLM autostart may take ~2 minutes).
+        max_wait_seconds = max(int(self.config.timeout), 120)
+        connect_timeout = min(15, max_wait_seconds)
+        http_timeout = (connect_timeout, max_wait_seconds)
+        logger.info(
+            "Preflight: allowing up to %ds for chat proxy responses (connect≤%ds)",
+            max_wait_seconds,
+            connect_timeout,
+        )
+
         # 1. Model list
         models_url = f"{base_url}/models"
         try:
-            resp = requests.get(models_url, timeout=10, headers=headers)
+            resp = requests.get(models_url, timeout=http_timeout, headers=headers)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(
                 f"Preflight: failed to connect to {models_url}: {exc}"
@@ -208,7 +219,26 @@ class PersonalTaggerRunner:
             ],
             "max_tokens": 4,
         }
-        resp = requests.post(chat_url, json=payload_text, timeout=15, headers=headers)
+        text_deadline = time.monotonic() + max_wait_seconds
+        while True:
+            try:
+                resp = requests.post(
+                    chat_url, json=payload_text, timeout=http_timeout, headers=headers
+                )
+            except requests.exceptions.Timeout as exc:
+                if time.monotonic() >= text_deadline:
+                    raise RuntimeError(
+                        "Preflight: text chat timed out waiting for chat proxy "
+                        f"after {max_wait_seconds}s. Model may still be loading."
+                    ) from exc
+                logger.info(
+                    "Preflight: text chat still waiting for backend warm-up; retrying..."
+                )
+                time.sleep(5)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Preflight: text chat failed: {exc}") from exc
+            break
         if resp.status_code != 200:
             raise RuntimeError(
                 f"Preflight: text chat failed HTTP {resp.status_code}: {resp.text[:160]}"
@@ -243,7 +273,29 @@ class PersonalTaggerRunner:
             ],
             "max_tokens": 8,
         }
-        resp = requests.post(chat_url, json=payload_vision, timeout=20, headers=headers)
+        vision_deadline = time.monotonic() + max_wait_seconds
+        while True:
+            try:
+                resp = requests.post(
+                    chat_url,
+                    json=payload_vision,
+                    timeout=http_timeout,
+                    headers=headers,
+                )
+            except requests.exceptions.Timeout as exc:
+                if time.monotonic() >= vision_deadline:
+                    raise RuntimeError(
+                        "Preflight: vision chat timed out waiting for chat proxy "
+                        f"after {max_wait_seconds}s. Model may still be loading."
+                    ) from exc
+                logger.info(
+                    "Preflight: vision chat still waiting for backend warm-up; retrying..."
+                )
+                time.sleep(5)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Preflight: vision chat failed: {exc}") from exc
+            break
         if resp.status_code != 200:
             raise RuntimeError(
                 "Preflight: vision chat failed HTTP %s: %s"
@@ -277,7 +329,7 @@ class PersonalTaggerRunner:
             "",
         ]
         if self.config.dry_run:
-            lines.append("_Dry run: fake test data used, metadata writes skipped._")
+            lines.append("_Dry run: metadata writes skipped (inference executed)._")
             lines.append("")
         elif self.config.no_meta:
             lines.append(
@@ -303,6 +355,7 @@ class PersonalTaggerRunner:
                 description = (
                     record.description.strip() if record.description else "<none>"
                 )
+                critique = record.critique.strip() if record.critique else "<none>"
 
                 status = (
                     "metadata written"
@@ -315,6 +368,13 @@ class PersonalTaggerRunner:
                 lines.append(f"  - Keywords: {keywords}")
                 lines.append(f"  - Caption: {caption}")
                 lines.append(f"  - Description: {description}")
+                if record.critique_title:
+                    lines.append(f"  - Critique title: {record.critique_title}")
+                if record.critique_category:
+                    lines.append(f"  - Critique category: {record.critique_category}")
+                if record.critique_score is not None:
+                    lines.append(f"  - Critique score: {record.critique_score}/20")
+                lines.append(f"  - Critique summary: {critique}")
             lines.append("")
 
         summary_path.write_text("\n".join(lines), encoding="utf-8")

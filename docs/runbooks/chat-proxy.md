@@ -9,6 +9,9 @@ for UI clients such as OpenWebUI.
 - Export proxy environment variables or define them in your process manager. Key
   settings: `CHAT_PROXY_HOST`, `CHAT_PROXY_PORT`, `CHAT_PROXY_LOOPBACK_ALIAS`,
   and `CHAT_PROXY_VLLM_SINGLE_PORT` (default `1`).【F:src/imageworks/chat_proxy/app.py†L22-L140】
+- Base defaults now live in `configs/chat_proxy.toml`. Edit it directly or use
+  the GUI’s Models → Advanced → “Proxy Settings” tab; see
+  [Chat Proxy Configuration Guide](../chat-proxy-config.md) for precedence rules.
 
 ## 2. Launch the proxy
 ```bash
