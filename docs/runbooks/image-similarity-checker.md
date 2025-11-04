@@ -1,53 +1,78 @@
 # Image Similarity Checker Runbook
 
-Use this playbook to detect near-duplicates between candidate submissions and
-the historical competition library.
+Step-by-step procedures for detecting duplicates between new entries and the competition library.
 
-## 1. Prepare configuration
-- Update `[tool.imageworks.image_similarity]` in `pyproject.toml` with the current
-  library root and default thresholds.【F:pyproject.toml†L258-L325】
-- Export overrides with `IMAGEWORKS_IMAGE_SIMILARITY__` variables when running in
-  CI or remote environments (e.g. `...__LIBRARY_ROOT`).【F:src/imageworks/apps/image_similarity_checker/core/config.py†L1-L152】
+---
+## 1. Before You Begin
 
-## 2. Warm library manifests
-```bash
-uv run imageworks-image-similarity check \
-  ~/photos/2024-candidates --library-root ~/archive/ccc \
-  --dry-run --summary outputs/summaries/similarity_dryrun.md
-```
-- Dry run populates the library manifest cache and validates discovery without
-  executing heavy embeddings.【F:src/imageworks/apps/image_similarity_checker/core/engine.py†L45-L113】
-- Inspect the summary for discovered candidate counts and ensure paths are
-  resolved correctly.
+1. Confirm historical library is mounted and accessible.
+2. Verify embedding models are downloaded (OpenCLIP weights) or remote endpoints reachable.
+3. Ensure `[tool.imageworks.image_similarity_checker]` defaults (thresholds, library root) are correct.
+4. Decide whether explanations and metadata writes are required for this run.
 
-## 3. Run full similarity analysis
-```bash
-uv run imageworks-image-similarity check \
-  ~/photos/2024-candidates --library-root ~/archive/ccc \
-  --output-jsonl outputs/results/similarity.jsonl \
-  --summary outputs/summaries/similarity.md \
-  --top-matches 5 --fail-threshold 0.92 --query-threshold 0.85
-```
-- Enable additional strategies using repeated `--strategy` flags (e.g. `embedding`
-  plus `perceptual_hash`).【F:src/imageworks/apps/image_similarity_checker/cli/main.py†L13-L140】
-- To leverage registry-managed VLM explainers, add `--use-loader --prompt-profile
-  default` and configure the desired logical model via the loader CLI.【F:src/imageworks/apps/image_similarity_checker/core/engine.py†L30-L44】
-- Set `--write-metadata` to inject verdict keywords into IPTC metadata. Backups
-  and overwrite behaviour default to pyproject values but can be toggled with
-  CLI flags.【F:src/imageworks/apps/image_similarity_checker/core/metadata.py†L19-L178】
+---
+## 2. CLI Workflow
 
-## 4. Review results
-- JSONL file contains structured matches for ingestion into dashboards.
-- Markdown summary surfaces top matches, scores, and optional VLM explanations.
-- Investigate `SimilarityVerdict.FAIL` entries first; `QUERY` results warrant
-  manual review but may pass after justification.【F:src/imageworks/apps/image_similarity_checker/core/engine.py†L114-L190】
+1. Build command:
+   ```bash
+   uv run imageworks-image-similarity check \
+     submissions/2024-week12 \
+     --library-root /mnt/archive/library \
+     --output-jsonl outputs/results/similarity_week12.jsonl \
+     --summary outputs/summaries/similarity_week12.md \
+     --strategy embedding --strategy perceptual_hash \
+     --embedding-backend open_clip --embedding-model ViT-B-32::laion2b_s34b_b79k \
+     --fail-threshold 0.92 --query-threshold 0.85 \
+     --explain --backend vllm --model qwen2-7b-instruct \
+     --write-metadata
+   ```
+2. Monitor CLI output; each candidate prints verdict, score, and top matches.
+3. Review Markdown summary for FAIL/QUERY sections and share with judging team.
+4. Store JSONL output for audit and replays.
 
-## 5. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| `No candidate images were found` | Ensure paths are correct and include files directly, not just directories; the engine validates before running strategies.【F:src/imageworks/apps/image_similarity_checker/core/engine.py†L45-L68】 |
-| `CapabilityError` when using loader | The selected logical model lacks required capabilities (vision/tool). Choose a different registry entry or disable loader integration.【F:src/imageworks/apps/image_similarity_checker/core/engine.py†L30-L44】 |
-| VLM explanations time out | Increase `--timeout`, reduce `--top-matches`, or run without explanations by omitting backend parameters.【F:src/imageworks/apps/image_similarity_checker/cli/main.py†L83-L180】 |
-| Metadata writes skipped | Confirm `--write-metadata` is enabled and that filesystem paths are writable. Logs note when no matches are found or writes are skipped.【F:src/imageworks/apps/image_similarity_checker/core/metadata.py†L19-L178】 |
+---
+## 3. GUI Workflow
 
-Store JSONL and summary artifacts with the competition batch for auditability.
+1. Open Streamlit → “Image Similarity” page.
+2. Drop candidate files or select directories.
+3. Confirm library root and optional cache refresh.
+4. Toggle strategies, augmentations, explanations, and metadata to match run plan.
+5. Click **Run Check**; track progress and view per-image cards.
+6. Use filters to review FAILs first, then QUERIES; open side-by-side viewer for inspection.
+7. Download JSONL/Markdown via provided buttons.
+
+---
+## 4. Handling Explanations
+
+- Enable `--explain` (CLI) or GUI toggle.
+- Provide backend/model overrides or rely on defaults.
+- If using model loader: add `--use-loader --registry-model similarity/explainer`.
+- Watch for API rate limits; reduce `--top-matches` if necessary.
+
+---
+## 5. Metadata Workflow
+
+1. Set `--write-metadata` and optionally `--backup-originals`.
+2. Metadata writer applies similarity keywords (`similarity:fail`, etc.).
+3. For dry runs, use `--dry-run --summary <path>` to review without writing.
+4. GUI exposes metadata toggle and warns before overwriting existing keywords.
+
+---
+## 6. Troubleshooting
+
+| Issue | Resolution |
+|-------|------------|
+| CLI crash referencing cache | Delete `.cache/imageworks/similarity_manifest.json` and rerun with `--refresh-library-cache`. |
+| GPU OOM during embedding | Switch to CPU-friendly backend or reduce batch size via config; disable augmentation pooling. |
+| Explanations time out | Increase `--timeout`, ensure backend healthy, or disable explanations temporarily. |
+| Metadata conflicts | Use `--no-overwrite-metadata` to append only when empty, or disable metadata and handle manually. |
+
+---
+## 7. Post-Run Actions
+
+1. Share Markdown summary with review panel.
+2. Update competition tracker with flagged duplicates.
+3. Archive JSONL and explanation text in evidence folder.
+4. Reset GUI presets if thresholds changed (Settings → Save preset).
+5. Plan next manifest refresh (set reminder before TTL expiry).
+

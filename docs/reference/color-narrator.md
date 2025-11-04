@@ -1,65 +1,100 @@
-# Color Narrator Reference
+# Color Narrator Operations Guide
 
-The color narrator application batches monochrome competition entries, enriches
-mono-checker output with a vision-language model (VLM), and writes structured
-XMP metadata back to the source files.
+Color Narrator enriches monochrome review with VLM-generated colour descriptions, confidence scores, and Lightroom metadata. It orchestrates batch narration of competition images using overlays from the mono checker and integrates tightly with the GUI.
 
-## Core pipeline
-- `NarrationConfig` collects data roots, VLM settings, and post-processing
-  toggles, defaulting to LMDeploy with Qwen2.5-VL-7B-AWQ.【F:src/imageworks/apps/color_narrator/core/narrator.py†L19-L61】
-- `ColorNarratorDataLoader` filters mono JSONL results by contamination level
-  and overlay availability before yielding `ColorNarratorItem` batches for
-  inference.【F:src/imageworks/apps/color_narrator/core/narrator.py†L63-L110】
-- `VLMClient.infer_single` constructs OpenAI-compatible requests and normalises
-  backend-specific quirks; health checks run before every batch.【F:src/imageworks/apps/color_narrator/core/narrator.py†L112-L171】【F:src/imageworks/apps/color_narrator/core/vlm.py†L27-L180】
-- Successful calls create `ColorNarrationMetadata` payloads that the
-  `XMPMetadataWriter` injects into the image file unless `dry_run` is enabled.【F:src/imageworks/apps/color_narrator/core/narrator.py†L173-L213】
+---
+## 1. Capability Matrix
 
-### Region-enhanced prompting
-Enable `config.use_regions` to feed 3×3 grid crops plus mono telemetry into
-`RegionBasedVLMAnalyzer`. The analyzer aggregates per-region captions and
-contamination scores before composing the final prompt template.【F:src/imageworks/apps/color_narrator/core/narrator.py†L51-L60】【F:src/imageworks/apps/color_narrator/core/region_based_vlm.py†L16-L180】
+| Area | Details |
+|------|---------|
+| Multi-backend VLM support | Supports VLLM, LMDeploy, Triton, and Ollama-compatible endpoints via `core.vlm.VLMClient`. |
+| Prompt templates | `core.prompts` defines numbered templates (global, validation, region-aware) selectable via CLI/GUI. |
+| Region-guided narration | Optional spatial grids using overlay masks with `RegionBasedVLMAnalyzer`. |
+| Metadata writing | `core.metadata.XMPMetadataWriter` embeds narration, keywords, and Lightroom section headings. |
+| Batch orchestration | `ColorNarrator` processes JSONL from mono checker, pairs with overlays, and manages retries. |
+| Audit logging | JSONL export with VLM responses, confidence, mono metrics, and metadata status. |
+| Integration hooks | Pulls defaults from `[tool.imageworks.color_narrator]`, shares `BatchRunMetrics` with model loader. |
 
-## Configuration sources
-- `[tool.imageworks.color_narrator]` in `pyproject.toml` defines default VLM
-  endpoints, contamination thresholds, and overlay directories.【F:pyproject.toml†L123-L199】
-- Environment overrides follow the `IMAGEWORKS_COLOR_NARRATOR__FOO=bar`
-  convention in the CLI loader (case-insensitive key name).【F:src/imageworks/apps/color_narrator/cli/main.py†L69-L106】
-- Mono verdict ingestion expects the JSONL path emitted by
-  `imageworks-mono check --jsonl-out …`; `require_overlays` skips entries
-  lacking heatmap assets.【F:src/imageworks/apps/color_narrator/core/narrator.py†L83-L108】
+---
+## 2. Core Components
 
-## CLI entry points (`imageworks-color-narrator`)
-Typer commands live in `cli/main.py` and automatically merge pyproject defaults
-with command-line overrides.【F:src/imageworks/apps/color_narrator/cli/main.py†L1-L327】
+- `core.narrator.ColorNarrator`: high-level runner orchestrating asset loading, prompt building, VLM calls, and metadata writes.
+- `core.vlm.VLMClient`: backend abstraction; resolves to HTTP requests depending on backend type.
+- `core.region_based_vlm.RegionBasedVLMAnalyzer`: slices overlays into nine regions and packages prompts accordingly.
+- `cli.main`: Typer interface exposing narration workflows and utility commands.
+- GUI page `6_🖼️_Color_Narrator.py`: wrappers for CLI, preset management, and result browsing.
 
-### `run`
-Process every qualifying item, log VLM latency, and (optionally) emit a Markdown
-summary and BatchRunMetrics JSON. Set `--no-write-xmp` to skip metadata writes
-and `--regions` to enable grid-enhanced prompting.【F:src/imageworks/apps/color_narrator/cli/main.py†L809-L1208】【F:src/imageworks/apps/color_narrator/cli/main.py†L1340-L1435】
+---
+## 3. CLI (`uv run imageworks-color-narrator ...`)
 
-### `summarise`
-Aggregate prior JSONL runs into Markdown or table reports for judges. The command
-supports filtering by verdict, contamination level, and manual include/exclude
-lists.【F:src/imageworks/apps/color_narrator/cli/main.py†L1175-L1442】
+### 3.1 `narrate`
+- Key options:
+  - `--images`, `--overlays`, `--mono-jsonl`
+  - VLM overrides: `--vlm-backend`, `--vlm-base-url`, `--vlm-model`, `--vlm-timeout`, `--vlm-api-key`
+  - Registry integration: `--vlm-registry-model`
+  - Prompt control: `--prompt`, `--list-prompts`, `--regions`, `--require-overlays/--allow-missing-overlays`
+  - Output: `--summary`, `--results-json`, `--no-meta`
+- Behaviour:
+  1. Loads mono JSONL, ensures overlays exist (optional requirement).
+  2. Resolves VLM backend using configuration precedence (CLI > env > pyproject defaults).
+  3. Executes narration batches; each result includes description, confidence, processing time, and metadata success flag.
+  4. Writes Markdown summary and JSONL audit; optionally writes XMP metadata via `XMPMetadataWriter`.
 
-### `overlays`
-Generate LAB or mono overlays for ad-hoc inspection without rerunning the full
-pipeline. Supports `--mode lab_chroma|lab_residual` and honors the pyproject
-heatmap defaults.【F:src/imageworks/apps/color_narrator/cli/main.py†L1468-L1754】
+### 3.2 Auxiliary commands
+- `bundle-prompts`: Export prompt definitions for documentation.
+- `preview-prompt`: Render template with sample data (supports region placeholders).
+- `diagnose-backend`: Connectivity checks for selected backend.
 
-### `validate`
-Run sanity checks over pyproject configuration, ensuring overlay directories
-exist and the selected backend responds to health probes.【F:src/imageworks/apps/color_narrator/cli/main.py†L1608-L1754】
+---
+## 4. Configuration
 
-## Outputs
-- JSONL audit trail containing VLM responses, contamination metrics, and XMP
-  write status.
-- Optional Markdown summary file capturing pass/fail counts and exemplar cases.
-- Per-image XMP tags or Lightroom keywords controlled by `--write-xmp` flags.
+From `[tool.imageworks.color_narrator]` in `pyproject.toml`:
+- Default backend preference (`vlm_backend`), base URLs for each backend, model IDs, API keys, timeouts.
+- Batch settings (`default_batch_size`, `max_concurrent_requests`).
+- Overlay requirements (`require_overlays`), contamination thresholds.
+- Paths: `default_images_dir`, `default_overlays_dir`, `default_mono_jsonl`.
+- Prompt defaults (`default_prompt_id`).
 
-## Integration points
-- Mono checker: consumes JSONL verdicts to prioritise color narration.
-- Personal tagger: shares registry role conventions for selecting VLM backends.
-- Chat proxy/model loader: VLM endpoints match the single-port orchestrator
-  controlled by `imageworks-loader activate-model` when using vLLM.【F:src/imageworks/apps/color_narrator/cli/main.py†L435-L524】【F:src/imageworks/model_loader/cli_sync.py†L202-L270】
+Environment overrides use `IMAGEWORKS_COLOR_NARRATOR__*` (double underscore) to map to config keys.
+
+---
+## 5. GUI Integration
+
+- **Preset selector**: chooses prompt template, backend, batch size, metadata mode.
+- **Backend status**: shows ping results using `diagnose-backend` logic.
+- **Process runner**: executes CLI `narrate` command; logs VLM latency and metadata writes.
+- **Results viewer**: lists narrated images with thumbnails, description, confidence, and metadata status. Allows filtering by verdict (Pass/Query/Fail from mono data).
+- **Metadata toggle**: UI switch maps to `--no-meta` flag.
+
+GUI persists overrides per user and cross-links to mono checker outputs (auto-suggests overlays directory and JSONL path).
+
+---
+## 6. Outputs
+
+| Artifact | Description |
+|----------|-------------|
+| Markdown summary (`narrate_summary.md`) | Grouped by mono verdict with description excerpts and confidence. |
+| JSONL results (`narrate_results.jsonl`) | Each line contains file paths, prompt id, backend info, narration, confidence, metadata flag, and error (if any). |
+| Metadata writes | IPTC/XMP keywords, Lightroom sections, custom properties written to image or sidecar depending on config. |
+| Logs | Append to `logs/color_narrator.log` if logging configured via `configure_logging`. |
+
+---
+## 7. Troubleshooting
+
+| Symptom | Cause | Action |
+|---------|-------|--------|
+| `❌ Unknown prompt id` | Prompt ID not in registry. | Run `--list-prompts` and choose valid id or update configuration. |
+| HTTP 401 from backend | Missing or incorrect API key. | Set `--vlm-api-key` or `IMAGEWORKS_COLOR_NARRATOR__vlm_api_key`. |
+| Missing overlays | `require_overlays` true but PNG not found. | Disable requirement or ensure mono checker produced overlays. |
+| Metadata write failure | ExifTool or Pillow error. | Check log; rerun with `--no-meta` then troubleshoot writer. |
+| GUI stuck on “Waiting for backend” | Backend unreachable. | Use **Diagnose backend** button, verify service port, restart backend. |
+
+---
+## 8. Best Practices
+
+1. Run mono checker before narrator; provide JSONL + overlays for richest context.
+2. Keep prompts under version control; export with `bundle-prompts` when modifying templates.
+3. Use registry models (`--vlm-registry-model`) for consistent backend selection across environments.
+4. Capture JSONL artifacts for audit and training future prompt adjustments.
+5. Limit batch size when using remote APIs to avoid rate limits; tune via config or CLI flag.
+

@@ -1,49 +1,55 @@
 # ZIP Extractor Runbook
 
-Prepare competition submissions for analysis by extracting ZIP archives and
-syncing metadata.
+Operational steps for unpacking incoming competition submissions.
 
-## 1. Configure defaults
-- Update `[tool.imageworks.zip-extract]` in `pyproject.toml` with the latest
-  download and extract paths.【F:pyproject.toml†L226-L257】
-- Confirm ExifTool is installed; the CLI shells out to `exiftool` for keyword and
-  metadata updates.【F:src/imageworks/tools/zip_extract.py†L70-L140】
+---
+## 1. Intake Preparation
 
-## 2. Dry run
-```bash
-uv run imageworks-zip --dry-run \
-  --zip-dir /mnt/c/Users/me/Downloads/ccc \
-  --extract-root /mnt/d/Competition/images
-```
-- Dry runs validate directory structure and show planned extractions without
-  modifying files.【F:src/imageworks/tools/zip_extract.py†L200-L340】
+1. Move received ZIP files into the configured staging directory (see `[tool.imageworks.zip-extract].default_zip_dir`).
+2. Ensure extract root has sufficient space and is included in backup plan.
+3. Verify ExifTool availability (`exiftool -ver`).
 
-## 3. Extract with metadata
-```bash
-uv run imageworks-zip \
-  --include-xmp --update-all-metadata \
-  --summary outputs/zip_extract_summary.md
-```
-- `--include-xmp` loads sidecars for title/author sync; `--update-all-metadata`
-  overwrites existing JPEG metadata rather than skipping duplicates.【F:src/imageworks/tools/zip_extract.py†L70-L140】
-- `--zip-file /path/to/archive.zip` targets a single archive when you need to
-  reprocess one submission without touching the rest of the directory (takes
-  precedence over `--zip-dir`).【F:src/imageworks/tools/zip_extract.py†L70-L190】
-- Default behaviour ensures the `ccc` keyword exists on every image for Lightroom
-  organisation.【F:src/imageworks/tools/zip_extract.py†L70-L140】
+---
+## 2. Standard Extraction
 
-## 4. Review summary
-- Markdown summary lists extracted files, updated metadata, skipped items, and
-  errors per archive.【F:src/imageworks/tools/zip_extract.py†L142-L190】
-- Archive outputs with the mono checker results to maintain provenance.
+1. Execute:
+   ```bash
+   uv run imageworks-zip run \
+     --zip-dir /mnt/c/Users/<user>/Downloads/CCC \
+     --extract-root /mnt/d/Proper\ Photos/photos/ccc\ competition\ images \
+     --output-file outputs/logs/zip_extract_$(date +%Y%m%d).md \
+     --include-xmp -m
+   ```
+2. Monitor console output for each ZIP (extracted counts, metadata updates, errors).
+3. Review generated Markdown summary; confirm each ZIP lists extracted images and metadata updates.
+4. File summary in intake ticket or shared folder.
 
+---
+## 3. Single ZIP Rerun
+
+- Use `--zip-file path/to/file.zip` to reprocess a specific submission. Combine with `-m` to update metadata even if files exist.
+
+---
+## 4. Post-Extraction Tasks
+
+1. Spot-check a few images in Lightroom to confirm `ccc` keyword present and metadata populated.
+2. Notify downstream operators that folder is ready for mono checker.
+3. If overlays or additional diagnostics required, trigger relevant pipelines.
+
+---
 ## 5. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| Missing target directory | Ensure the ZIP filename contains a `(Folder Name)` block or supply explicit paths; extractor defaults to the ZIP stem otherwise.【F:src/imageworks/tools/zip_extract.py†L31-L70】 |
-| Metadata update failures | Verify ExifTool is available on PATH. Inspect the summary for captured exceptions per file.【F:src/imageworks/tools/zip_extract.py†L70-L140】 |
-| Files skipped unexpectedly | Existing files are preserved; rerun with `--update-all-metadata` to rewrite metadata while keeping content intact.【F:src/imageworks/tools/zip_extract.py†L52-L120】 |
-| Non-image contents extracted | Only allowed extensions are copied. Adjust `IMAGE_EXTS` in the module if new formats arrive.【F:src/imageworks/tools/zip_extract.py†L1-L52】 |
 
-Store extracted folders in the location referenced by the mono checker and color
-narrator defaults to maintain end-to-end automation.
+| Issue | Action |
+|-------|--------|
+| Command exits with permission error | Ensure extract root writable; run as user with correct permissions. |
+| ExifTool missing | Install via package manager or disable metadata updates (omit `-m`). |
+| Files already exist, metadata skipped | Rerun with `-m` or delete stale files before extraction. |
+| Summary missing entries | Confirm ZIP contained supported image extensions; check logs for errors. |
+
+---
+## 6. Maintenance
+
+1. Periodically archive processed ZIPs to long-term storage to keep staging directory manageable.
+2. Update configuration defaults if directory structure changes (e.g., new Windows username or drive letter).
+3. Review Markdown summaries quarterly to refine process or identify recurring issues.
+

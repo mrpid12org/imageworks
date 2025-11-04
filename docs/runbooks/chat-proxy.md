@@ -1,88 +1,85 @@
 # Chat Proxy Runbook
 
-Operate the OpenAI-compatible chat proxy that fronts ImageWorks registry models
-for UI clients such as OpenWebUI.
+This runbook describes the day-to-day operations for the ImageWorks chat proxy service across CLI and GUI entry points.
 
-## 1. Configure registry and environment
-- Ensure `configs/model_registry.json` is up to date via `uv run imageworks-loader
-  list`. Logical entries must include backend configuration and version locks.【F:src/imageworks/model_loader/registry.py†L1-L200】
-- Export proxy environment variables or define them in your process manager. Key
-  settings: `CHAT_PROXY_HOST`, `CHAT_PROXY_PORT`, `CHAT_PROXY_LOOPBACK_ALIAS`,
-  and `CHAT_PROXY_VLLM_SINGLE_PORT` (default `1`).【F:src/imageworks/chat_proxy/app.py†L22-L140】
-- Base defaults now live in `configs/chat_proxy.toml`. Edit it directly or use
-  the GUI’s Models → Advanced → “Proxy Settings” tab; see
-  [Chat Proxy Configuration Guide](../chat-proxy-config.md) for precedence rules.
+---
+## 1. Prerequisites & Preflight
 
-## 2. Launch the proxy
-```bash
-uv run imageworks-chat-proxy
-```
-- Startup registers FastAPI routes, loads the layered registry, and initialises
-  the single-port vLLM orchestrator if enabled.【F:src/imageworks/chat_proxy/app.py†L142-L280】
-- Logs stream to `CHAT_PROXY_LOG_PATH` (default `logs/chat_proxy.jsonl`); rotate
-  by adjusting `CHAT_PROXY_MAX_LOG_BYTES`.【F:src/imageworks/chat_proxy/logging_utils.py†L1-L160】
+1. Ensure the deterministic model registry is up to date: `uv run imageworks-models list` should succeed.
+2. Confirm GPU backends are reachable (vLLM, Ollama) using `nvidia-smi` or `curl http://127.0.0.1:11434/api/tags`.
+3. Validate configuration overrides by running `uv run python -c "from imageworks.chat_proxy.config import ProxyConfig; print(ProxyConfig.load())"` and checking host/port/log paths.
+4. GUI users should start the proxy **before** launching Streamlit; otherwise the GUI will show backend unavailable banners.
 
-## 3. Validate endpoints
-- Health check: `curl http://127.0.0.1:8100/v1/health`
-- Model list: `curl http://127.0.0.1:8100/v1/models | jq`
-- Chat completion:
-  ```bash
-  curl http://127.0.0.1:8100/v1/chat/completions \
-    -H 'Authorization: Bearer EMPTY' \
-    -H 'Content-Type: application/json' \
-    -d '{"model":"qwen2", "messages":[{"role":"user","content":"ping"}]}'
-  ```
-  Tool and vision payloads are normalised according to `normalization.py` before
-  forwarding to the backend.【F:src/imageworks/chat_proxy/normalization.py†L1-L149】
+---
+## 2. Starting & Stopping the Service
 
-## 4. Coordinate GPU backends (vLLM + Ollama)
-- `docker-compose.chat-proxy.yml` now defines two services:
-  - `chat-proxy`: the API gateway (exposes :8100, launches vLLM when required)
-  - `imageworks-ollama`: GPU-enabled Ollama runtime (:11434)
-- The proxy keeps the services in sync. When a request targets a different backend
-  than the previous one, it proactively frees resources before forwarding:
-  - Switching from Ollama → vLLM triggers an unload of any running GGUF
-    checkpoints via `ollama ps`/`api/stop` so the GPU is clear.【F:src/imageworks/chat_proxy/ollama_manager.py†L1-L80】【F:src/imageworks/chat_proxy/forwarder.py†L356-L390】
-  - Switching from vLLM → Ollama deactivates the orchestrated vLLM worker before
-    checking Ollama health, ensuring the GGUF runner has room to start.【F:src/imageworks/chat_proxy/forwarder.py†L356-L390】
-- Ollama-backed registry entries now default to `http://imageworks-ollama:11434`
-  via `IMAGEWORKS_OLLAMA_HOST`, so no loopback alias is required. Update legacy
-  entries that still target `127.0.0.1` to benefit from the automatic VRAM
-  coordination.
-- To seed or update GGUF models, exec into the container:
-  ```bash
-  docker exec -it imageworks-ollama ollama pull mistral:instruct
-  docker exec -it imageworks-ollama ollama ps
-  ```
-  Models live under `ollama-data/` in the repo root, mounted at `/root/.ollama`.
-- From the GUI, the Backends tab now exposes a “Restart Chat Proxy” button that wraps
-  `docker restart imageworks-chat-proxy`, giving you a one-click way to apply registry
-  updates or clear GPU memory without leaving the dashboard.【F:src/imageworks/gui/pages/2_🎯_Models.py†L1878-L1908】
+### 2.1 CLI workflow
+1. Activate environment (if not using `uv` wrappers).
+2. Launch service: `uv run imageworks-chat-proxy`.
+3. Optional custom host/port: `CHAT_PROXY_HOST=0.0.0.0 CHAT_PROXY_PORT=9000 uvicorn imageworks.chat_proxy.app:app`.
+4. Stop with `Ctrl+C`. For graceful backend shutdown (vLLM single-port) run `uv run imageworks-models activate-model --stop` after proxy exits.
 
-## 5. Manage vLLM instances
-- Activate or stop vLLM models using the loader CLI:
-  ```bash
-  uv run imageworks-loader activate-model <logical_name>
-  uv run imageworks-loader activate-model --stop
-  uv run imageworks-loader current-model
-  ```
-  These commands update the orchestrator state file referenced by
-  `CHAT_PROXY_VLLM_STATE_PATH`.【F:src/imageworks/model_loader/cli_sync.py†L202-L270】
-- The proxy auto-switches models on incoming requests when `CHAT_PROXY_VLLM_SINGLE_PORT=1`.
+### 2.2 GUI workflow
+1. Open **Settings → Backends**.
+2. Use **Start Chat Proxy** button (executes the same CLI command via supervisor script).
+3. Monitor status pill; it polls `/v1/healthz` until the proxy is reachable.
+4. Use **Stop Chat Proxy** to terminate gracefully (sends `SIGINT`).
 
-## 6. Integrate with OpenWebUI
-- Use `docker-compose.openwebui.yml` as a template. Mount model directories into
-  the proxy container so installed-only filtering works, or set
-  `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` to expose logical entries.【F:docs/reference/chat-proxy.md†L1-L120】
-- Configure OpenWebUI with `OPENAI_API_BASE_URL=http://chat-proxy:8100/v1` and
-  `OPENAI_API_KEY=EMPTY`.
+---
+## 3. Validating Availability
 
-## 7. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| Proxy lists no models | Ensure registry files are mounted/readable and that `CHAT_PROXY_INCLUDE_NON_INSTALLED` matches your deployment. Verify via `uv run imageworks-loader list`.【F:src/imageworks/chat_proxy/models.py†L1-L200】 |
-| `CapabilityError` responses | The selected logical model lacks requested features (e.g. vision). Update registry roles or choose a compatible entry.【F:src/imageworks/chat_proxy/profile_manager.py†L1-L200】 |
-| Autostart fails for vLLM | Confirm `CHAT_PROXY_AUTOSTART_ENABLED=1` and commands in `CHAT_PROXY_AUTOSTART_MAP`. For orchestrated vLLM models, ensure GPU access inside the container and valid base weights.【F:src/imageworks/chat_proxy/vllm_manager.py†L1-L220】 |
-| Vision chats exceed context | Adjust `CHAT_PROXY_VISION_TRUNCATE_HISTORY` or keep defaults to drop history for image requests, avoiding max-token errors.【F:src/imageworks/chat_proxy/forwarder.py†L126-L178】【F:src/imageworks/chat_proxy/config.py†L68-L123】 |
+1. API: `curl http://127.0.0.1:8100/v1/models | jq length` should return non-zero.
+2. GUI: Dashboard “Active model” card should show either *None* or the active vLLM logical name, with latency sparkline populated.
+3. Logs: tail `logs/chat_proxy.jsonl` – new entries should appear for each GUI prompt.
 
-Rotate logs regularly and monitor `/v1/metrics` (when enabled) for latency trends.
+---
+## 4. Managing Backends via Proxy
+
+### 4.1 Activate a vLLM model
+- CLI: `uv run imageworks-models activate-model qwen2-7b-instruct`.
+- GUI: Models page → “Activate via Proxy” on desired row.
+- Verify: `uv run imageworks-models current-model` or Settings page status chip.
+
+### 4.2 Switch Ollama tag
+- Update registry entry `served_model_id` or use `ollama run <tag>` to prewarm.
+- Proxy autostart map `ollama:<tag>` ensures `AutostartManager` loads the desired model when requests arrive.
+
+### 4.3 Disable autostart temporarily
+- CLI: `CHAT_PROXY_AUTOSTART_ENABLED=0 uv run imageworks-chat-proxy`.
+- GUI: Settings → Backends → toggle **Autostart** switch (writes env override to `.env.local`).
+
+---
+## 5. Registry Hot Reload & Profile Control
+
+1. Edit `configs/model_registry.curated.json` or use downloader tooling to refresh `model_registry.discovered.json`.
+2. Proxy detects file modification and reloads automatically. To force reload, run `uv run python -c "from imageworks.model_loader.registry import load_registry; load_registry(force=True)"`.
+3. Deployments: use GUI Settings → Profiles to switch between `production`, `staging`, or `testing`. This rewrites `ProfileManager` state and updates the `/v1/models` filter instantly.
+
+---
+## 6. Incident Response
+
+| Issue | Action |
+|-------|--------|
+| API returns 502/504 | Check `logs/chat_proxy.jsonl` for `err_backend_unavailable`; confirm backend URL and restart service. |
+| GUI shows “Template required” | Ensure chat template exists in `src/imageworks/chat_templates`, or set `CHAT_PROXY_REQUIRE_TEMPLATE=0` while triaging. |
+| Stale model list | Run `uv run imageworks-models list` to ensure registry loads, then restart proxy. |
+| Memory pressure | Reduce `CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION` or stop heavy model before launching another. |
+| Log file at rotation limit | Increase `CHAT_PROXY_MAX_LOG_BYTES` or enable external log shipping. |
+
+---
+## 7. Change Management
+
+1. Capture configuration diffs (`env` overrides, registry updates) in change ticket.
+2. Test new backend combination by running `uv run imageworks-chat-proxy` in staging and sending a sample prompt via `curl`.
+3. Update GUI documentation if new roles or deployment profiles are added.
+4. Archive JSONL logs before redeployments if audit retention is required.
+
+---
+## 8. Post-Deployment Checklist
+
+- [ ] `/v1/models` lists expected logical models.
+- [ ] GUI Dashboard shows healthy heartbeat and no warning banners.
+- [ ] Autostart triggers correctly when first request arrives (check `_staging/autostart/*.log`).
+- [ ] Metrics endpoint `/metrics` (if enabled) scrapes without error.
+- [ ] Log volume within retention window.
+

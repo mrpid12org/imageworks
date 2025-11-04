@@ -1,60 +1,69 @@
 # Personal Tagger Runbook
 
-Use this runbook to generate captions, descriptions, and keywords for portfolio
-shots while maintaining safe metadata practices.
+Operational checklist for running the personal tagging pipeline.
 
-## 1. Prerequisites
-- Confirm `uv run imageworks-loader list --role caption` returns available
-  registry entries if you intend to use loader integration.
-- Update `[tool.imageworks.personal_tagger]` paths in `pyproject.toml` to point at
-  your source directories and default outputs.【F:pyproject.toml†L200-L257】
-- Export overrides (optional) using the `IMAGEWORKS_PERSONAL_TAGGER__` prefix.
+---
+## 1. Preparation
 
-## 2. Discover candidate images
-Run a dry discovery pass to confirm filters:
-```bash
-uv run imageworks-personal-tagger run --dry-run --no-meta \
-  --input-dir ~/photos/portfolio
-```
-The runner logs skipped paths and honours recursive scanning and extension
-filters defined in the config object.【F:src/imageworks/apps/personal_tagger/core/runner.py†L41-L104】
+1. Organise input directories (e.g., per shoot) and ensure backups exist.
+2. Decide on prompt profile and critique settings for the batch.
+3. Confirm chosen backend/registry models are online (use `imageworks-models select` for registry names).
+4. Review metadata overwrite policy to avoid clobbering existing captions.
 
-## 3. Execute tagging
-```bash
-uv run imageworks-personal-tagger run \
-  --input-dir ~/photos/portfolio \
-  --output-jsonl outputs/results/personal_tagger.jsonl \
-  --summary outputs/summaries/personal_tagger.md \
-  --batch-size 2 --max-workers 2 --prompt-profile default
-```
-Key switches:
-- `--use-registry` resolves caption/keyword/description models by functional role
-  via the deterministic loader.【F:src/imageworks/apps/personal_tagger/cli/main.py†L121-L214】
-- `--preflight/--no-preflight` toggles health checks. Leave enabled for remote
-  backends to avoid partial runs.【F:src/imageworks/apps/personal_tagger/core/runner.py†L105-L185】
-- `--dry-run` retains JSONL/summary output but skips metadata writes and marks
-  records accordingly.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】
-- `--critique-title-template`, `--critique-category`, and `--critique-notes` feed
-  structured context into the competition-judge critique stage (e.g. with the
-  `club_judge_json` prompt profile) for consistent scoring output.【F:src/imageworks/apps/personal_tagger/cli/main.py†L85-L170】
+---
+## 2. CLI Execution
 
-## 4. Review results
-- Inspect the Markdown summary for keyword frequency, caption quality, and any
-  errors flagged in the `notes` column.
-- JSONL entries contain raw text suitable for reformatting or follow-up prompts.
-- When a judging profile is active, review the `critique_title`,
-  `critique_category`, and `critique_score` fields alongside the narrative
-  critique in both JSONL and the Markdown summary.
-- Batch metrics append inference duration and throughput history to
-  `outputs/metrics/personal_tagger_batch_metrics.json` for regression tracking.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】
+1. Sample command:
+   ```bash
+   uv run imageworks-personal-tagger run \
+     --input-dir /photos/to_tag \
+     --recursive \
+     --output-jsonl outputs/results/tagger_week12.jsonl \
+     --summary outputs/summaries/tagger_week12.md \
+     --backend lmdeploy --base-url http://localhost:24001/v1 \
+     --caption-role caption --keyword-role keywords --description-role description \
+     --use-loader --prompt-profile competition \
+     --max-keywords 30 --batch-size 4 --max-workers 8
+   ```
+2. Monitor output; ensure preflight passes and each stage logs success.
+3. If running in dry-run mode (`--dry-run` or `--no-meta`), inspect JSONL before committing metadata.
+4. For metadata application after dry-run, rerun with identical options but without `--no-meta`.
 
+---
+## 3. GUI Workflow
+
+1. Open Streamlit → “Personal Tagger”.
+2. Select directories and recursion preference.
+3. Choose backend/registry models (GUI will display resolved served IDs).
+4. Configure prompt profile, critique notes, keyword limit, metadata toggle.
+5. Execute run and watch progress.
+6. Use results table to preview generated metadata; apply metadata if run was dry-run.
+
+---
+## 4. Handling Metadata
+
+- Backups: enable `--backup-originals` (CLI) or GUI toggle to copy originals before writing.
+- Overwrite rules: use `--overwrite-metadata` only when existing keywords should be replaced.
+- Sidecars: configure in `pyproject.toml` if writing `.xmp` sidecars preferred.
+- Post-run validation: spot-check in Lightroom or DAM; confirm keywords and captions present.
+
+---
 ## 5. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| `Preflight: failed to connect` | Verify `--base-url` and API key. The preflight performs `/models`, text, and vision probes before running.【F:src/imageworks/apps/personal_tagger/core/runner.py†L105-L185】 |
-| Metadata not written | Ensure `--no-meta` is not set and the Exif/XMP sidecar path is writable. The runner records `metadata_written` and any exceptions in `notes`.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】 |
-| Duplicate captions | When running multiple passes, enable `--overwrite-metadata` to replace existing tags or use `--dry-run` for inspection only.【F:src/imageworks/apps/personal_tagger/cli/main.py†L19-L120】 |
-| Backend returns wrong model | Use `--caption-model`/`--keyword-model` overrides or update registry aliases. `list-registry` shows available logical names when using loader integration.【F:src/imageworks/apps/personal_tagger/cli/main.py†L215-L372】 |
 
-Archive JSONL outputs with commit hashes for reproducibility after each tagging
-cycle.
+| Issue | Mitigation |
+|-------|-----------|
+| Preflight fails due to capability mismatch | Adjust roles or use explicit models that advertise required capabilities. |
+| API timeout | Increase `--timeout`, reduce `--batch-size`, or check backend load. |
+| Prompt profile missing | Run `imageworks-personal-tagger --help` to confirm profile names; update configuration if custom profile removed. |
+| Excessive runtime | Increase `--max-workers`, reduce image count per run, or disable critiques. |
+| Metadata not written | Ensure run not in dry-run mode and no permission issues on filesystem. |
+
+---
+## 6. Post-Run Activities
+
+1. Archive JSONL/summary outputs with shoot deliverables.
+2. Record prompt profile and backend versions in changelog.
+3. Notify stakeholders (photographers, DAM admins) when new metadata ready for review.
+4. Review randomly sampled images to ensure tone and keywords meet expectations; adjust prompts for next run if needed.
+5. Update GUI preset if configuration changes should persist.
+

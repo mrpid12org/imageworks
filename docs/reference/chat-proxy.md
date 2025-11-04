@@ -1,155 +1,128 @@
-## ImageWorks Chat Proxy (OpenAI-compatible)
+# Chat Proxy Operations Guide
 
-The chat proxy exposes a minimal OpenAI-compatible API over your ImageWorks registry so UIs like OpenWebUI can select and chat with models using a single base URL. It unifies naming, forwards requests to backends (Ollama, vLLM, etc.), and applies a few sensible defaults.
+The chat proxy exposes a FastAPI layer that normalises requests from GUI clients and external tools into deterministic calls to ImageWorks backends (vLLM, LMDeploy/Ollama via registry). It orchestrates single-port model activation, handles prompt/response sanitation, records telemetry, and enforces deployment profiles.
 
-### Endpoints
-- GET `/v1/health` – readiness of the proxy itself
-- GET `/v1/models` – OpenAI-compatible model list
-- POST `/v1/chat/completions` – Chat with text/vision/tool support
-- GET `/v1/metrics` – Optional rolling metrics (disabled by default)
+---
+## 1. Capability Summary
 
-### Naming
-- Returns simplified names that match the CLI list by default.
-- Quantization is appended in parentheses when known, e.g. `llama 12.2b (Q4 K M)`.
-- Decorations like backend/format are suppressed by default to keep names clean.
+| Area | Details |
+|------|---------|
+| Multi-backend routing | Supports vLLM single-port activation, Ollama tag switching, and generic OpenAI-compatible HTTP relay via `ChatForwarder`. |
+| Model registry integration | Reads from layered registry (`model_loader.registry`) with hot reload when curated/discovered layers change; honours profile-based whitelists and testing filters. |
+| Autostart orchestration | `AutostartManager` can start/stop services (vLLM, Ollama) on demand using `CHAT_PROXY_AUTOSTART_MAP` definitions with configurable grace periods. |
+| Payload normalisation | Enforces template requirements, strips images for text-only models, down-samples oversize base64 payloads, harmonises tool calls, and truncates history for vision/reasoning models. |
+| Telemetry & logging | Streams JSONL conversations (`logs/chat_proxy.jsonl`), aggregates latency/cost metrics, and optionally exposes Prometheus-style counters. |
+| Deployment profiles | `ProfileManager` + `RoleSelector` enforce named deployment profiles (production, staging, testing) and role-to-model mappings surfaced to the GUI. |
+| Health & discovery | `/v1/models` enumerates install state, capabilities, active status, and served identifiers; `/v1/debug/registry` dumps cached registry names to aid troubleshooting. |
 
-### Default behavior
-- Suppress extra decorations in model list: `CHAT_PROXY_SUPPRESS_DECORATIONS=1`
-- Exclude non-installed entries (installed-only): `CHAT_PROXY_INCLUDE_NON_INSTALLED=0`
-  - Installed-only means the proxy will only list entries whose `download_path` exists on disk from inside the proxy's filesystem view.
-  - If you run the proxy in Docker, either:
-    - Mount your HF weights directory into the container at the same absolute path, or
-    - Set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` to list logical entries even if files aren’t visible in the container.
+---
+## 2. Architecture & Components
 
-### Environment variables
-| Variable | Purpose | Default |
-|---------|---------|---------|
-| CHAT_PROXY_HOST | Bind address | 127.0.0.1 |
-| CHAT_PROXY_PORT | Listen port | 8100 |
-| CHAT_PROXY_SUPPRESS_DECORATIONS | Hide backend/format/quant fields in models output | 1 |
-| CHAT_PROXY_INCLUDE_NON_INSTALLED | Include entries without visible files | 0 |
-| CHAT_PROXY_LOOPBACK_ALIAS | Replace localhost targets in backend URLs (e.g. `host.docker.internal`) | *(unset)* |
-| CHAT_PROXY_ENABLE_METRICS | Enable `/v1/metrics` | 0 |
-| CHAT_PROXY_REQUIRE_TEMPLATE | Enforce presence of chat template | 1 |
-| CHAT_PROXY_MAX_IMAGE_BYTES | Max decoded image size | 6000000 |
-| CHAT_PROXY_BACKEND_TIMEOUT_MS | Upstream request timeout | 120000 |
-| CHAT_PROXY_STREAM_IDLE_TIMEOUT_MS | Streaming idle cutoff | 60000 |
-| CHAT_PROXY_LOG_PATH | JSONL chat log (rotates by size) | logs/chat_proxy.jsonl |
-| CHAT_PROXY_MAX_LOG_BYTES | Log rotation threshold in bytes | 25000000 |
-| CHAT_PROXY_DISABLE_TOOL_NORMALIZATION | Pass through backend tool payloads unchanged | 0 |
-| CHAT_PROXY_LOG_PROMPTS | Include prompt payloads in JSONL log | 0 |
-| CHAT_PROXY_SCHEMA_VERSION | Schema version advertised in models list | 1 |
-| CHAT_PROXY_AUTOSTART_ENABLED | Enable backend autostart commands | 0 |
-| CHAT_PROXY_AUTOSTART_MAP | JSON map of logical model → command | *(unset)* |
-| CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S | Delay before the proxy marks autostart failures | 120 |
-| CHAT_PROXY_VLLM_SINGLE_PORT | Enable single active vLLM orchestration | 1 |
-| CHAT_PROXY_VLLM_PORT | Canonical vLLM port when orchestration is enabled | 24001 |
-| CHAT_PROXY_VLLM_STATE_PATH | Metadata file tracking the active vLLM instance | `_staging/active_vllm.json` |
-| CHAT_PROXY_VLLM_START_TIMEOUT_S | Time budget (seconds) for vLLM startup + health | 180 |
-| CHAT_PROXY_VLLM_STOP_TIMEOUT_S | Graceful shutdown timeout before SIGKILL | 30 |
-| CHAT_PROXY_VLLM_HEALTH_TIMEOUT_S | Per-request timeout when polling vLLM health | 120 |
-| CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION | Fraction of GPU memory vLLM should claim when launched by the orchestrator | 0.75 |
-| CHAT_PROXY_VLLM_MAX_MODEL_LEN | Override max sequence length passed to vLLM (`--max-model-len`) | *(unset)* |
-| CHAT_PROXY_OLLAMA_BASE_URL | Override the Ollama service base URL when different from the host default | http://127.0.0.1:11434 |
-| CHAT_PROXY_OLLAMA_STOP_TIMEOUT_S | Timeout budget (seconds) when waiting for Ollama to unload models | 30 |
+1. **FastAPI app (`chat_proxy.app`)** – wires configuration, managers, and routers; reloads registry on disk change.
+2. **`ChatForwarder`** – central request pipeline: resolves registry entry, ensures backend availability, prepares backend-specific payloads, streams responses, and records metrics/logs.
+3. **Managers**
+   - `VllmManager` manages single-port vLLM lifecycle using state persisted in `_staging/active_vllm.json`.
+   - `OllamaManager` issues load/unload commands to Ollama REST endpoints.
+   - `AutostartManager` interprets autostart map and coordinates service activation.
+4. **Policy helpers** – `capabilities.supports_vision/reasoning`, `normalization.normalize_response`, and `role_selector.RoleSelector` enforce runtime rules.
+5. **Metrics + logging** – `metrics.MetricsAggregator` collects per-request samples; `logging_utils.JsonlLogger` rotates JSONL logs according to `max_log_bytes`.
+6. **Configuration** – `ProxyConfig.load()` merges environment overrides for host/port, logging, timeouts, autostart, history truncation, and Ollama/vLLM tunables.
 
-### Logging & autostart
-- Requests are appended to `CHAT_PROXY_LOG_PATH` in JSONL format. When the file
-  exceeds `CHAT_PROXY_MAX_LOG_BYTES` it is truncated and restarted. Set
-  `CHAT_PROXY_LOG_PROMPTS=1` to include full prompt payloads (disabled by
-  default).
-- Autostart is optional. Enable it with `CHAT_PROXY_AUTOSTART_ENABLED=1` and
-  supply `CHAT_PROXY_AUTOSTART_MAP` (JSON mapping logical model names to shell
-  commands). The proxy waits `CHAT_PROXY_AUTOSTART_GRACE_PERIOD_S` seconds
-  before reporting a startup failure. When single-port orchestration is enabled
-  the proxy ignores autostart commands for vLLM entries and instead asks the
-  orchestrator to switch the active model.
-
-### Single-port vLLM orchestration
-- With `CHAT_PROXY_VLLM_SINGLE_PORT=1` (default) the proxy keeps at most one
-  vLLM instance alive. Switching models automatically stops the running process,
-  starts the requested entry on `CHAT_PROXY_VLLM_PORT`, and waits for
-  `/v1/health` before forwarding user traffic.
-- The orchestrator persists its state in `CHAT_PROXY_VLLM_STATE_PATH`
-  (`active_vllm.json` under `_staging/` by default). If the backing process
-  exits unexpectedly the state file is cleared on the next request.
-- You can trigger manual switches without hitting the API:
-  `uv run imageworks-loader activate-model <logical_name>` starts that entry,
-  `uv run imageworks-loader activate-model --stop` shuts everything down, and
-  `uv run imageworks-loader current-model` reports the active metadata.
-
-### Dockerized deployment
-- `Dockerfile.chat-proxy` now targets `nvidia/cuda:12.8-runtime-ubuntu22.04`
-  and bundles `vllm[vision]` alongside the proxy so the orchestrator can launch
-  models inside the container. Rebuild with `docker compose build chat-proxy`
-  after dependency updates.
-- Grant GPU access to the container (`gpus: all` in compose or
-  `NVIDIA_VISIBLE_DEVICES=all`) and ensure the NVIDIA Container Toolkit is
-  installed on the host.
-- Mount your model weights into the container at the same absolute path used on
-  the host so `start_vllm_server.py` resolves entries correctly.
-- Ollama entries imported via `imageworks-download` automatically set
-  `backend_config.host=imageworks-ollama` (configurable via the
-  `IMAGEWORKS_OLLAMA_HOST` environment variable). This keeps the proxy pointing
-  at the bundled Ollama container. Export a different host value before
-  rediscovery/import if you want to target a host-level daemon instead.
-- To fall back to a host-managed vLLM process, set
-  `CHAT_PROXY_VLLM_SINGLE_PORT=0` (for example by exporting the environment
-  variable before invoking `docker compose up`).
-
-### Docker Compose usage
-
-The repo includes `docker-compose.openwebui.yml` with a `chat-proxy` service and an `openwebui` service wired together. Key bits:
-
-```yaml
-services:
-  chat-proxy:
-    build:
-      context: .
-      dockerfile: Dockerfile.chat-proxy
-    environment:
-      - CHAT_PROXY_HOST=0.0.0.0
-      - CHAT_PROXY_PORT=8100
-      - CHAT_PROXY_SUPPRESS_DECORATIONS=1
-      - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8100/v1/health"]
-    volumes:
-      # Mount HF weights into the container at the same absolute path so installed-only checks pass
-      - /home/you/ai-models/weights:/home/you/ai-models/weights:ro
-    extra_hosts:
-      - host.docker.internal:host-gateway  # Only required if you point back to a host daemon
-
-  openwebui:
-    image: ghcr.io/open-webui/open-webui:latest
-    depends_on:
-      chat-proxy:
-        condition: service_healthy
-    environment:
-      - OPENAI_API_BASE_URL=http://chat-proxy:8100/v1
-      - OPENAI_API_KEY=EMPTY
-      - ENABLE_OLLAMA_API=false
-      - OLLAMA_BASE_URLS=
-      - OLLAMA_API_CONFIGS=
-      - RESET_CONFIG_ON_START=true
+Sequence:
+```
+Client → FastAPI endpoint (OpenAI schema) → ChatForwarder
+       → Registry lookup + policy checks
+       → Backend activation (autostart) → HTTP streaming to backend
+       → Response normalisation → Client stream & metrics/log capture
 ```
 
-### Verification
-- From host: `curl -s http://127.0.0.1:8100/v1/models`
-- From the OpenWebUI container: `docker exec -t openwebui curl -s http://chat-proxy:8100/v1/models`
+---
+## 3. Interfaces
 
-If you see fewer models than expected, it’s usually because the proxy can’t see your HF paths. Add the HF mount (above) or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1`.
+### 3.1 CLI service launcher
+- Entrypoint: `uv run imageworks-chat-proxy` (`chat_proxy.app:main`).
+- Flags: rely on environment variables (see §4). FastAPI can also be run via `uvicorn imageworks.chat_proxy.app:app --host 0.0.0.0 --port 8100` for custom hosting.
 
-### Tool normalization
+### 3.2 HTTP API
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/v1/chat/completions` | POST | OpenAI-compatible chat completions (primary entry). |
+| `/v1/models` | GET | Lists filtered registry entries with availability flags, served IDs, active status, and capability hints. |
+| `/v1/debug/registry` | GET | Raw cache dump of registry names/display names (restricted to debug use). |
+| `/v1/healthz` | GET | Basic process health (if mounted via `autostart`). |
 
-### Vision history management
-Vision requests can blow past backend context windows, so the proxy trims
-prior conversation turns when an image is present. Defaults keep the system
-message and current user payload while dropping history. Tune behaviour with
-`CHAT_PROXY_VISION_TRUNCATE_HISTORY`, `CHAT_PROXY_VISION_KEEP_SYSTEM`, and
-`CHAT_PROXY_VISION_KEEP_LAST_N_TURNS` to keep additional context when needed.【F:src/imageworks/chat_proxy/forwarder.py†L126-L178】【F:src/imageworks/chat_proxy/config.py†L68-L123】
+### 3.3 GUI integration
+- **Settings → Backends**: toggles autostart, inspects registry entries, and surfaces active vLLM state via `/v1/models` & `/v1/autostart/status` helper calls.
+- **Dashboard**: displays current active model, proxy uptime, and error counters using metrics aggregated by `MetricsAggregator`.
+- **Models Page**: uses `/v1/models` for inventory and surfaces “Activate via proxy” actions that call `imageworks-models activate-model` behind the scenes.
 
-Some backends return legacy `function_call` fields. The proxy can synthesize a standard `tool_calls` array for OpenAI compatibility. Disable with `CHAT_PROXY_DISABLE_TOOL_NORMALIZATION=1` if you prefer raw passthrough.
+---
+## 4. Configuration & Environment
 
-### Security note
-There is no authentication in Phase 1. Keep the proxy bound to localhost for single-machine use or place behind your reverse proxy with auth if exposing beyond your LAN.
+Key environment variables consumed by `ProxyConfig`:
+```
+CHAT_PROXY_HOST=0.0.0.0
+CHAT_PROXY_PORT=8100
+CHAT_PROXY_LOG_PATH=/var/log/imageworks/chat_proxy.jsonl
+CHAT_PROXY_MAX_LOG_BYTES=50000000
+CHAT_PROXY_BACKEND_TIMEOUT_MS=180000
+CHAT_PROXY_STREAM_IDLE_TIMEOUT_MS=90000
+CHAT_PROXY_AUTOSTART_ENABLED=1
+CHAT_PROXY_AUTOSTART_MAP=vllm:qlora-prod,ollama:color-narrator
+CHAT_PROXY_REQUIRE_TEMPLATE=1
+CHAT_PROXY_MAX_IMAGE_BYTES=8000000
+CHAT_PROXY_LOG_PROMPTS=1
+CHAT_PROXY_INCLUDE_NON_INSTALLED=0
+CHAT_PROXY_LOOPBACK_ALIAS=imageworks-chat
+CHAT_PROXY_VLLM_SINGLE_PORT=1
+CHAT_PROXY_VLLM_PORT=24001
+CHAT_PROXY_VLLM_STATE_PATH=/srv/imageworks/_staging/active_vllm.json
+CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION=0.85
+CHAT_PROXY_VLLM_MAX_MODEL_LEN=8000
+CHAT_PROXY_VISION_KEEP_LAST_N_TURNS=1
+CHAT_PROXY_REASONING_TRUNCATE_HISTORY=1
+CHAT_PROXY_REASONING_KEEP_LAST_N_TURNS=2
+CHAT_PROXY_OLLAMA_BASE_URL=http://ollama.internal:11434
+```
+Autostart map format: comma-separated `<backend>=<service>` definitions referencing `autostart.AutostartManager` adapters (vLLM, Ollama, shell commands).
+
+Other knobs:
+- `CHAT_PROXY_ENABLE_METRICS=1` exposes Prometheus at `/metrics`.
+- `CHAT_PROXY_SUPPRESS_DECORATIONS=0` preserves backend-specific metadata for debugging.
+- `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` reveals registry entries whose artifacts are not yet on disk (useful for planning).
+
+---
+## 5. Data & Artifacts
+
+- **Logs**: JSONL transcripts at `logs/chat_proxy.jsonl` (rotates at `max_log_bytes`). Each entry includes request metadata, model, backend latency, token counts, and errors.
+- **vLLM state**: `_staging/active_vllm.json` tracks the active logical model, PID, and port for single-port orchestration.
+- **Autostart runfiles**: Temporary PID and readiness files under `_staging/autostart` (created on demand).
+- **Metrics**: In-memory `MetricsAggregator` retains recent samples; optional exporter pushes to `/metrics`.
+
+---
+## 6. Operational Considerations
+
+- **History truncation**: Vision models drop previous turns unless `CHAT_PROXY_VISION_KEEP_LAST_N_TURNS > 0`; reasoning models default to 1 prior turn.
+- **Template enforcement**: If `require_template` is enabled, chat requests must resolve to a chat template in `chat_templates/`; missing templates yield `err_template_required`.
+- **Image gating**: Payloads with embedded images are size-checked; oversize attachments trigger `err_payload_too_large` (HTTP 413).
+- **Role-aware selection**: `RoleSelector` ensures only models flagged for the active deployment profile (production/testing) are exposed via `/v1/models`.
+- **Autostart**: When a request targets a vLLM model and no instance is active, the proxy invokes `VllmManager.activate()` and waits up to `vllm_start_timeout_s` before failing with `err_model_start_timeout`.
+
+---
+## 7. Troubleshooting Quick Reference
+
+| Symptom | Likely Cause | Mitigation |
+|---------|--------------|------------|
+| `404 model not found` | Registry cache stale or profile excludes model. | Trigger reload (`touch configs/model_registry.discovered.json`), verify profile, or hit `/v1/debug/registry`.
+| `409 capability mismatch` | Client requested vision but model lacks `capabilities.vision`. | Choose a vision-capable logical name or adjust GUI role mapping.
+| vLLM never activates | Autostart disabled or incorrect `CHAT_PROXY_AUTOSTART_MAP`. | Enable autostart, verify service command, check `_staging/autostart/*.log`.
+| Streams cut abruptly | `stream_idle_timeout_ms` too low for slow backends. | Increase timeout and restart proxy.
+| GUI shows “non installed” | File path from registry missing. | Run `imageworks-download normalize-formats --rebuild` or adjust registry entry.
+
+---
+## 8. Related Tooling
+
+- `imageworks-models` CLI provides manual registry inspection and vLLM control (see dedicated guide).
+- GUI Settings and Dashboard pages call into the proxy for backend health; keep proxy running before launching Streamlit (`uv run imageworks-gui`).
+- Integration tests use `CHAT_PROXY_INCLUDE_TEST_MODELS=1` to surface synthetic fixtures.
+

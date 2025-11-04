@@ -1,59 +1,89 @@
 # Model Loader Runbook
 
-Manage deterministic registry operations and vLLM orchestration using the
-`imageworks-loader` CLI.
+Operational procedures for maintaining the ImageWorks model registry and deterministic loader.
 
-## 1. Inspect registry state
-```bash
-uv run imageworks-loader list --role vision
-```
-- Lists logical entries filtered by capability role, including backend, lock
-  status, and aggregate hash.【F:src/imageworks/model_loader/cli_sync.py†L36-L120】
-- Add `--include-non-installed` when troubleshooting entries missing filesystem
-  paths.【F:src/imageworks/model_loader/cli_sync.py†L59-L88】
+---
+## 1. Daily Checks
 
-## 2. Select models for clients
-```bash
-uv run imageworks-loader select qwen2-vl-2b
-```
-- Returns resolved endpoints, served IDs, and capability flags. Exits with
-  `CapabilityError` when requirements (e.g. vision) aren’t satisfied.【F:src/imageworks/model_loader/cli_sync.py†L121-L200】
-- Downstream tools (chat proxy, tagger, narrator) rely on this output when
-  `--use-loader` or registry integration is enabled.
+1. Run `uv run imageworks-models list` to ensure registry loads without errors.
+2. Inspect `configs/model_registry.curated.json` for pending PRs or manual edits awaiting merge.
+3. Confirm `_staging/active_vllm.json` aligns with expected logical model (if single-port mode is in use).
+4. Review `logs/model_loader.log` (if enabled) for lock violations or probe failures.
 
-## 3. Verify and lock models
-```bash
-uv run imageworks-loader verify qwen2-vl-2b
-uv run imageworks-loader lock qwen2-vl-2b --set-expected
-```
-- `verify` recomputes artifact hashes and updates `version_lock.last_verified`,
-  exiting with code `2` if the stored hash diverges.【F:src/imageworks/model_loader/cli_sync.py†L271-L340】
-- `lock`/`unlock` toggle the deterministic lock status to protect against
-  unexpected weight changes.【F:src/imageworks/model_loader/cli_sync.py†L341-L420】
+---
+## 2. Adding or Updating a Model
 
-## 4. Operate vLLM orchestrator
-```bash
-uv run imageworks-loader activate-model qwen2-vl-2b
-uv run imageworks-loader current-model
-uv run imageworks-loader activate-model --stop
-```
-- Switches the active vLLM model bound to `CHAT_PROXY_VLLM_PORT`, persisting state
-  in `_staging/active_vllm.json`. Failures raise runtime errors for quick
-  feedback.【F:src/imageworks/model_loader/cli_sync.py†L202-L270】
+### 2.1 CLI steps
+1. Download/import weights: `uv run imageworks-download download owner/repo --location linux_wsl`.
+2. Edit `configs/model_registry.curated.json`:
+   - Add entry with `backend`, `served_model_id`, `roles`, `capabilities`, and `download_path`.
+   - Supply `backend_config` (launch command for vLLM, base URL for remote, etc.).
+3. Validate schema: `uv run python -m imageworks.model_loader.registry --validate` (optional helper script or run unit tests).
+4. Load registry: `uv run imageworks-models list`.
+5. Verify hash: `uv run imageworks-models verify <logical-name>`.
+6. Lock entry: `uv run imageworks-models lock <logical-name> --set-expected`.
+7. Reload chat proxy / GUI to pick up new entry.
 
-## 5. Diagnose layered registry issues
-- Registries live under `configs/` (`.curated`, `.discovered`, merged snapshot).
-  Re-run `uv run imageworks-download normalize-formats --dry-run` to reconcile
-  stale metadata when hashes drift.【F:src/imageworks/model_loader/registry.py†L1-L200】【F:docs/reference/model-downloader.md†L1-L160】
-- If layered overrides conflict, consult ADR-0001 (ensure curated entries exclude
-  dynamic fields) and the `layered-registry` troubleshooting notes.【F:docs/reference/troubleshooting/layered-registry-curated-override-issue.md†L1-L80】
+### 2.2 GUI steps
+1. Open **Models** page → **Registry** tab.
+2. Use **Import from Download History** (pulls discovered overlay) and fill metadata fields.
+3. Trigger **Verify Hash** button (executes CLI verify).
+4. Toggle **Lock version** once verification succeeds.
 
-## 6. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| `CapabilityError` | Verify registry roles are correct and that `capabilities` includes requested flags. Update `model_registry.curated.json` if needed.【F:src/imageworks/model_loader/service.py†L1-L180】 |
-| `verify` exits with code 2 | Inspect file changes in the weights directory; rerun with `--set-expected` after confirming the new hash is valid.【F:src/imageworks/model_loader/hashing.py†L1-L200】 |
-| Orchestrator stuck in previous model | Remove `_staging/active_vllm.json` and restart the proxy; ensure `CHAT_PROXY_VLLM_SINGLE_PORT=1` in the environment.【F:src/imageworks/model_loader/cli_sync.py†L202-L270】 |
-| Registry edits lost | Make changes in `.curated` only and rerun tooling; `.json` is regenerated on save. Use version control for curated file changes.【F:src/imageworks/model_loader/registry.py†L1-L200】 |
+---
+## 3. Handling Hash Drift
 
-Archive CLI output in ops logs when making registry changes for auditability.
+1. Alert triggered (CLI exit 2 or GUI warning badge).
+2. Inspect `download_path` for unexpected changes (`ls -R` within the directory).
+3. If drift expected (new quant, patch release):
+   - Re-run `uv run imageworks-models verify <name>`.
+   - Accept new hash by re-running with `--set-expected` on the next `lock` command.
+4. If drift unexpected:
+   - Re-download assets using downloader with `--force`.
+   - Compare README/license from registry history for tampering.
+   - File incident report before unlocking in production.
+
+---
+## 4. Managing vLLM Single-Port Instance
+
+1. Start: `uv run imageworks-models activate-model <logical-name>`.
+2. Stop: `uv run imageworks-models activate-model --stop`.
+3. Status: `uv run imageworks-models current-model`.
+4. GUI: Models page → **Active Model** panel.
+5. Troubleshooting: If activation fails, check `_staging/active_vllm.json` and GPU utilization; adjust `CHAT_PROXY_VLLM_*` env vars if necessary.
+
+---
+## 5. Vision Probe Validation
+
+1. Prepare canonical probe image.
+2. Run `uv run imageworks-models probe-vision <logical-name> path/to/image.jpg`.
+3. Confirm output shows `vision_ok: true` and includes reasoning text.
+4. GUI: Models page includes **Vision Probe** button invoking the same command; review modal output.
+
+---
+## 6. Registry Hot Reload
+
+1. When curated/discovered files change, chat proxy reloads automatically.
+2. For manual reload: `uv run python -c "from imageworks.model_loader.registry import load_registry; load_registry(force=True)"`.
+3. GUI: Settings → Backends → **Reload registry** button (wraps the command above).
+
+---
+## 7. Incident Response Matrix
+
+| Event | Response |
+|-------|----------|
+| Registry fails to load | Validate JSON syntax (`jq . configs/model_registry.curated.json`). Roll back last edit if malformed. |
+| `CapabilityError` from downstream tool | Update entry capabilities/roles to match actual backend features, or adjust tool configuration. |
+| vLLM activation stuck | Review `autostart` logs, ensure `backend_config.launch` command is valid, verify GPU availability. |
+| GUI shows missing artifacts | Run downloader `normalize-formats --rebuild` to refresh metadata; fix `download_path`. |
+| API `/v1/select` 404 | Ensure correct logical name, reload registry, confirm not filtered by profile/test flag. |
+
+---
+## 8. Change Control Checklist
+
+- [ ] Registry diff reviewed and approved.
+- [ ] Hash verification executed and logged.
+- [ ] Version lock toggled as appropriate.
+- [ ] Downstream services (chat proxy, GUI) restarted or reloaded.
+- [ ] Documentation updated (capability matrix, runbook reference).
+

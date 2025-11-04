@@ -1,42 +1,66 @@
-# GUI Control Center Runbook
+# GUI Runbook
 
-Operate the Streamlit control center to orchestrate ImageWorks workflows.
+Operational playbook for the ImageWorks Streamlit interface.
 
-## 1. Launch the app
-```bash
-uv run imageworks-gui
-```
-- The entry point initialises directories and session state before rendering the
-  sidebar and welcome screen.【F:src/imageworks/gui/app.py†L1-L110】
-- On first run Streamlit prints the localhost URL (default `http://localhost:8501`).
+---
+## 1. Launching the GUI
 
-## 2. Verify environment status
-- Sidebar GPU panel queries `GPUDetector` to confirm VRAM availability; enable the
-  "🐛 Debug" toggle to surface stack traces when detection fails.【F:src/imageworks/gui/app.py†L40-L80】
-- Backend panel shows expected chat proxy, vLLM, and Ollama endpoints. Update the
-  defaults in `gui/config.py` if your deployment uses alternative hosts.【F:src/imageworks/gui/config.py†L41-L70】
+1. Ensure chat proxy and required backends are available (or be prepared to start them via Settings).
+2. Start Streamlit:
+   ```bash
+   uv run imageworks-gui
+   ```
+3. Access the UI at `http://localhost:8501` (default Streamlit port).
+4. Log in via reverse proxy/SAML if deployed behind an auth gateway (out of scope for local runs).
 
-## 3. Run workflows
-- Navigate to **Workflows → Mono Checker** (and others) to configure parameters.
-  Each page mirrors CLI options and displays the generated command preview for
-  reproducibility.【F:src/imageworks/gui/pages/mono.py†L150-L210】
-- Use the "Queue Job" buttons to launch commands asynchronously. Output logs are
-  captured via `utils.jobs.run_subprocess` and streamed to the UI.【F:src/imageworks/gui/utils/jobs.py†L15-L140】
-- Job history persists in `outputs/gui_job_history.json`, letting you rerun recent
-  configurations from the UI.【F:src/imageworks/gui/config.py†L11-L40】【F:src/imageworks/gui/pages/results.py†L1-L120】
+---
+## 2. Daily Operator Checklist
 
-## 4. Inspect results
-- The **Results** page loads JSONL artifacts using pagination and filtering tools.
-  It links to generated overlays, summaries, and metric files produced by the CLIs.【F:src/imageworks/gui/pages/results.py†L120-L210】
-- Toggle the session "Debug" checkbox to expose raw session state for support
-  scenarios.【F:src/imageworks/gui/app.py†L80-L110】
+1. **Dashboard** – verify chat proxy status, GPU utilisation, and recent job results.
+2. **Models** – confirm critical models remain locked and active entry matches expected production model.
+3. **Mono Checker / Color Narrator** – review last run timestamps and JSONL output from Results page.
+4. **Settings** – ensure deployment profile correct (production vs staging) and registry reload succeeded overnight.
 
-## 5. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| "No GPU detected" warning | Confirm NVIDIA drivers are visible to the Python environment. In WSL ensure `nvidia-smi` works; toggle Debug for detailed errors.【F:src/imageworks/gui/app.py†L40-L80】 |
-| Commands never start | Verify `uv` is installed and available on PATH. The job runner relies on `subprocess.Popen`; check `outputs/logs` for captured stderr.【F:src/imageworks/gui/utils/jobs.py†L15-L140】 |
-| Registry data missing | Run `uv run imageworks-loader list` to generate merged registry files. The GUI reads from `configs/model_registry.json` on start.【F:src/imageworks/gui/config.py†L1-L40】 |
-| Streamlit session resets unexpectedly | Ensure browser caching allows third-party cookies; session state is stored server-side but requires stable connections. Export configuration using the job history as a backup.【F:src/imageworks/gui/state.py†L1-L60】 |
+---
+## 3. Running Jobs from the GUI
 
-Document GUI-driven runs alongside CLI equivalents to keep audit logs consistent.
+1. Navigate to module page (Mono Checker, Image Similarity, Personal Tagger, Color Narrator).
+2. Choose preset or configure inputs manually.
+3. Review command preview for accuracy.
+4. Click **Run** and monitor Process Runner output; failures trigger toast + log expansion.
+5. Use Results page to inspect outputs across modules (JSONL/Markdown download buttons).
+
+---
+## 4. Managing Presets
+
+1. Adjust fields on module page to desired defaults.
+2. Click **Save preset as default** (if available) to persist to `_staging/gui_presets.json`.
+3. For temporary overrides, rely on session state; changes reset after page refresh unless saved.
+
+---
+## 5. Chat Proxy Control via Settings
+
+1. Open Settings → Backends.
+2. Use **Start Chat Proxy** or **Stop Chat Proxy** buttons to control service.
+3. Use **Reload registry** to force loader cache refresh.
+4. Profile selector updates `ProfileManager`; confirm by revisiting Models page.
+
+---
+## 6. Troubleshooting
+
+| Issue | Resolution |
+|-------|-----------|
+| Process runner stuck on “Starting...” | Underlying CLI waiting for input or hung; click **Cancel run**, inspect logs, rerun in terminal if needed. |
+| Command fails with permission error | Ensure directories referenced in overrides are writable by current user. |
+| GUI loses settings after restart | Presets not saved; reapply configuration and use “Save preset”. |
+| Chat proxy status red | Start service via Settings or check logs in `logs/chat_proxy.jsonl`. |
+| Registry table empty | Reload registry (`Settings → Reload registry` or shortcut `r` on Models page). |
+
+---
+## 7. Maintenance & Updates
+
+1. Pull latest code and restart Streamlit to apply UI updates.
+2. Clear `_staging/gui_process_history.json` periodically to control disk usage.
+3. Review logs in `logs/gui.log` for repeated errors; escalate to engineering if persistent.
+4. Update this runbook when new pages or workflows are added.
+

@@ -1,64 +1,75 @@
 # Color Narrator Runbook
 
-Follow this checklist to narrate mono competition finalists and capture the
-output in Lightroom-friendly metadata.
+Operational guide for running the colour narration pipeline with both CLI and GUI entry points.
 
-## 1. Prepare mono results
-1. Run the mono checker to generate the JSONL verdict file referenced by the
-   narrator defaults:
+---
+## 1. Preconditions
+
+1. Mono checker run completed with JSONL + overlays ready.
+2. Target VLM backend reachable (vLLM/LMDeploy/Triton/Ollama). Test with `uv run imageworks-color-narrator diagnose-backend`.
+3. ExifTool installed if metadata writing enabled.
+4. `[tool.imageworks.color_narrator]` defaults reviewed for backend URLs and prompt ids.
+
+---
+## 2. CLI Batch Execution
+
+1. Command template:
    ```bash
-   uv run imageworks-mono check --jsonl-out outputs/results/mono_results.jsonl \
-     --summary-out outputs/summaries/mono_summary.md
+   uv run imageworks-color-narrator narrate \
+     --images /path/to/jpegs \
+     --overlays /path/to/overlays \
+     --mono-jsonl outputs/results/mono_results.jsonl \
+     --summary outputs/summaries/narrate_summary.md \
+     --results-json outputs/results/narrate_results.jsonl \
+     --prompt 3 --vlm-backend lmdeploy --vlm-model "Qwen2.5-VL-7B-AWQ" \
+     --batch-size 4
    ```
-   The CLI enforces `--write-xmp` support by requiring a JSONL destination before
-   invoking the ExifTool script.【F:src/imageworks/apps/mono_checker/cli/mono.py†L624-L707】
-2. Ensure overlays exist in the configured directory if `require_overlays` is
-   left enabled (default true).【F:src/imageworks/apps/color_narrator/core/narrator.py†L83-L110】
+2. Monitor CLI output for per-image narration and metadata status lines.
+3. Inspect summary Markdown for outliers (low confidence or missing metadata).
+4. Archive JSONL results alongside mono checker outputs.
 
-## 2. Configure the VLM backend
-- Check `[tool.imageworks.color_narrator]` in `pyproject.toml` for base URLs and
-  model names. Override per run with `--backend`, `--model`, or environment
-  variables such as `IMAGEWORKS_COLOR_NARRATOR__VLM_BASE_URL`.
-- Validate connectivity before long runs:
-  ```bash
-  uv run imageworks-color-narrator validate
-  ```
-  This command performs filesystem checks and hits the selected backend’s health
-  endpoint.【F:src/imageworks/apps/color_narrator/cli/main.py†L1608-L1754】
+---
+## 3. GUI Workflow
 
-## 3. Execute narration
-Run batches with pyproject defaults and optional overrides:
-```bash
-uv run imageworks-color-narrator run --regions --batch-size 2 \
-  --summary-path outputs/summaries/color_narrator.md
-```
-- `--regions` sends grid crops through `RegionBasedVLMAnalyzer` when supported by
-  the chosen prompt definition.【F:src/imageworks/apps/color_narrator/core/narrator.py†L51-L60】
-- `--no-write-xmp` performs a dry run but retains JSONL and Markdown output for
-  review.【F:src/imageworks/apps/color_narrator/cli/main.py†L809-L1208】
-- Adjust concurrency with `--max-concurrent-requests` to match GPU VRAM limits.
+1. Launch Streamlit GUI and open **Color Narrator** page.
+2. Select preset (e.g., “LMDeploy Narration”).
+3. Confirm directories auto-populated from last mono run.
+4. Toggle metadata/regions/backends as required.
+5. Click **Run Narration**; observe progress and backend latency charts.
+6. Review results table, filter by **Needs review** (metadata errors) if any.
 
-Progress and per-batch latency are logged through `BatchRunMetrics` in the CLI.
-JSONL entries capture both VLM responses and metadata write status for later
-inspection.【F:src/imageworks/apps/color_narrator/cli/main.py†L1340-L1435】
+---
+## 4. Prompt & Backend Validation
 
-## 4. Review deliverables
-- Markdown summary (if requested) highlights interesting cases by verdict.
-- JSONL log feeds QA dashboards or the `summarise` command:
-  ```bash
-  uv run imageworks-color-narrator summarise \
-    --jsonl inputs/results/mono_results.jsonl --summary-out audits/review.md
-  ```
-- Lightroom keywords and custom metadata appear after the generated script runs
-  `imageworks.tools.write_mono_xmp` unless `--no-write-xmp` was specified.【F:src/imageworks/apps/color_narrator/cli/main.py†L1340-L1412】
+- List prompts: `uv run imageworks-color-narrator narrate --list-prompts` (exits immediately).
+- Preview prompt: `uv run imageworks-color-narrator preview-prompt --prompt 2 --regions`.
+- Backend health: `uv run imageworks-color-narrator diagnose-backend --vlm-backend vllm --vlm-base-url http://localhost:8000/v1`.
 
-## 5. Troubleshooting
-| Symptom | Checks |
-| --- | --- |
-| CLI exits with `VLM backend is not available` | Ensure LMDeploy/vLLM server is running and that `--backend` matches the deployment. Health check uses the configured base URL before processing begins.【F:src/imageworks/apps/color_narrator/core/narrator.py†L124-L146】 |
-| `--write-xmp` aborts with missing JSONL path | Provide `--jsonl-out` (or set `default_jsonl`) so the CLI can read verdicts when invoking the metadata writer.【F:src/imageworks/apps/color_narrator/cli/main.py†L1340-L1371】 |
-| Overlays skipped despite existing files | Confirm filenames align with mono results and that `require_overlays` remains true. Disabled overlays allow narration without heatmaps.【F:src/imageworks/apps/color_narrator/core/narrator.py†L83-L108】 |
-| GPU OOM | Lower `--batch-size`, disable `--regions`, or switch to the lighter vLLM default defined in pyproject.【F:src/imageworks/apps/color_narrator/core/narrator.py†L32-L60】【F:pyproject.toml†L123-L199】 |
+---
+## 5. Metadata Handling
 
-Document completion of each run in the project tracker along with summary
-artifacts for judging.
+1. To disable metadata temporarily: add `--no-meta` (CLI) or disable toggle in GUI.
+2. To write sidecars: use `--no-meta` false plus `--metadata-sidecar` (config-driven) or adjust config.
+3. Verify `narrate_results.jsonl` includes `metadata_written: true` for successful rows.
+4. If errors occur, rerun with `--no-meta` to capture narratives while investigating ExifTool issues.
+
+---
+## 6. Error Handling
+
+| Symptom | Mitigation |
+|---------|-----------|
+| Backend timeout | Increase `--vlm-timeout` or scale `batch-size` down; check backend logs. |
+| HTTP 401/403 | Provide `--vlm-api-key` or fix API credentials. |
+| Missing overlays | Use `--allow-missing-overlays` if overlays optional, or regenerate from mono checker. |
+| Region prompts misaligned | Ensure overlays match image dimensions; rerun mono checker to regenerate heatmaps. |
+| Metadata collisions | Set `--no-meta`, manually inspect existing keywords before retrying with metadata on. |
+
+---
+## 7. Post-run Checklist
+
+- [ ] Markdown summary archived with competition batch.
+- [ ] JSONL results stored in repository or blob storage.
+- [ ] Backend usage metrics reviewed (BatchRunMetrics output at end of CLI run).
+- [ ] GUI presets updated if configuration changed.
+- [ ] Any low-confidence narrations flagged to judges.
+
