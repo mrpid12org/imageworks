@@ -1,37 +1,71 @@
-# ZIP Extractor Reference
+# ZIP Extractor Operations Guide
 
-Automate extraction of competition ZIP submissions, enforce keyword hygiene, and
-synchronise XMP metadata with JPEGs.
+The ZIP extractor unpacks competition submissions, normalises metadata, and ensures Lightroom keywords are applied before downstream processing (mono checker, color narrator, etc.).
 
-## Configuration
-- Defaults read from `[tool.imageworks.zip-extract]` in `pyproject.toml`, covering
-  ZIP source directory, extraction root, and overlay behaviour.【F:src/imageworks/tools/zip_extract.py†L1-L52】【F:pyproject.toml†L226-L257】
-- CLI options override defaults and support metadata toggles: `--include-xmp`,
-  `--update-all-metadata`, and keyword enforcement.【F:src/imageworks/tools/zip_extract.py†L100-L200】
+---
+## 1. Capabilities
 
-## Extraction pipeline
-- ZIP names are parsed for text inside parentheses to determine target
-  subdirectories under the extract root.【F:src/imageworks/tools/zip_extract.py†L31-L70】
-- Only image files (and optional XMP sidecars) are extracted; existing files are
-  skipped but recorded for auditing.【F:src/imageworks/tools/zip_extract.py†L52-L90】
-- `ccc` keyword enforcement uses ExifTool to append IPTC metadata to every image
-  processed, ensuring Lightroom categorisation.【F:src/imageworks/tools/zip_extract.py†L70-L140】
-- XMP sidecars are parsed for title/author data and applied to matching JPEGs when
-  available and allowed by `--include-xmp` and `--update-all-metadata`.【F:src/imageworks/tools/zip_extract.py†L70-L140】
+| Capability | Details |
+|------------|---------|
+| Batch extraction | Processes all ZIP files in a directory or a single targeted ZIP. |
+| Metadata propagation | Copies XMP sidecars or writes author/title metadata using ExifTool; enforces `ccc` keyword. |
+| Selective extraction | Optionally include `.xmp` files; skips files already present unless `--metadata` specified. |
+| Colour diagnostics | Can compute colourfulness metrics (via configuration) for reporting (future expansion). |
+| Summary reporting | Generates Markdown summary listing extracted files, metadata updates, skips, and errors. |
+| CLI-only | Primary interface via `imageworks-zip` Typer CLI; GUI leverages results indirectly via Mono Checker folder picker. |
 
-## Reporting
-- `write_summary` writes Markdown summaries containing per-ZIP success counts,
-  metadata updates, skipped files, and errors.【F:src/imageworks/tools/zip_extract.py†L142-L190】
-- Console output (Rich tables) provides a quick overview of processed archives
-  during CLI execution.【F:src/imageworks/tools/zip_extract.py†L200-L340】
+---
+## 2. CLI (`uv run imageworks-zip run ...`)
 
-## CLI (`imageworks-zip`)
-- `run` processes a directory of ZIP files, allowing dry runs and selective
-  metadata updates. Each archive produces an entry in the Markdown summary.
-- Additional subcommands expose diagnostic helpers for listing available ZIPs and
-  verifying metadata consistency (see CLI module for options).【F:src/imageworks/tools/zip_extract.py†L200-L340】
+### Options
+- `--zip-dir`: directory containing ZIPs (default from config).
+- `--zip-file`: path to single ZIP (overrides `--zip-dir`).
+- `--extract-root`: destination directory (created if missing).
+- `--output-file`: summary Markdown path (`zip_extract_summary.md` default).
+- `--include-xmp`: also extract XMP sidecars.
+- `--metadata` (`-m`): force metadata update for existing files.
 
-## Integration
-- Output directories match GUI expectations so extracted images appear in the
-  Control Center workflows automatically.【F:src/imageworks/gui/config.py†L1-L40】
-- Mono checker consumes the extracted folders as input for verification runs.
+### Behaviour
+1. Determines extract subdirectory from text in parentheses of ZIP filename (fallback to stem).
+2. Extracts images (and optional XMP) while skipping existing files unless metadata flag set.
+3. Ensures each extracted image contains keyword `ccc`; updates metadata with title/author when XMP available.
+4. Records extracted files, skipped files, metadata updates, and errors per ZIP.
+5. Writes Markdown summary enumerating actions for audit.
+
+---
+## 3. Configuration
+
+`[tool.imageworks.zip-extract]` (pyproject):
+- `default_zip_dir`, `default_extract_root`, `default_summary_output`
+- Metadata flags: `backup_original_files`, `overwrite_existing_metadata`
+- Colour thresholds (used by downstream analytics)
+- Prompt templates for integration with color narrator validation
+
+Defaults ensure WSL paths map to Windows downloads and photo storage directories.
+
+---
+## 4. Integration Points
+
+- **Mono Checker GUI**: “Select from extracted folders” drop-down enumerates directories under `extract_root`.
+- **Color Narrator**: uses same defaults for overlays and JSONL paths; ensures metadata prepared before narration.
+- **Personal Tagger**: benefits from keyword baseline (`ccc`) to flag competition entries.
+
+---
+## 5. Troubleshooting
+
+| Symptom | Cause | Remedy |
+|---------|-------|--------|
+| “ZIP file does not exist” | Path typo or missing `.zip` extension. | Verify path or use `--zip-dir` scan. |
+| Metadata update errors | ExifTool not installed or missing permissions. | Install ExifTool and ensure output directory writable. |
+| Summary empty | No ZIP files found matching glob. | Confirm `--zip-dir` and file extensions. |
+| Keywords not added | Extraction skipped because file existed. | Re-run with `-m/--metadata` to force update. |
+
+---
+## 6. Best Practices
+
+1. Run ZIP extractor immediately after receiving competition submissions.
+2. Keep extracted directories organised by submission batch (naming derived from ZIP filenames).
+3. Review Markdown summary to confirm metadata applied; attach to intake ticket.
+4. Use version control or backups for metadata scripts if customizing ExifTool behaviour.
+5. After extraction, trigger mono checker on the new folder to continue pipeline.
+

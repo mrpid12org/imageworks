@@ -1,54 +1,90 @@
-# Personal Tagger Reference
+# Personal Tagger Operations Guide
 
-The personal tagger generates captions, descriptions, and keyword metadata for
-portfolio images using OpenAI-compatible multimodal backends.
+Personal Tagger generates captions, keywords, descriptions, and critiques for personal photo libraries. It supports multi-model workflows, deterministic registry integration, and metadata writes compatible with Lightroom and DAM tooling.
 
-## Configuration model
-- `PersonalTaggerSettings` loads defaults from `[tool.imageworks.personal_tagger]`
-  (pyproject) and exposes image extension filters, backend defaults, and output
-  destinations.【F:src/imageworks/apps/personal_tagger/core/config.py†L55-L128】【F:pyproject.toml†L200-L257】
-- `build_runtime_config` merges CLI options, pyproject defaults, and environment
-  overrides (`IMAGEWORKS_PERSONAL_TAGGER__*`).【F:src/imageworks/apps/personal_tagger/core/config.py†L1-L54】【F:src/imageworks/apps/personal_tagger/cli/main.py†L19-L120】
-- Registry integration toggles (`--use-loader`, `--use-registry`) allow mapping
-  functional roles to logical model names via the deterministic loader before
-  inference.【F:src/imageworks/apps/personal_tagger/cli/main.py†L121-L214】
+---
+## 1. Feature Summary
 
-## Runtime pipeline
-- `PersonalTaggerRunner` discovers files, orchestrates inference, and writes
-  JSONL/Markdown summaries plus batch metrics.【F:src/imageworks/apps/personal_tagger/core/runner.py†L1-L104】
-- Discovery honours recursive scanning, explicit file inputs, and extension
-  filters configured in `PersonalTaggerConfig`.【F:src/imageworks/apps/personal_tagger/core/runner.py†L41-L77】
-- `create_inference_engine` picks a backend-specific engine (OpenAI-compatible)
-  that issues caption, keyword, and description prompts in sequence per
-  image.【F:src/imageworks/apps/personal_tagger/core/inference.py†L29-L220】
-- The critique stage can run the `club_judge_json` profile, prompting the model
-  for a rubric-guided critique that returns structured JSON (title, category,
-  critique body, score) with automatic fallback when parsing fails.【F:src/imageworks/apps/personal_tagger/core/inference.py†L325-L406】【F:src/imageworks/apps/personal_tagger/core/prompts.py†L244-L280】
-- Metadata persistence flows through `PersonalMetadataWriter`, supporting
-  Lightroom/XMP updates with opt-in backups and overwrite rules.【F:src/imageworks/apps/personal_tagger/core/runner.py†L78-L138】【F:src/imageworks/apps/personal_tagger/core/metadata_writer.py†L23-L170】
-- Optional `preflight` mode performs REST probes for model listing, text, and
-  vision inference before processing any files.【F:src/imageworks/apps/personal_tagger/core/runner.py†L105-L185】
+| Capability | Details |
+|------------|---------|
+| Multi-stage prompting | Separate caption, keyword, and description prompts with optional critique generation. |
+| Backend flexibility | Works with LMDeploy, vLLM, Ollama, or remote OpenAI-compatible APIs; supports per-stage model overrides. |
+| Registry integration | `--use-loader` plus `--caption-role`, `--keyword-role`, etc. resolve models from deterministic registry. |
+| Metadata writing | Writes IPTC/XMP captions, keywords, custom namespaces, and optional critique notes. |
+| Batch orchestration | Processes recursive directories with concurrency control, skipping previously-tagged files if desired. |
+| Preset profiles | `prompt_profile` bundles instructions, competition categories, and critique tone. |
+| Audit outputs | JSONL log per image, Markdown summary, and CLI console table. |
+| GUI integration | Streamlit page for selecting inputs, toggling registry usage, and reviewing generated metadata before commit. |
 
-## CLI (`imageworks-personal-tagger`)
-- Root callback mirrors the `run` command for backward compatibility, allowing
-  `imageworks-personal-tagger --input-dir …` or explicit subcommands.【F:src/imageworks/apps/personal_tagger/cli/main.py†L19-L120】
-- `list-registry` prints registry candidates for caption/keyword/description
-  roles when the loader integration is enabled.【F:src/imageworks/apps/personal_tagger/cli/main.py†L215-L232】
-- `run` executes the full pipeline, supports dry runs, and records structured
-  JSONL plus Markdown summaries for audit trails.【F:src/imageworks/apps/personal_tagger/cli/main.py†L233-L372】
-- New options `--critique-title-template`, `--critique-category`, and
-  `--critique-notes` feed additional context into the judging prompt, enabling
-  reusable competition briefs from both CLI and GUI flows.【F:src/imageworks/apps/personal_tagger/cli/main.py†L100-L164】【F:src/imageworks/apps/personal_tagger/cli/main.py†L462-L515】
+---
+## 2. Architecture
 
-## Outputs
-- JSONL log of `PersonalTaggerRecord` entries with model identifiers, generated
-  text, critique metadata (title/category/score), and metadata write status.
-- Markdown summary aggregating keyword frequencies and notable captions.
-- Metrics history appended to `outputs/metrics/personal_tagger_batch_metrics.json`.
+- `core.config`: loads defaults from `[tool.imageworks.personal_tagger]`, merges CLI overrides, handles environment variables.
+- `core.runner.PersonalTaggerRunner`: orchestrates pipeline (preflight, batching, prompts, metadata writer).
+- `core.prompts`: defines prompt profiles and templates for each stage.
+- CLI entrypoint `apps.personal_tagger.cli.main`: Typer app with root callback (legacy compatibility), `run`, and `list-registry` commands.
+- GUI page `5_🖼️_Personal_Tagger.py`: process runner, preview tables, and metadata diff viewer.
 
-## Integration
-- Model loader: resolves logical names when `--use-loader` is provided, sharing
-  registry semantics with the chat proxy and downloader.【F:src/imageworks/apps/personal_tagger/cli/main.py†L121-L214】
-- Color narrator: reuses VLM backend configuration for consistent GPU scheduling.
-- Zip extract: shares metadata helpers to maintain consistent Lightroom keyword
-  handling across ingestion pipelines.【F:src/imageworks/apps/personal_tagger/core/metadata_writer.py†L23-L170】
+---
+## 3. CLI Usage (`uv run imageworks-personal-tagger ...`)
+
+### 3.1 Root invocation
+- Running without subcommand mirrors `run` (legacy compatibility) while still accepting options.
+
+### 3.2 `run`
+- Key options include:
+  - Input selection: repeatable `--input-dir`, `--recursive`, `--image-exts`.
+  - Backend: `--backend`, `--base-url`, `--model`, `--api-key`, `--timeout`, `--max-new-tokens`, `--temperature`, `--top-p`.
+  - Stage overrides: `--caption-model`, `--keyword-model`, `--description-model`, `--caption-role`, `--keyword-role`, `--description-role`.
+  - Registry: `--use-loader`, per-stage registry model flags (`--caption-registry-model`, etc.).
+  - Prompting: `--prompt-profile`, `--critique-title-template`, `--critique-category`, `--critique-notes`.
+  - Output: `--output-jsonl`, `--summary`, `--max-keywords`, `--batch-size`, `--max-workers`.
+  - Metadata: `--dry-run`, `--no-meta`, `--backup-originals`, `--overwrite-metadata`.
+  - Preflight: `--skip-preflight`, `--use-loader`, `--use-registry`.
+
+### 3.3 Outputs
+- JSONL log containing captions, keywords, critiques, metadata status.
+- Markdown summary with per-folder counts and highlight excerpts.
+- Console progress with Rich tables summarising each stage.
+
+---
+## 4. GUI Highlights
+
+- **Input selection**: browse directories, toggle recursion, preview image counts.
+- **Model selection**: choose between explicit backend/model combos or registry roles; displays resolved served id.
+- **Prompt controls**: pick prompt profile, critique notes, max keywords.
+- **Process runner**: executes CLI `run` command, streaming logs.
+- **Result review**: table of generated metadata; supports “apply metadata” action when run in dry-run mode.
+- **Preset management**: save frequently used configurations per photographer.
+
+---
+## 5. Configuration Defaults
+
+Define in `[tool.imageworks.personal_tagger]`:
+- Default directories, summary/JSONL paths.
+- Backend defaults (backend/base-url/model for each stage).
+- Prompt profile defaults, critique options, keyword limits.
+- Metadata behaviour (overwrite, backups, dry-run default).
+
+Environment overrides follow `IMAGEWORKS_PERSONAL_TAGGER__KEY=value` format.
+
+---
+## 6. Troubleshooting
+
+| Symptom | Likely Cause | Resolution |
+|---------|--------------|------------|
+| Preflight failure | Backend unreachable or capabilities mismatch. | Use `--skip-preflight` during triage; verify backend endpoints and registry roles. |
+| Metadata skipped | `--no-meta` true or file already tagged. | Remove flag or allow overwrite via `--overwrite-metadata`. |
+| Keyword overflow | `max_keywords` too low. | Increase via CLI or config. |
+| Registry lookup error | Role name missing in registry. | Run `imageworks-personal-tagger list-registry` to inspect available entries. |
+| GUI preview empty | Run executed with `--no-meta`; enable metadata or load JSONL file via viewer. |
+
+---
+## 7. Best Practices
+
+1. Maintain separate prompt profiles for competition vs personal portfolio to tailor tone.
+2. Use registry roles for consistent backend selection across environments.
+3. Keep JSONL logs for training future prompts and auditing metadata changes.
+4. Use dry-run mode during prompt tuning; apply metadata only after reviewer approval.
+5. Schedule periodic reviews of generated keywords to refine prompt templates and synonym lists.
+
