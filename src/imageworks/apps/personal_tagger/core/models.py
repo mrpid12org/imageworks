@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+from .judge_types import ComplianceReport, PairwiseReport, RubricScores, TechnicalSignals
+
 
 @dataclass(frozen=True)
 class KeywordPrediction:
@@ -48,6 +50,13 @@ class PersonalTaggerRecord:
     critique_score: Optional[int] = None
     critique_title: Optional[str] = None
     critique_category: Optional[str] = None
+    critique_subscores: RubricScores = field(default_factory=RubricScores)
+    critique_total: Optional[float] = None
+    critique_award: Optional[str] = None
+    critique_compliance_flag: Optional[str] = None
+    technical_signals: TechnicalSignals = field(default_factory=TechnicalSignals)
+    compliance: Optional[ComplianceReport] = None
+    pairwise: Optional[PairwiseReport] = None
     duration_seconds: float = 0.0
     backend: str = ""
     models: GenerationModels = field(
@@ -69,6 +78,13 @@ class PersonalTaggerRecord:
             "critique_score": self.critique_score,
             "critique_title": self.critique_title,
             "critique_category": self.critique_category,
+            "critique_subscores": self.critique_subscores.as_dict(),
+            "critique_total": self.critique_total,
+            "critique_award": self.critique_award,
+            "critique_compliance_flag": self.critique_compliance_flag,
+            "technical_signals": self.technical_signals.to_dict(),
+            "compliance": self.compliance.to_dict() if self.compliance else None,
+            "pairwise": self.pairwise.to_dict() if self.pairwise else None,
             "metadata_written": self.metadata_written,
             "backend": self.backend,
             "models": self.models.to_dict(),

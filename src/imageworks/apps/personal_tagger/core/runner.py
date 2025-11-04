@@ -9,11 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from .config import PersonalTaggerConfig
 from imageworks.model_loader.metrics import BatchRunMetrics
+
+from .config import PersonalTaggerConfig
 from .inference import BaseInferenceEngine, create_inference_engine
+from .judge_types import PairwiseReport
 from .metadata_writer import PersonalMetadataWriter
 from .models import PersonalTaggerRecord
+from .pairwise import JudgeVisionEntry, run_pairwise_tournament
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,11 @@ class PersonalTaggerRunner:
             record = self._process_image(image_path)
             batch_metrics.end_stage(stage_timing)
             records.append(record)
+
+        pairwise_report = self._maybe_run_pairwise(records)
+        if pairwise_report:
+            for record in records:
+                record.pairwise = pairwise_report
 
         batch_metrics.close_batch()
         self._write_jsonl(records)
@@ -131,6 +139,38 @@ class PersonalTaggerRunner:
     def _matches_extension(self, path: Path) -> bool:
         suffix = path.suffix.lower()
         return suffix in {ext.lower() for ext in self.config.image_extensions}
+
+    def _maybe_run_pairwise(
+        self, records: Sequence[PersonalTaggerRecord]
+    ) -> Optional[PairwiseReport]:
+        competition = getattr(self.config, "competition", None)
+        if not competition:
+            return None
+        if getattr(self.config, "pairwise_rounds", 0) <= 0:
+            return None
+        if len(records) < 2:
+            return None
+        if not all(record.critique_total is not None for record in records):
+            return None
+
+        entries = [
+            JudgeVisionEntry(
+                image=str(record.image),
+                total=float(record.critique_total or 0.0),
+                rubric=record.critique_subscores,
+            )
+            for record in records
+        ]
+        report = run_pairwise_tournament(
+            entries, rounds=int(self.config.pairwise_rounds)
+        )
+
+        for record in records:
+            if record.critique_award is None:
+                award = competition.score_bands.award_for(record.critique_total)
+                if award:
+                    record.critique_award = award
+        return report
 
     def _write_batch_metrics(self, batch_metrics: BatchRunMetrics) -> None:
         try:
@@ -372,9 +412,54 @@ class PersonalTaggerRunner:
                     lines.append(f"  - Critique title: {record.critique_title}")
                 if record.critique_category:
                     lines.append(f"  - Critique category: {record.critique_category}")
-                if record.critique_score is not None:
+                if record.critique_total is not None:
+                    lines.append(
+                        f"  - Judge total: {record.critique_total:.1f}/20"
+                    )
+                elif record.critique_score is not None:
                     lines.append(f"  - Critique score: {record.critique_score}/20")
+                scores_summary = record.critique_subscores.summary()
+                if scores_summary and scores_summary != "<no scores>":
+                    lines.append(f"  - Subscores: {scores_summary}")
+                if record.critique_award:
+                    lines.append(f"  - Award suggestion: {record.critique_award}")
+                if record.critique_compliance_flag:
+                    lines.append(
+                        f"  - Compliance flag: {record.critique_compliance_flag}"
+                    )
+                elif record.compliance:
+                    lines.append(
+                        f"  - Compliance: {record.compliance.to_prompt()}"
+                    )
+                lines.append(
+                    f"  - Technical signals: {record.technical_signals.to_prompt()}"
+                )
                 lines.append(f"  - Critique summary: {critique}")
+            lines.append("")
+
+        report = records[0].pairwise if records and records[0].pairwise else None
+        if report:
+            lines.append("## Pairwise Tournament")
+            lines.append("")
+            for match in report.rounds:
+                left_name = Path(match.left_image).name
+                right_name = Path(match.right_image).name
+                winner_name = Path(match.winner).name
+                lines.append(
+                    f"- Round {match.round_index}: {left_name} vs {right_name} → **{winner_name}** ({match.reason})"
+                )
+            lines.append("")
+            lines.append("### Final Rankings")
+            for idx, entry in enumerate(report.final_rankings, start=1):
+                lines.append(
+                    f"{idx}. {Path(str(entry['image'])).name} — {entry['score']:.1f}"
+                )
+            if report.stability_metrics:
+                metrics = ", ".join(
+                    f"{key}={value}" for key, value in sorted(report.stability_metrics.items())
+                )
+                lines.append("")
+                lines.append(f"Stability metrics: {metrics}")
             lines.append("")
 
         summary_path.write_text("\n".join(lines), encoding="utf-8")
