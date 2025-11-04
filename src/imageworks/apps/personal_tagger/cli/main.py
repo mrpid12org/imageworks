@@ -186,6 +186,21 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
         "--description-role",
         help="Functional role name to resolve description model (default: description).",
     ),
+    competition_config: Optional[Path] = typer.Option(
+        None,
+        "--competition-config",
+        help="Path to competition registry TOML for Judge Vision flows.",
+    ),
+    competition: Optional[str] = typer.Option(
+        None,
+        "--competition",
+        help="Competition identifier defined in the registry (e.g. club_open_2025).",
+    ),
+    pairwise_rounds: Optional[int] = typer.Option(
+        None,
+        "--pairwise-rounds",
+        help="Override the number of pairwise tournament rounds.",
+    ),
 ) -> None:
     """Root-level option passthrough for backward compatibility.
 
@@ -226,6 +241,9 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
             caption_registry_model=caption_registry_model,
             keyword_registry_model=keyword_registry_model,
             description_registry_model=description_registry_model,
+            competition_config=competition_config,
+            competition=competition,
+            pairwise_rounds=pairwise_rounds,
             # stream parameter removed (not yet supported in build_runtime_config)
         )
 
@@ -435,6 +453,21 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "--description-role",
         help="Functional role name to resolve description model (default: description).",
     ),
+    competition_config: Optional[Path] = typer.Option(
+        None,
+        "--competition-config",
+        help="Path to competition registry TOML for Judge Vision flows.",
+    ),
+    competition: Optional[str] = typer.Option(
+        None,
+        "--competition",
+        help="Competition identifier defined in the registry (e.g. club_open_2025).",
+    ),
+    pairwise_rounds: Optional[int] = typer.Option(
+        None,
+        "--pairwise-rounds",
+        help="Override the number of pairwise tournament rounds.",
+    ),
 ) -> None:
     """Run the personal tagger with CLI/pyproject configuration."""
 
@@ -515,6 +548,9 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "caption_role": caption_role,
         "keyword_role": keyword_role,
         "description_role": description_role,
+        "competition_config": competition_config,
+        "competition": competition,
+        "pairwise_rounds": pairwise_rounds,
     }
 
     # Merge selection overrides last so they win

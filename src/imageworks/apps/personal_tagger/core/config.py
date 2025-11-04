@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import tomllib
 
+from .competition import CompetitionConfig, load_competition_registry
+
 
 _CONFIG_ENV_PREFIX = "IMAGEWORKS_PERSONAL_TAGGER__"
 
@@ -123,10 +125,13 @@ class PersonalTaggerSettings:
         ".cr2",
         ".cr3",
     )
-    json_schema_version: str = "1.0"
+    json_schema_version: str = "1.1"
     critique_title_template: str = "{stem}"
     critique_default_category: Optional[str] = None
     critique_default_notes: str = ""
+    default_competition_config: Optional[Path] = None
+    default_competition: Optional[str] = None
+    default_pairwise_rounds: int = 0
 
 
 @dataclass(frozen=True)
@@ -165,6 +170,9 @@ class PersonalTaggerConfig:
     critique_title_template: str = "{stem}"
     critique_category: Optional[str] = None
     critique_notes: str = ""
+    competition_config_path: Optional[Path] = None
+    competition: Optional[CompetitionConfig] = None
+    pairwise_rounds: int = 0
 
 
 def _merge_dict(
@@ -243,6 +251,9 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         "critique_default_notes": defaults.critique_default_notes,
         "json_schema_version": defaults.json_schema_version,
         "default_preflight": defaults.default_preflight,
+        "default_competition_config": defaults.default_competition_config,
+        "default_competition": defaults.default_competition,
+        "default_pairwise_rounds": defaults.default_pairwise_rounds,
     }
 
     result = _merge_dict(result, _load_pyproject_settings(start))
@@ -351,6 +362,20 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
     critique_notes = str(
         result.get("critique_default_notes", defaults.critique_default_notes) or ""
     ).strip()
+    competition_config_path = _as_path(
+        result.get("default_competition_config")
+    ) or defaults.default_competition_config
+    competition_identifier_raw = result.get(
+        "default_competition", defaults.default_competition
+    )
+    competition_identifier = (
+        str(competition_identifier_raw).strip()
+        if competition_identifier_raw is not None
+        else None
+    ) or None
+    pairwise_rounds = _coerce_int(
+        result.get("default_pairwise_rounds"), defaults.default_pairwise_rounds
+    )
 
     image_exts = _normalise_iterable(result.get("image_extensions"))
     if not image_exts:
@@ -394,6 +419,9 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         critique_title_template=critique_title_template,
         critique_default_category=critique_category,
         critique_default_notes=critique_notes,
+        default_competition_config=competition_config_path,
+        default_competition=competition_identifier,
+        default_pairwise_rounds=pairwise_rounds,
     )
 
 
@@ -432,6 +460,9 @@ def build_runtime_config(
     critique_title_template: Optional[str] = None,
     critique_category: Optional[str] = None,
     critique_notes: Optional[str] = None,
+    competition_config: Optional[Path] = None,
+    competition: Optional[str] = None,
+    pairwise_rounds: Optional[int] = None,
 ) -> PersonalTaggerConfig:
     """Compose a runtime configuration from defaults and CLI overrides."""
 
@@ -584,6 +615,30 @@ def build_runtime_config(
         resolved_keyword_model = _resolve("keywords", resolved_keyword_model)
         resolved_description_model = _resolve("description", resolved_description_model)
 
+    resolved_competition_path = (
+        competition_config if competition_config is not None else settings.default_competition_config
+    )
+    resolved_competition: Optional[CompetitionConfig] = None
+    if resolved_competition_path:
+        registry = load_competition_registry(Path(resolved_competition_path).expanduser())
+        resolved_competition_path = registry.source
+        competition_identifier = competition or settings.default_competition
+        resolved_competition = registry.get(competition_identifier)
+        if competition_identifier and not resolved_competition:
+            raise ValueError(
+                f"Competition '{competition_identifier}' not found in {resolved_competition_path}"
+            )
+
+    resolved_pairwise_rounds = (
+        pairwise_rounds
+        if pairwise_rounds is not None
+        else (
+            resolved_competition.pairwise_rounds
+            if resolved_competition is not None
+            else settings.default_pairwise_rounds
+        )
+    )
+
     return PersonalTaggerConfig(
         input_paths=tuple(resolved_inputs),
         output_jsonl=resolved_output,
@@ -617,4 +672,7 @@ def build_runtime_config(
         critique_title_template=resolved_critique_title_template,
         critique_category=resolved_critique_category,
         critique_notes=resolved_critique_notes,
+        competition_config_path=resolved_competition_path,
+        competition=resolved_competition,
+        pairwise_rounds=resolved_pairwise_rounds or 0,
     )

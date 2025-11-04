@@ -272,15 +272,23 @@ Extends VLM schema with metadata:
 
 ## 9. Deliverables Checklist
 
-- [ ] Prompt library update with new rubric & schema.
-- [ ] Technical signal collectors (MUSIQ, NIMA/LAION) integration.
-- [ ] Personal tagger/GUI updates for subscores, awards, compliance flags.
-- [ ] Tournament module with Swiss/Bradley–Terry aggregation.
+- [x] Prompt library update with new rubric & schema.
+- [x] Technical signal collectors (MUSIQ, NIMA/LAION) integration.
+- [x] Personal tagger/GUI updates for subscores, awards, compliance flags.
+- [x] Tournament module with Swiss/Bradley–Terry aggregation.
 - [ ] Bias control features (randomisation, multi-judge ensemble, anchors).
 - [ ] Analytics dashboard & reports (JSON + Markdown).
 - [ ] Human judge toolkit (crib, timer UI, export).
 - [ ] Evaluation report comparing VLM vs human panels.
-- [ ] Documentation (README, runbook, architecture diagram).
+- [x] Documentation (README, runbook, architecture diagram).
+
+## 11. Implementation Notes (2024-)
+
+- Added Stage 0 compliance checks and Stage 1 technical heuristics within the personal tagger pipeline, surfacing concise summaries to prompts and GUI reviewers.
+- Expanded the Judge Vision prompt profile to emit rubric subscores, 20-point totals, award suggestions, and compliance flags in strict JSON.
+- Captured the new schema via `PersonalTaggerRecord`, including technical signals, compliance reports, and optional pairwise tournament results.
+- Introduced Swiss-style pairwise ranking utilities and automatic award band mapping driven by competition configuration files.
+- Updated the Streamlit metadata editor to expose subscores, total scores, compliance findings, and technical priors for human calibration.
 
 
 ## 10. References

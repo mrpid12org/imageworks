@@ -15,9 +15,13 @@ from imageworks.model_loader.role_selection import select_by_role
 from imageworks.model_loader.service import select_model, CapabilityError
 
 from . import prompts as prompt_registry
+from .competition import CompetitionConfig
+from .compliance import evaluate_compliance
 from .config import PersonalTaggerConfig
+from .judge_types import ComplianceReport, RubricScores, TechnicalSignals
 from .models import GenerationModels, KeywordPrediction, PersonalTaggerRecord
 from .post_processing import clean_keywords, tidy_caption, tidy_description
+from .technical_signals import TechnicalSignalExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +115,7 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         super().__init__(config)
         self._clients: Dict[str, OpenAIChatClient] = {}
         self._prompt_profile = prompt_registry.get_prompt_profile(config.prompt_profile)
+        self._technical_extractor = TechnicalSignalExtractor()
 
     def close(self) -> None:  # pragma: no cover - exercised in runtime only
         for client in self._clients.values():
@@ -164,6 +169,12 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             self._resolved_description_model = self.config.description_model
             self._resolved_critique_model = self.config.description_model
 
+        competition: Optional[CompetitionConfig] = getattr(
+            self.config, "competition", None
+        )
+        compliance_report = evaluate_compliance(image_path, competition)
+        technical_signals = self._technical_extractor.run(image_path)
+
         caption_text, caption_error = self._run_caption_stage(image_b64)
         keyword_strings, keyword_error = self._run_keyword_stage(image_b64)
         description_text, description_error = self._run_description_stage(
@@ -175,8 +186,18 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             critique_title,
             critique_category,
             critique_error,
+            rubric_scores,
+            critique_total,
+            award_suggestion,
+            compliance_flag,
         ) = self._run_critique_stage(
-            image_b64, image_path, caption_text, keyword_strings
+            image_b64,
+            image_path,
+            caption_text,
+            keyword_strings,
+            compliance_report,
+            technical_signals,
+            competition,
         )
 
         keywords = self._convert_keywords(keyword_strings)
@@ -198,6 +219,12 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             critique_score=critique_score,
             critique_title=critique_title,
             critique_category=critique_category,
+            critique_subscores=rubric_scores,
+            critique_total=critique_total,
+            critique_award=award_suggestion,
+            critique_compliance_flag=compliance_flag,
+            technical_signals=technical_signals,
+            compliance=compliance_report,
             duration_seconds=duration,
             backend=self.config.backend,
             models=GenerationModels(
@@ -329,7 +356,20 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         image_path: Path,
         caption: str,
         keywords: List[str],
-    ) -> tuple[str, Optional[int], Optional[str], Optional[str], Optional[str]]:
+        compliance: ComplianceReport,
+        technical_signals: TechnicalSignals,
+        competition: Optional[CompetitionConfig],
+    ) -> tuple[
+        str,
+        Optional[int],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        RubricScores,
+        Optional[float],
+        Optional[str],
+        Optional[str],
+    ]:
         stage = self._prompt_profile.critique_stage
         try:
             keyword_preview = ", ".join(keywords[:10]) if keywords else "none"
@@ -339,6 +379,9 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             category_context = (self.config.critique_category or "").strip()
             notes_context = self._build_critique_notes(image_path)
             title_context = self._render_critique_title(image_path, caption)
+            competition_notes = (
+                competition.to_prompt_brief() if competition else ""
+            )
             result = self._chat(
                 model=model_name,
                 messages=[
@@ -353,7 +396,9 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                                     keyword_preview=keyword_preview,
                                     title=title_context or "null",
                                     category=category_context or "null",
-                                    notes=notes_context,
+                                    notes=(notes_context + (" | " + competition_notes if competition_notes else "")),
+                                    compliance_findings=compliance.to_prompt(),
+                                    technical_signals=technical_signals.to_prompt(),
                                 ),
                             },
                             {
@@ -369,7 +414,17 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Critique generation failed")
-            return "", None, None, None, f"critique_error: {exc}"
+            return (
+                "",
+                None,
+                None,
+                None,
+                f"critique_error: {exc}",
+                RubricScores(),
+                None,
+                None,
+                None,
+            )
 
         raw_content = result.content.strip()
         critique_text = self._extract_text(raw_content)
@@ -378,22 +433,21 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                 parsed = json.loads(self._coerce_json_payload(raw_content))
             except json.JSONDecodeError as exc:
                 logger.warning("Critique JSON parsing failed: %s", exc)
-                return critique_text.strip(), None, None, None, "critique_json_error"
+                return (
+                    critique_text.strip(),
+                    None,
+                    None,
+                    None,
+                    "critique_json_error",
+                    RubricScores(),
+                    None,
+                    None,
+                    None,
+                )
 
             critique_body = (parsed.get("critique") or "").strip()
-            score_val = parsed.get("score")
-            score = None
-            if isinstance(score_val, (int, float)):
-                score = int(score_val)
-            elif isinstance(score_val, str):
-                stripped = score_val.strip()
-                if stripped:
-                    try:
-                        score = int(float(stripped))
-                    except ValueError as exc:
-                        logger.debug(
-                            "Critique score not numeric: %s", stripped, exc_info=exc
-                        )
+            total_val = self._coerce_float(parsed.get("total"))
+            score = int(round(total_val)) if total_val is not None else None
             if score is not None and not 0 <= score <= 20:
                 logger.warning(
                     "Critique score out of range (%s); clamping to 0-20", score
@@ -401,6 +455,15 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                 score = max(0, min(20, score))
             title = self._normalise_optional_str(parsed.get("title"))
             category = self._normalise_optional_str(parsed.get("category"))
+            award = self._normalise_optional_str(parsed.get("award_suggestion"))
+            compliance_flag = self._normalise_optional_str(parsed.get("compliance_flag"))
+            subscores_data = parsed.get("subscores", {})
+            rubric_scores = RubricScores(
+                impact=self._coerce_float(subscores_data.get("impact")),
+                composition=self._coerce_float(subscores_data.get("composition")),
+                technical=self._coerce_float(subscores_data.get("technical")),
+                category_fit=self._coerce_float(subscores_data.get("category_fit")),
+            )
             critique_body = critique_body or critique_text.strip()
             return (
                 critique_body,
@@ -408,6 +471,10 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
                 title or self._normalise_optional_str(title_context),
                 category or self._normalise_optional_str(category_context),
                 None if critique_body else "critique_empty",
+                rubric_scores,
+                total_val,
+                award,
+                compliance_flag,
             )
 
         critique_body = critique_text.strip()
@@ -417,6 +484,10 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
             None,
             None,
             None if critique_body else "critique_empty",
+            RubricScores(),
+            None,
+            None,
+            None,
         )
 
     # ------------------------------------------------------------------
@@ -443,6 +514,15 @@ class OpenAIInferenceEngine(BaseInferenceEngine):
         if configured:
             return configured
         return f"Filename: {image_path.name}"
+
+    @staticmethod
+    def _coerce_float(value: object) -> Optional[float]:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):  # noqa: BLE001
+            return None
 
     @staticmethod
     def _coerce_json_payload(raw: str) -> str:
