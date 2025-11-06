@@ -30,6 +30,14 @@ Operational playbook for the ImageWorks Streamlit interface.
 4. Click **Run** and monitor Process Runner output; failures trigger toast + log expansion.
 5. Use Results page to inspect outputs across modules (JSONL/Markdown download buttons).
 
+### 3.1 VRAM Estimator tab
+
+- Open **⚡ VRAM Estimator** for forward and inverse VRAM planning.
+- Optional: expand “GPU Overview” to display `nvidia-smi` results.
+- Select an overhead profile (or click *Auto-detect profile* to use GPU heuristics).
+- Fill in model parameters and context window to estimate total VRAM. Results are shown as metrics and JSON for export.
+- Use the inverse form to discover the maximum context (k tokens) that fits within a VRAM budget.
+
 ---
 ## 4. Managing Presets
 
@@ -63,4 +71,3 @@ Operational playbook for the ImageWorks Streamlit interface.
 2. Clear `_staging/gui_process_history.json` periodically to control disk usage.
 3. Review logs in `logs/gui.log` for repeated errors; escalate to engineering if persistent.
 4. Update this runbook when new pages or workflows are added.
-

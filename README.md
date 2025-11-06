@@ -46,6 +46,7 @@ All tools are also available via command-line. Each command is packaged as a con
 | `imageworks-download` | Download/import model weights, normalise metadata, and maintain the layered registry. | [Model Downloader Reference](docs/reference/model-downloader.md) |
 | `imageworks-models` | Inspect, select, lock, or activate models from the registry (CLI). | [Model Loader Reference](docs/reference/model-loader.md) |
 | `imageworks-loader` | Sync registry overlays and curated layers (legacy convenience wrapper). | [Model Loader Reference](docs/reference/model-loader.md) |
+| `imageworks-vram-estimator` | Estimate VRAM requirements or max context windows for vLLM deployments. | [VRAM Estimator Reference](docs/reference/vram-estimator.md) |
 | `imageworks-chat-proxy` | Launch the OpenAI-compatible FastAPI proxy that fronts the registry-backed models. | [Chat Proxy Reference](docs/reference/chat-proxy.md) |
 
 ### Chat Proxy & OpenWebUI

@@ -1,0 +1,17 @@
+{
+  "ada_16gb": {
+    "overhead_gib": 1.6,
+    "vision_gib": 0.5,
+    "frag_factor": 1.12
+  },
+  "hopper_80gb": {
+    "overhead_gib": 2.0,
+    "vision_gib": 1.0,
+    "frag_factor": 1.08
+  },
+  "studio_dual": {
+    "overhead_gib": 2.5,
+    "vision_gib": 1.0,
+    "frag_factor": 1.15
+  }
+}

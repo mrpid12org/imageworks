@@ -61,6 +61,7 @@ imageworks-models-api = "imageworks.model_loader.api:app"
 imageworks-loader = "imageworks.model_loader.cli_sync:app"
 imageworks-gui = "imageworks.gui.app:main"
 imageworks-chat-proxy = "imageworks.chat_proxy.app:main"
+imageworks-vram-estimator = "imageworks.tools.vram_estimator:app"
 
 
 [tool.rye]
@@ -82,6 +83,7 @@ exclude = [".venv", ".pytest_cache", ".ruff_cache"]
 packages = ["src/imageworks"]
 include = [
   "src/imageworks/chat_templates/*.jinja",
+  "src/imageworks/tools/overhead_profiles.json",
 ]
 
 
