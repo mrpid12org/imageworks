@@ -31,6 +31,7 @@ Each ImageWorks module now has at least one reference document and one runbook:
 | Mono checker | [`reference/mono-checker.md`](reference/mono-checker.md) | [`runbooks/mono-checker.md`](runbooks/mono-checker.md) |
 | Personal tagger | [`reference/personal-tagger.md`](reference/personal-tagger.md) | [`runbooks/personal-tagger.md`](runbooks/personal-tagger.md) |
 | Judge Vision | [`proposals/judge-vision-spec.md`](proposals/judge-vision-spec.md) | [`runbooks/judge-vision.md`](runbooks/judge-vision.md) |
+| Model downloader architecture extraction | [`proposals/model-downloader-architecture-extraction.md`](proposals/model-downloader-architecture-extraction.md) | – |
 | VRAM estimator | [`reference/vram-estimator.md`](reference/vram-estimator.md) | [`runbooks/vram-estimator.md`](runbooks/vram-estimator.md) |
 | ZIP extractor | [`reference/zip-extract.md`](reference/zip-extract.md) | [`runbooks/zip-extract.md`](runbooks/zip-extract.md) |
 
