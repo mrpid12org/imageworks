@@ -170,8 +170,8 @@ estimator, deployment planners, judge vision) can populate fields automatically.
    - Add GUI button (Settings → Maintenance and VRAM Estimator) to trigger reconciliation after the first successful load.
 6. **GUI enhancements & parameter propagation**
    - VRAM estimator: when registry model selected, prefill fields and annotate source (config vs runtime). Allow users to apply runtime overrides.
-   - When estimator solves for an optimal context/batch combination, offer a “Apply to Model Settings” action that updates the registry entry’s vLLM `extra_args` (e.g. `--max-model-len`, `--max-num-seqs`, `--gpu-memory-utilization`) via the Models page backend.
-   - Provide inline guidance differentiating vLLM `--max-model-len` (in tokens) versus Ollama `--num-ctx` (context window), and allow explicit mapping (user selects which flag to update).
+   - Initial download should set conservative defaults in the registry entry: batch size 1, tensor-parallel 1, GPU utilisation 0.85, and context length derived from architecture but capped at ~60 % of predicted maximum (or 4k if unknown). These values populate vLLM `extra_args` (`--max-model-len`, `--max-num-seqs`, `--gpu-memory-utilization`) and Ollama `--num-ctx` when applicable.
+   - When estimator solves for an optimal context/batch combination, offer a “Apply to Model Settings” action that updates the registry entry’s loading parameters. Provide inline guidance differentiating vLLM `--max-model-len` (tokens) versus Ollama `--num-ctx` (context window) and allow explicit mapping.
 7. **Documentation & tests**
    - Update model downloader reference/runbook.
    - Add tests verifying registry entry includes architecture after download.
