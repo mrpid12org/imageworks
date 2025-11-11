@@ -81,6 +81,23 @@ Use this runbook for day-to-day ImageWorks downloader operations. Each section h
    ```
    - Re-run without `--dry-run` to apply; GUI tabs mirror each command and show the exact invocation.
 
+### 3.4.1 Architecture metadata maintenance
+1. **CLI**
+   ```bash
+   uv run imageworks-download migrate-architecture --dry-run
+   uv run imageworks-download migrate-architecture
+
+   uv run imageworks-download reconcile-architecture --dry-run
+   uv run imageworks-download reconcile-architecture
+   ```
+   - `migrate-architecture` re-parses downloaded repositories (config/GGUF) and persists `metadata.architecture`.
+   - `reconcile-architecture` ingests `logs/model_loader_metrics.jsonl` to augment `metadata.architecture.runtime`.
+2. **GUI**
+   - **Settings → General → Model Metadata Maintenance**
+     - **Re-extract architecture metadata** ↔ `migrate-architecture`
+     - **Reconcile runtime metadata** ↔ `reconcile-architecture`
+   - Status output appears inline; review warnings for entries lacking configs.
+
 ### 3.5 Verify installations and roles
 1. **CLI**
    ```bash

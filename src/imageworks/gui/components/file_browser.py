@@ -179,6 +179,7 @@ def render_path_browser(
     allow_file_selection: bool = False,
     file_types: Optional[List[str]] = None,
     initial_file: Optional[str] = None,
+    show_file_listing: bool = True,
 ) -> Dict[str, Optional[str]]:
     """
     Interactive filesystem browser for directories (and optional file selection).
@@ -252,7 +253,6 @@ def render_path_browser(
 
     jump_value = jump_col.text_input(
         "Jump to path",
-        value=st.session_state[jump_input_key],
         key=jump_input_key,
         help="Enter a path and click Go to navigate directly.",
     )
@@ -306,7 +306,7 @@ def render_path_browser(
         st.caption("No subdirectories.")
 
     selected_file: Optional[str] = None
-    if allow_file_selection:
+    if allow_file_selection and show_file_listing:
         if files:
             default_index = 0
             if initial_file:

@@ -61,8 +61,11 @@ Returns the largest context length (in k tokens) that fits within 12 GiB.
 3. Optional: expand “GPU Overview” to confirm detected hardware.
 4. Use the **Forward Estimate** form to enter model parameters and context.
    - Select an overhead profile or press “Auto-detect profile”.
-   - Enter the parameters manually (registry drop-down is informational only).
+   - Choosing a registry model now auto-prefills layers, heads, KV precision, and
+     context length from `metadata.architecture`.
    - Click **Estimate VRAM** to view weights, KV cache, totals, and JSON output.
+   - Press **Apply to Model Settings** to write the current context + batch back into
+     the registry (vLLM `--max-model-len` / `--max-num-seqs`, Ollama `--num-ctx`).
 5. Use the **Inverse Estimate** form to find the maximum context for a specified
    VRAM budget.
    - Adjust `batch`, `layers`, and other fields as needed.

@@ -7,7 +7,11 @@ settings so downloads land in predictable directories.
 import os
 from pathlib import Path
 from typing import List, Optional
-import tomllib
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 from dataclasses import dataclass, field
 
 
@@ -184,7 +188,15 @@ def get_config() -> DownloaderConfig:
     """Get the global configuration instance."""
     global _config_instance
     if _config_instance is None:
-        _config_instance = DownloaderConfig.from_pyproject()
+        base = DownloaderConfig.from_pyproject()
+        env = os.environ
+        if "IMAGEWORKS_MODEL_ROOT" in env or "IMAGEWORKS_LMSTUDIO_ROOT" in env:
+            overrides = DownloaderConfig.from_env()
+            if "IMAGEWORKS_MODEL_ROOT" in env:
+                base.linux_wsl.root = overrides.linux_wsl.root
+            if "IMAGEWORKS_LMSTUDIO_ROOT" in env:
+                base.windows_lmstudio.root = overrides.windows_lmstudio.root
+        _config_instance = base
         _config_instance.ensure_directories()
     return _config_instance
 

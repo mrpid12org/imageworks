@@ -50,7 +50,6 @@ class StubInferenceEngine(BaseInferenceEngine):
             keywords=[KeywordPrediction(keyword="test", score=0.99)],
             caption="Test caption",
             description="Test description",
-            critique="Test critique",
             duration_seconds=0.0,
             backend="test-backend",
             models=self._models,
@@ -100,7 +99,6 @@ def test_role_based_registry_resolution(tmp_path, monkeypatch):
         caption=config.caption_model or "resolved/caption",  # fallback if not set
         keywords=config.keyword_model or "resolved/keywords",
         description=config.description_model or "resolved/description",
-        critique=config.description_model or "resolved/critique",
     )
 
     # Sanity: ensure roles requested
@@ -129,7 +127,6 @@ def test_role_based_registry_resolution(tmp_path, monkeypatch):
     assert record.models.caption == resolved_models.caption
     assert record.models.keywords == resolved_models.keywords
     assert record.models.description == resolved_models.description
-    assert record.models.critique == resolved_models.critique
 
     # Output artifacts created
     assert config.output_jsonl.exists()

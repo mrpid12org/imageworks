@@ -6,12 +6,15 @@ import json
 
 from imageworks.gui.state import init_session_state
 from imageworks.gui.config import LOGS_DIR, OUTPUTS_DIR
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 
 
 def main():
     """Dashboard page."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (ensures consistency on page refresh)
     st.markdown(

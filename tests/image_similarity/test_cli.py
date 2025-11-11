@@ -2,13 +2,17 @@ from pathlib import Path
 
 import pytest
 
-typer_testing = pytest.importorskip("typer.testing")
-pytest.importorskip("PIL")
-from PIL import Image
+try:
+    from typer.testing import CliRunner
+except ImportError:  # pragma: no cover
+    pytest.skip("typer.testing not installed", allow_module_level=True)
+
+try:
+    from PIL import Image
+except ImportError:  # pragma: no cover
+    pytest.skip("PIL not installed", allow_module_level=True)
 
 from imageworks.apps.image_similarity_checker.cli.main import app
-
-CliRunner = typer_testing.CliRunner
 
 runner = CliRunner()
 

@@ -37,6 +37,26 @@ class OllamaManager:
             logger.warning("[ollama-manager] Health check failed: %s", exc)
             return False
 
+    async def list_installed_models(self) -> set[str]:
+        """Return the set of model names reported by `ollama list`/`/api/tags`."""
+
+        try:
+            resp = await self._http.get(f"{self.base_url}/api/tags")
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[ollama-manager] Failed to query installed tags: %s", exc)
+            return set()
+
+        models = payload.get("models") or []
+        names: set[str] = set()
+        for model in models:
+            name = model.get("name") or model.get("model")
+            if not name:
+                continue
+            names.add(str(name).strip().lower())
+        return names
+
     async def unload_all(self) -> None:
         """Request Ollama to stop all loaded models to free GPU memory."""
 

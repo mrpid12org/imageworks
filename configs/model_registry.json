@@ -105,6 +105,15 @@
         "completion"
       ],
       "ollama_license": null,
+      "architecture": {
+        "sources": [
+          "ollama:aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m"
+        ],
+        "warnings": [
+          "Model directory not found: ollama:/aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m"
+        ],
+        "collected_at": "2025-11-06T22:32:45.240601+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "aqualaguna/gemma-3-27b-it-abliterated-GGUF:q3_k_m",
@@ -1090,7 +1099,20 @@
         "completion",
         "tools",
         "thinking"
-      ]
+      ],
+      "architecture": {
+        "params_billion": 9.0,
+        "field_sources": {
+          "params_billion": "ollama:huihui_ai/gpt-oss-abliterated:20b"
+        },
+        "sources": [
+          "ollama:huihui_ai/gpt-oss-abliterated:20b"
+        ],
+        "warnings": [
+          "Model directory not found: ollama:/huihui_ai/gpt-oss-abliterated:20b"
+        ],
+        "collected_at": "2025-11-06T22:32:45.309834+00:00"
+      }
     },
     "served_model_id": "huihui_ai/gpt-oss-abliterated:20b",
     "model_aliases": [],
@@ -1301,6 +1323,33 @@
       "external_chat_template_files": [],
       "embedded_chat_template_preview": null,
       "branch": "main",
+      "architecture": {
+        "hidden_size": 1024,
+        "vocab_size": 51289,
+        "num_layers": 12,
+        "max_position_embeddings": 4096,
+        "context_length": 4096,
+        "vision": {
+          "image_size": null,
+          "patch_size": null,
+          "hidden_size": null,
+          "num_layers": null,
+          "projection_dim": 1024
+        },
+        "field_sources": {
+          "hidden_size": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json",
+          "vocab_size": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json",
+          "num_layers": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json:text_config",
+          "max_position_embeddings": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json:text_config",
+          "context_length": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json:text_config",
+          "vision": "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/config.json",
+          "generation_config:/home/stewa/ai-models/weights/microsoft/Florence-2-large/generation_config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.241448+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "None",
@@ -1377,7 +1426,47 @@
       "audio": false,
       "thinking": true,
       "reasoning": true,
-      "tools": true
+      "tools": true,
+      "language": true,
+      "chat": true,
+      "visual": false,
+      "multimodal": false,
+      "mm": false,
+      "image": false,
+      "vl": false,
+      "speech": false,
+      "voice": false,
+      "asr": false,
+      "tts": false,
+      "embed": false,
+      "text-embedding": false,
+      "representation": false,
+      "tool_use": true,
+      "tool-use": true,
+      "tool_call": true,
+      "tool-call": true,
+      "toolcalls": true,
+      "tool_calls": true,
+      "toolchoice": true,
+      "tool_choice": true,
+      "function_call": true,
+      "function-call": true,
+      "function_calls": true,
+      "function_calling": true,
+      "function-calling": true,
+      "function_tools": true,
+      "functioncalling": true,
+      "toolcalling": true,
+      "auto_tool_choice": true,
+      "reason": true,
+      "think": true,
+      "chain_of_thought": true,
+      "cot": true,
+      "reasoner": true,
+      "o1": true,
+      "o3": true,
+      "r1": true,
+      "deepseek": true
     },
     "generation_defaults": {
       "temperature": 0.35,
@@ -1460,6 +1549,44 @@
     "metadata": {
       "primary_chat_template_file": "chat_template.jinja",
       "primary_chat_template_sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146",
+      "architecture": {
+        "num_layers": 24,
+        "num_attention_heads": 64,
+        "num_kv_heads": 8,
+        "hidden_size": 2880,
+        "intermediate_size": 2880,
+        "max_position_embeddings": 131072,
+        "context_length": 131072,
+        "rope_theta": 150000.0,
+        "rope_scaling": {
+          "beta_fast": 32.0,
+          "beta_slow": 1.0,
+          "factor": 32.0,
+          "original_max_position_embeddings": 4096,
+          "rope_type": "yarn",
+          "truncate": false
+        },
+        "vocab_size": 201088,
+        "head_dim": 45,
+        "field_sources": {
+          "num_layers": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "num_attention_heads": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "num_kv_heads": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "hidden_size": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "intermediate_size": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "max_position_embeddings": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "context_length": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "rope_theta": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "rope_scaling": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "vocab_size": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "head_dim": "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/config.json",
+          "generation_config:/home/stewa/ai-models/weights/openai/gpt-oss-20b/generation_config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.242448+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "gpt-oss-20b_(MXFP4)",
@@ -1676,6 +1803,7 @@
       "producer": "huihui-ai",
       "model_type": "image-text-to-text",
       "library": "transformers",
+      "vision_target_long_edge": 448,
       "files_downloaded": 16,
       "has_chat_template": true,
       "has_embedded_chat_template": false,
@@ -1687,6 +1815,53 @@
       "quant_schemes": [
         "fp8"
       ],
+      "architecture": {
+        "num_layers": 36,
+        "num_attention_heads": 32,
+        "num_kv_heads": 8,
+        "hidden_size": 4096,
+        "intermediate_size": 12288,
+        "max_position_embeddings": 262144,
+        "context_length": 262144,
+        "rope_theta": 5000000.0,
+        "rope_scaling": {
+          "mrope_interleaved": true,
+          "mrope_section": [
+            24,
+            20,
+            20
+          ],
+          "rope_type": "default"
+        },
+        "vocab_size": 151936,
+        "vision": {
+          "image_size": null,
+          "patch_size": 16,
+          "hidden_size": 1152,
+          "num_layers": 27,
+          "projection_dim": null
+        },
+        "head_dim": 128,
+        "field_sources": {
+          "num_layers": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "num_attention_heads": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "num_kv_heads": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "hidden_size": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "intermediate_size": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "max_position_embeddings": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "context_length": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "rope_theta": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "rope_scaling": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "vocab_size": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config",
+          "vision": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json",
+          "head_dim": "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json:text_config"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/config.json",
+          "generation_config:/home/stewa/ai-models/weights/huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated-fp8/generation_config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.310496+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "None",
@@ -1945,6 +2120,53 @@
       "vision": true,
       "parameter_size": "7B",
       "context_length": 32768,
+      "architecture": {
+        "num_layers": 28,
+        "num_attention_heads": 28,
+        "num_kv_heads": 4,
+        "hidden_size": 3584,
+        "intermediate_size": 18944,
+        "max_position_embeddings": 128000,
+        "context_length": 128000,
+        "rope_theta": 1000000.0,
+        "rope_scaling": {
+          "mrope_section": [
+            16,
+            24,
+            24
+          ],
+          "rope_type": "default",
+          "type": "default"
+        },
+        "vocab_size": 152064,
+        "vision": {
+          "image_size": null,
+          "patch_size": null,
+          "hidden_size": 1280,
+          "num_layers": null,
+          "projection_dim": null
+        },
+        "head_dim": 128,
+        "field_sources": {
+          "num_layers": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "num_attention_heads": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "num_kv_heads": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "hidden_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "intermediate_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "max_position_embeddings": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "context_length": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "rope_theta": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "rope_scaling": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "vocab_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "vision": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "head_dim": "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/config.json",
+          "generation_config:/home/stewa/ai-models/weights/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/generation_config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.311208+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "None",
@@ -2164,7 +2386,7 @@
         "--kv-cache-dtype",
         "fp8",
         "--gpu-memory-utilization",
-        "0.90",
+        "0.9",
         "--max-model-len",
         "6144",
         "--max-num-seqs",
@@ -2174,7 +2396,7 @@
         "--swap-space",
         "4",
         "--limit-mm-per-prompt",
-        "{\"image\":1,\"video\":0}",
+        "{\"image\":2,\"video\":0}",
         "--chat-template",
         "/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/qwen_template.jinja"
       ]
@@ -2229,9 +2451,11 @@
       "deepseek": false
     },
     "generation_defaults": {
+      "max_tokens": 2000,
       "temperature": 0.7,
       "top_p": 0.8,
-      "top_k": 20
+      "top_k": 20,
+      "context_window": 6144
     },
     "artifacts": {
       "aggregate_sha256": "d2e94a5567140828eee755fd8bcd2b3f9f4fc1f74448090fe3676fcde84b3af0",
@@ -2356,6 +2580,7 @@
       "producer": "qwen",
       "model_type": "image-text-to-text",
       "library": null,
+      "vision_target_long_edge": 448,
       "files_downloaded": 13,
       "verified_complete": true,
       "has_chat_template": true,
@@ -2367,6 +2592,53 @@
       "branch": "main",
       "primary_chat_template_file": "chat_template.json",
       "primary_chat_template_sha256": "2c1437f11fc16ab501b984c000f6e291c599f0d28d2c9c6bf2c4533e65429b42",
+      "architecture": {
+        "num_layers": 36,
+        "num_attention_heads": 32,
+        "num_kv_heads": 8,
+        "hidden_size": 4096,
+        "intermediate_size": 12288,
+        "max_position_embeddings": 262144,
+        "context_length": 262144,
+        "rope_theta": 5000000.0,
+        "rope_scaling": {
+          "mrope_interleaved": true,
+          "mrope_section": [
+            24,
+            20,
+            20
+          ],
+          "rope_type": "default"
+        },
+        "vocab_size": 151936,
+        "vision": {
+          "image_size": null,
+          "patch_size": 16,
+          "hidden_size": 1152,
+          "num_layers": 27,
+          "projection_dim": null
+        },
+        "head_dim": 128,
+        "field_sources": {
+          "num_layers": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "num_attention_heads": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "num_kv_heads": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "hidden_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "intermediate_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "max_position_embeddings": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "context_length": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "rope_theta": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "rope_scaling": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "vocab_size": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config",
+          "vision": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json",
+          "head_dim": "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json:text_config"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/config.json",
+          "generation_config:/home/stewa/ai-models/weights/Qwen/Qwen3-VL-8B-Instruct-FP8/generation_config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.311909+00:00"
+      },
       "registry_layer": "curated"
     },
     "served_model_id": "None",
@@ -2390,11 +2662,11 @@
     "quantization": "fp8",
     "backend_alternatives": [],
     "role_priority": {
-      "caption": 85,
-      "keywords": 80,
-      "description": 90,
-      "narration": 90,
-      "vision_general": 85
+      "caption": 95,
+      "keywords": 95,
+      "description": 95,
+      "narration": 95,
+      "vision_general": 95
     },
     "download_format": "safetensors",
     "download_location": "linux_wsl",
@@ -2547,7 +2819,33 @@
     },
     "profiles_placeholder": null,
     "metadata": {
-      "created_from_download": true
+      "created_from_download": true,
+      "architecture": {
+        "num_layers": 24,
+        "num_attention_heads": 16,
+        "hidden_size": 1024,
+        "intermediate_size": 4096,
+        "vision": {
+          "image_size": 384,
+          "patch_size": null,
+          "hidden_size": 1024,
+          "num_layers": 24,
+          "projection_dim": null
+        },
+        "head_dim": 64,
+        "field_sources": {
+          "num_layers": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json:text_config",
+          "num_attention_heads": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json:text_config",
+          "hidden_size": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json:text_config",
+          "intermediate_size": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json:text_config",
+          "vision": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json",
+          "head_dim": "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json:text_config"
+        },
+        "sources": [
+          "config:/home/stewa/ai-models/weights/google/siglip-large-patch16-384/config.json"
+        ],
+        "collected_at": "2025-11-06T22:32:45.312170+00:00"
+      }
     },
     "served_model_id": "None",
     "model_aliases": [

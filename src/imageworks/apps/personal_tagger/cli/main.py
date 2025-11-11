@@ -85,21 +85,6 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
         "--prompt-profile",
         help="Prompt profile name to apply (defaults to configuration).",
     ),
-    critique_title_template: Optional[str] = typer.Option(
-        None,
-        "--critique-title-template",
-        help="Template for critique titles (placeholders: {stem}, {name}, {caption}, {parent}).",
-    ),
-    critique_category: Optional[str] = typer.Option(
-        None,
-        "--critique-category",
-        help="Default competition category to supply to the critique prompt.",
-    ),
-    critique_notes: Optional[str] = typer.Option(
-        None,
-        "--critique-notes",
-        help="Additional notes or judging brief forwarded to the critique prompt.",
-    ),
     batch_size: Optional[int] = typer.Option(
         None, "--batch-size", help="Number of images per inference batch."
     ),
@@ -186,21 +171,6 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
         "--description-role",
         help="Functional role name to resolve description model (default: description).",
     ),
-    competition_config: Optional[Path] = typer.Option(
-        None,
-        "--competition-config",
-        help="Path to competition registry TOML for Judge Vision flows.",
-    ),
-    competition: Optional[str] = typer.Option(
-        None,
-        "--competition",
-        help="Competition identifier defined in the registry (e.g. club_open_2025).",
-    ),
-    pairwise_rounds: Optional[int] = typer.Option(
-        None,
-        "--pairwise-rounds",
-        help="Override the number of pairwise tournament rounds.",
-    ),
 ) -> None:
     """Root-level option passthrough for backward compatibility.
 
@@ -224,9 +194,6 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
             temperature=temperature,
             top_p=top_p,
             prompt_profile=prompt_profile,
-            critique_title_template=critique_title_template,
-            critique_category=critique_category,
-            critique_notes=critique_notes,
             batch_size=batch_size,
             max_workers=max_workers,
             recursive=recursive,
@@ -241,9 +208,6 @@ def _root_callback(  # noqa: PLR0913 - mirrors run() for root compatibility
             caption_registry_model=caption_registry_model,
             keyword_registry_model=keyword_registry_model,
             description_registry_model=description_registry_model,
-            competition_config=competition_config,
-            competition=competition,
-            pairwise_rounds=pairwise_rounds,
             # stream parameter removed (not yet supported in build_runtime_config)
         )
 
@@ -344,21 +308,6 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "--prompt-profile",
         help="Prompt profile name to apply (defaults to configuration).",
     ),
-    critique_title_template: Optional[str] = typer.Option(
-        None,
-        "--critique-title-template",
-        help="Template for critique titles (placeholders: {stem}, {name}, {caption}, {parent}).",
-    ),
-    critique_category: Optional[str] = typer.Option(
-        None,
-        "--critique-category",
-        help="Default competition category to supply to the critique prompt.",
-    ),
-    critique_notes: Optional[str] = typer.Option(
-        None,
-        "--critique-notes",
-        help="Additional notes or judging brief forwarded to the critique prompt.",
-    ),
     batch_size: Optional[int] = typer.Option(
         None,
         "--batch-size",
@@ -453,21 +402,6 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "--description-role",
         help="Functional role name to resolve description model (default: description).",
     ),
-    competition_config: Optional[Path] = typer.Option(
-        None,
-        "--competition-config",
-        help="Path to competition registry TOML for Judge Vision flows.",
-    ),
-    competition: Optional[str] = typer.Option(
-        None,
-        "--competition",
-        help="Competition identifier defined in the registry (e.g. club_open_2025).",
-    ),
-    pairwise_rounds: Optional[int] = typer.Option(
-        None,
-        "--pairwise-rounds",
-        help="Override the number of pairwise tournament rounds.",
-    ),
 ) -> None:
     """Run the personal tagger with CLI/pyproject configuration."""
 
@@ -529,9 +463,6 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "temperature": temperature,
         "top_p": top_p,
         "prompt_profile": prompt_profile,
-        "critique_title_template": critique_title_template,
-        "critique_category": critique_category,
-        "critique_notes": critique_notes,
         "batch_size": batch_size,
         "max_workers": max_workers,
         "recursive": recursive,
@@ -548,9 +479,6 @@ def run(  # noqa: PLR0913 - CLI surface area is intentional
         "caption_role": caption_role,
         "keyword_role": keyword_role,
         "description_role": description_role,
-        "competition_config": competition_config,
-        "competition": competition,
-        "pairwise_rounds": pairwise_rounds,
     }
 
     # Merge selection overrides last so they win

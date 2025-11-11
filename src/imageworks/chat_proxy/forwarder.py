@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
+import logging
 import re
 import time
+from io import BytesIO
 from typing import Any, AsyncGenerator, Dict, Optional, TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
@@ -30,6 +33,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from .ollama_manager import OllamaManager
 
 
+logger = logging.getLogger(__name__)
+
+
 class ChatForwarder:
     def __init__(
         self,
@@ -48,6 +54,12 @@ class ChatForwarder:
         self.vllm_manager = vllm_manager
         self.ollama_manager = ollama_manager
         self._last_backend: str | None = None
+        allowed = getattr(cfg, "vision_downscale_backends", None) or []
+        self._downscale_backends = {
+            backend.strip().lower()
+            for backend in allowed
+            if isinstance(backend, str) and backend.strip()
+        }
 
     @staticmethod
     def _clean_generation_text(text: str | None) -> str | None:
@@ -61,7 +73,12 @@ class ChatForwarder:
             return False
 
     async def _prepare_ollama_payload(
-        self, backend_id: str, messages: list[Any], stream: bool
+        self,
+        backend_id: str,
+        messages: list[Any],
+        stream: bool,
+        allow_downscale: bool = True,
+        max_edge: int | None = None,
     ) -> dict:
         prepared: list[dict] = []
         total_bytes = 0
@@ -86,10 +103,17 @@ class ChatForwarder:
                         if not url:
                             continue
                         if url.startswith("data:image") and "," in url:
-                            raw = url.split(",", 1)[-1]
+                            header, raw = url.split(",", 1)
                             try:
                                 # Validate base64 and account size
                                 b = base64.b64decode(raw, validate=False)
+                                processed = (
+                                    self._downscale_image_bytes(b, max_edge)
+                                    if allow_downscale
+                                    else None
+                                )
+                                if processed:
+                                    b = processed
                                 total_bytes += len(b)
                                 images.append(base64.b64encode(b).decode())
                             except Exception:
@@ -100,6 +124,13 @@ class ChatForwarder:
                                 resp = await self.client.get(url)
                                 if resp.status_code < 400:
                                     b = await resp.aread()
+                                    processed = (
+                                        self._downscale_image_bytes(b, max_edge)
+                                        if allow_downscale
+                                        else None
+                                    )
+                                    if processed:
+                                        b = processed
                                     total_bytes += len(b)
                                     images.append(base64.b64encode(b).decode())
                             except Exception:
@@ -133,6 +164,145 @@ class ChatForwarder:
                     # Non-base64 URL present; count as minimal bytes to trigger image flow
                     total = max(total, 1)
         return has, total
+
+    def _rewrite_inline_image_data_urls(
+        self, messages: list[Any], max_edge: int
+    ) -> int:
+        """
+        Downscale base64-encoded inline images (data URLs) in-place.
+
+        Returns the number of images that were downscaled.
+        """
+
+        if max_edge <= 0:
+            return 0
+        rewritten = 0
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if not isinstance(part, dict) or part.get("type") != "image_url":
+                    continue
+                image_meta = part.get("image_url") or {}
+                url = (image_meta.get("url") or "").strip()
+                if not (url.startswith("data:image") and "," in url):
+                    continue
+                header, raw = url.split(",", 1)
+                try:
+                    binary = base64.b64decode(raw, validate=False)
+                except Exception:
+                    continue
+                processed = self._downscale_image_bytes(binary, max_edge)
+                if not processed:
+                    continue
+                new_meta = dict(image_meta)
+                new_meta["url"] = (
+                    "data:image/jpeg;base64," + base64.b64encode(processed).decode()
+                )
+                part["image_url"] = new_meta
+                rewritten += 1
+        return rewritten
+
+    def _allow_downscale_for_backend(self, backend: str | None) -> bool:
+        if not self.cfg.auto_downscale_images:
+            return False
+        return (backend or "").strip().lower() in self._downscale_backends
+
+    def _resolve_vision_target_edge(self, entry) -> int:
+        meta = getattr(entry, "metadata", {}) or {}
+        candidate = meta.get("vision_target_long_edge") or (
+            meta.get("vision") or {}
+        ).get("target_long_edge")
+        try:
+            edge = int(candidate)
+        except (TypeError, ValueError):
+            edge = None
+        fallback = int(self.cfg.max_image_pixels or 0)
+        return edge if edge and edge > 0 else fallback
+
+    @staticmethod
+    def _attach_carryover_images(messages: list[Any], carryover: list[dict[str, Any]]):
+        if not carryover or not messages:
+            return
+        last = messages[-1]
+        if not isinstance(last, dict) or last.get("role") != "user":
+            return
+        content = last.get("content")
+        if isinstance(content, str):
+            content_list = [{"type": "text", "text": content}]
+        elif isinstance(content, list):
+            content_list = content
+        else:
+            content_list = []
+        existing = {
+            (part.get("image_url") or {}).get("url")
+            for part in content_list
+            if isinstance(part, dict) and part.get("type") == "image_url"
+        }
+        if existing:
+            return
+        for img in carryover:
+            image_meta = copy.deepcopy(img.get("image_url") or {})
+            url = image_meta.get("url")
+            if not url or url in existing:
+                continue
+            content_list.append({"type": "image_url", "image_url": image_meta})
+            existing.add(url)
+        last["content"] = content_list
+
+    def _downscale_image_bytes(self, data: bytes, max_edge: int | None) -> bytes | None:
+        """Downscale/recompress inline images to control prompt length."""
+
+        if not self.cfg.auto_downscale_images:
+            return None
+
+        max_edge = max(int(max_edge or 0), 0)
+        quality = int(self.cfg.image_jpeg_quality or 85)
+        quality = max(10, min(quality, 100))
+
+        if max_edge <= 0:
+            return None
+
+        try:
+            from PIL import Image
+        except Exception:  # pragma: no cover - pillow optional
+            return None
+
+        try:
+            with Image.open(BytesIO(data)) as img:
+                img = img.convert("RGB")
+                original_size = img.size
+                original_bytes = len(data)
+                resized = False
+                longest = max(img.size)
+                if longest > max_edge:
+                    scale = max_edge / longest
+                    new_size = (
+                        max(1, int(img.width * scale)),
+                        max(1, int(img.height * scale)),
+                    )
+                    img = img.resize(new_size, Image.LANCZOS)
+                    resized = True
+                buf = BytesIO()
+                img.save(buf, format="JPEG", quality=quality, optimize=True)
+                processed = buf.getvalue()
+                if resized:
+                    logger.warning(
+                        "[vision] downscaled inline image from %sx%s (%.1f KB) "
+                        "to %sx%s (%.1f KB)",
+                        original_size[0],
+                        original_size[1],
+                        original_bytes / 1024,
+                        img.width,
+                        img.height,
+                        len(processed) / 1024,
+                    )
+                return processed
+        except Exception:
+            return None
 
     @staticmethod
     def _strip_images_for_text_model(
@@ -188,7 +358,9 @@ class ChatForwarder:
 
         return sanitized, removed_count, missing_alt
 
-    def _truncate_history_for_vision(self, messages: list[Any]) -> list[Any]:
+    def _truncate_history_for_vision(
+        self, messages: list[Any]
+    ) -> tuple[list[Any], list[dict[str, Any]]]:
         """
         Truncate message history for vision requests to avoid context length issues.
 
@@ -204,15 +376,16 @@ class ChatForwarder:
         full conversational context.
         """
         if not messages:
-            return messages
+            return messages, []
 
         # Don't truncate if disabled
         if not self.cfg.vision_truncate_history:
             return messages
 
-        truncated = []
+        truncated: list[Any] = []
         system_messages = []
-        conversation = []
+        conversation: list[Any] = []
+        image_part_map: dict[int, list[dict[str, Any]]] = {}
 
         # Separate system messages from conversation
         for msg in messages:
@@ -220,6 +393,25 @@ class ChatForwarder:
                 system_messages.append(msg)
             else:
                 conversation.append(msg)
+                if isinstance(msg, dict) and msg.get("role") == "user":
+                    parts: list[dict[str, Any]] = []
+                    content = msg.get("content")
+                    if isinstance(content, list):
+                        for part in content:
+                            if (
+                                isinstance(part, dict)
+                                and part.get("type") == "image_url"
+                                and part.get("image_url")
+                            ):
+                                parts.append(
+                                    {
+                                        "image_url": copy.deepcopy(
+                                            part.get("image_url") or {}
+                                        )
+                                    }
+                                )
+                    if parts:
+                        image_part_map[id(msg)] = parts
 
         # Keep system messages if configured
         if self.cfg.vision_keep_system and system_messages:
@@ -227,6 +419,7 @@ class ChatForwarder:
 
         # Keep last N turns (pairs of user/assistant messages)
         # A "turn" = user message + optional assistant response
+        kept_ids: set[int] = set()
         if self.cfg.vision_keep_last_n_turns > 0 and len(conversation) > 1:
             # Keep the last N turns before the current message
             # Current message is always last, so we want to preserve some history
@@ -235,12 +428,21 @@ class ChatForwarder:
                 -(keep_count + 1) : -1
             ]  # Exclude last (current)
             truncated.extend(history_to_keep)
+            kept_ids.update(id(msg) for msg in history_to_keep)
 
         # Always keep the current message (last in conversation)
         if conversation:
             truncated.append(conversation[-1])
+            kept_ids.add(id(conversation[-1]))
 
-        return truncated
+        carryover: list[dict[str, Any]] = []
+        for msg in conversation:
+            msg_id = id(msg)
+            if msg_id in kept_ids:
+                continue
+            carryover.extend(image_part_map.get(msg_id, []))
+
+        return truncated, carryover
 
     def _truncate_history_for_reasoning(self, messages: list[Any]) -> list[Any]:
         """
@@ -440,6 +642,8 @@ class ChatForwarder:
         # Capability checks
         has_vision = supports_vision(entry)
         has_images, image_bytes = self._detect_images(messages)
+        downscale_allowed = self._allow_downscale_for_backend(entry.backend)
+        target_edge = self._resolve_vision_target_edge(entry)
         if has_images and not has_vision:
             sanitized_messages, removed_count, missing_alt = (
                 self._strip_images_for_text_model(messages)
@@ -464,15 +668,21 @@ class ChatForwarder:
                 raise err_capability_mismatch(
                     f"Model '{model}' does not support vision/image content"
                 )
+        if has_images and has_vision and downscale_allowed:
+            rewritten = self._rewrite_inline_image_data_urls(messages, target_edge)
+            if rewritten:
+                payload["messages"] = messages
+                has_images, image_bytes = self._detect_images(messages)
         if image_bytes > self.cfg.max_image_bytes:
             raise err_payload_too_large(self.cfg.max_image_bytes)
 
         # Truncate history for vision requests if configured
         # This helps vision models with limited VRAM handle sequential image analysis
         # without accumulating massive context from previous images
+        carryover_images: list[dict[str, Any]] = []
         if has_images and has_vision:
             original_count = len(payload.get("messages") or [])
-            truncated_messages = self._truncate_history_for_vision(
+            truncated_messages, carryover_images = self._truncate_history_for_vision(
                 payload.get("messages") or []
             )
             if len(truncated_messages) < original_count:
@@ -488,6 +698,13 @@ class ChatForwarder:
                     self.cfg.vision_keep_last_n_turns,
                 )
                 payload["messages"] = truncated_messages
+            else:
+                payload["messages"] = truncated_messages
+            if carryover_images:
+                self._attach_carryover_images(payload["messages"], carryover_images)
+                has_images, image_bytes = self._detect_images(payload["messages"])
+        else:
+            payload["messages"] = payload.get("messages") or []
 
         # Truncate history for reasoning/thinking requests if configured
         # This helps reasoning models avoid context overflow from previous long outputs
@@ -637,6 +854,8 @@ class ChatForwarder:
                     payload.get("messages") or [],
                     # For image content, request non-streaming upstream to avoid transfer-encoding issues
                     stream=False if has_images else True,
+                    allow_downscale=self._allow_downscale_for_backend(entry.backend),
+                    max_edge=target_edge,
                 )
 
                 async def event_gen() -> AsyncGenerator[bytes, None]:
@@ -996,6 +1215,8 @@ class ChatForwarder:
                     backend_id,
                     payload.get("messages") or [],
                     stream=False,
+                    allow_downscale=self._allow_downscale_for_backend(entry.backend),
+                    max_edge=target_edge,
                 )
                 resp = await self.client.post(url, json=opayload)
                 if resp.status_code >= 400:

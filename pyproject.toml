@@ -7,7 +7,7 @@ name = "imageworks"
 version = "0.1.0"
 dependencies = [
   "typer",
-  "numpy",
+  "numpy>=1.26,<2",
   "opencv-python-headless",
   "Pillow",
   "scikit-image",
@@ -18,6 +18,7 @@ dependencies = [
   "torch>=2.3.0",
   "transformers>=4.57.1",
   "requests",
+  "protobuf>=3.20.3,<4",
   "aiohttp",
   # Image metadata dependencies
   "exifread",
@@ -29,6 +30,8 @@ dependencies = [
   "lmdeploy>=0.10.1",
   "qwen-vl-utils>=0.0.14",
   "nvidia-ml-py>=13.580.82",
+  "tensorflow==2.17.0",
+  "tensorflow-hub==0.16.1",
   # Model downloader dependencies
   "requests>=2.31.0",
   "aiohttp>=3.9.0",
@@ -39,6 +42,7 @@ dependencies = [
   "uvicorn>=0.30.0",
   # GUI dependencies
   "streamlit>=1.28.0",
+  "streamlit-autorefresh>=1.0.1",
   "streamlit-aggrid>=0.3.0",
   "plotly>=5.0.0",
   "markdown>=3.4.0",
@@ -59,6 +63,7 @@ imageworks-download = "imageworks.tools.model_downloader.cli:main"
 imageworks-models = "imageworks.model_loader.cli:app"
 imageworks-models-api = "imageworks.model_loader.api:app"
 imageworks-loader = "imageworks.model_loader.cli_sync:app"
+imageworks-judge-vision = "imageworks.apps.judge_vision.cli.main:app"
 imageworks-gui = "imageworks.gui.app:main"
 imageworks-chat-proxy = "imageworks.chat_proxy.app:main"
 imageworks-vram-estimator = "imageworks.tools.vram_estimator:app"
@@ -206,7 +211,7 @@ default_input_dirs = []
 default_output_jsonl = "outputs/results/personal_tagger.jsonl"
 default_summary_path = "outputs/summaries/personal_tagger_summary.md"
 default_backend = "vllm"
-default_model = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+default_model = "qwen3-vl-8b-instruct_(FP8)"
 default_base_url = "http://localhost:8100/v1"
 default_timeout = 120
 default_max_new_tokens = 512
@@ -220,9 +225,9 @@ default_dry_run = false
 default_backup_originals = true
 default_overwrite_metadata = false
 default_use_registry = true
-caption_model = "qwen3-vl-8b-instruct-abliterated_(FP8)"
-keyword_model = "qwen3-vl-8b-instruct-abliterated_(FP8)"
-description_model = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+caption_model = "qwen3-vl-8b-instruct_(FP8)"
+keyword_model = "qwen3-vl-8b-instruct_(FP8)"
+description_model = "qwen3-vl-8b-instruct_(FP8)"
 default_api_key = "EMPTY"
 max_keywords = 15
 image_extensions = [

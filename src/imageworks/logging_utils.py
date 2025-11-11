@@ -20,6 +20,14 @@ def _default_log_directory() -> Path:
         return Path(env_override).expanduser()
 
     module_path = Path(__file__).resolve()
+    # Prefer the project root (folder containing pyproject.toml or .git)
+    for candidate in [module_path] + list(module_path.parents):
+        candidate_dir = candidate if candidate.is_dir() else candidate.parent
+        if (candidate_dir / "pyproject.toml").exists() or (
+            candidate_dir / ".git"
+        ).exists():
+            return candidate_dir / "logs"
+
     try:
         project_root = module_path.parents[3]
     except IndexError:  # pragma: no cover - defensive fallback for unusual installs
@@ -46,7 +54,9 @@ def configure_logging(
 ) -> Path:
     """Configure root logging to write to a named file inside the log directory."""
 
-    target_directory = Path(log_dir).expanduser() if log_dir else _default_log_directory()
+    target_directory = (
+        Path(log_dir).expanduser() if log_dir else _default_log_directory()
+    )
     target_directory.mkdir(parents=True, exist_ok=True)
     log_path = target_directory / f"{log_name}.log"
 
@@ -75,4 +85,3 @@ def configure_logging(
     logging.captureWarnings(True)
 
     return log_path
-

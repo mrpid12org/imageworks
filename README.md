@@ -8,10 +8,11 @@ Imageworks provides local-first photography tooling for competition compliance, 
 - **Mono Checker** – Competition compliance pipeline (metadata ingest, monochrome validation, overlays, Lightroom helpers). [Mono Checker Reference](docs/reference/mono-checker.md)
 - **Image Similarity Checker** – Duplicate and near-duplicate detection with embedding, perceptual, and structural strategies plus explanation generation. [Image Similarity Reference](docs/reference/image-similarity-checker.md)
 - **Color Narrator** – VLM-guided natural language descriptions of residual colour in monochrome images with backend diagnostics and overlay support. [Color Narrator Reference](docs/domains/color-narrator/reference.md)
-- **Personal Tagger** – Multi-stage caption/keyword/critique generator for personal libraries with Lightroom-ready metadata writes. [Personal Tagger Reference](docs/reference/personal-tagger.md)
+- **Personal Tagger** – Multi-stage caption/keyword/description generator for personal libraries with Lightroom-ready metadata writes. [Personal Tagger Reference](docs/reference/personal-tagger.md)
 - **ZIP Extractor** – Batch unzip + metadata normaliser for competition submissions, producing Markdown intake summaries. [ZIP Extractor Reference](docs/reference/zip-extract.md)
 - **Model Registry & Loader** – Deterministic registry, hash verification, vLLM single-port activation, and REST API used by all tooling. [Model Loader Reference](docs/reference/model-loader.md)
 - **Model Downloader** – Parallel Hugging Face/Ollama retrieval with registry updates, format detection, and GUI parity. [Model Downloader Reference](docs/reference/model-downloader.md)
+- **Judge Vision** – Two-pass IQA + critique pipeline with GUI orchestration, GPU leasing, and a containerised TensorFlow backend for deterministic metrics. [Judge Vision Runbook](docs/runbooks/judge-vision.md)
 - **Chat Proxy** – OpenAI-compatible FastAPI layer that routes to the registry-backed backend roster for OpenWebUI and other clients. [Chat Proxy Reference](docs/reference/chat-proxy.md)
 
 All applications share a Python codebase (`src/imageworks`) that targets WSL/Ubuntu and takes advantage of GPU acceleration when available.
@@ -41,7 +42,7 @@ All tools are also available via command-line. Each command is packaged as a con
 | `imageworks-mono` | Validate monochrome competition entries, write XMP keywords, render overlays. | [Mono Checker Reference](docs/reference/mono-checker.md) |
 | `imageworks-image-similarity` | Detect duplicates/near-duplicates against a historical library with optional LLM explanations. | [Image Similarity Reference](docs/reference/image-similarity-checker.md) |
 | `imageworks-color-narrator` | Generate residual colour descriptions and diagnostics for monochrome validation. | [Color Narrator Reference](docs/domains/color-narrator/reference.md) |
-| `imageworks-personal-tagger` | Produce captions/keywords/critique for personal catalogues with registry-backed model selection. | [Personal Tagger Reference](docs/reference/personal-tagger.md) |
+| `imageworks-personal-tagger` | Produce captions/keywords/descriptions for personal catalogues with registry-backed model selection. | [Personal Tagger Reference](docs/reference/personal-tagger.md) |
 | `imageworks-zip` | Extract competition ZIPs, enforce keywords, and summarise metadata actions. | [ZIP Extractor Reference](docs/reference/zip-extract.md) |
 | `imageworks-download` | Download/import model weights, normalise metadata, and maintain the layered registry. | [Model Downloader Reference](docs/reference/model-downloader.md) |
 | `imageworks-models` | Inspect, select, lock, or activate models from the registry (CLI). | [Model Loader Reference](docs/reference/model-loader.md) |
@@ -49,13 +50,57 @@ All tools are also available via command-line. Each command is packaged as a con
 | `imageworks-vram-estimator` | Estimate VRAM requirements or max context windows for vLLM deployments. | [VRAM Estimator Reference](docs/reference/vram-estimator.md) |
 | `imageworks-chat-proxy` | Launch the OpenAI-compatible FastAPI proxy that fronts the registry-backed models. | [Chat Proxy Reference](docs/reference/chat-proxy.md) |
 
-### Chat Proxy & OpenWebUI
-ImageWorks includes a lightweight OpenAI-compatible Chat Proxy that presents your unified model registry (Ollama, vLLM, etc.) to OpenWebUI and other OpenAI clients. The proxy:
-- Returns simplified, human-friendly model names (same as the CLI list)
-- Supports text, vision, and tools passthrough with optional light normalization
-- Exposes `/v1/models` and `/v1/chat/completions` endpoints
+### Judge Vision (GPU IQA + Critique)
 
-A docker-compose file (`docker-compose.openwebui.yml`) runs the proxy and OpenWebUI together. By default, the proxy hides non-installed entries; when containerized, mount your HF weights at the same absolute path so “installed-only” checks pass, or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` to relax filtering. Launch locally with `uv run imageworks-chat-proxy` (FastAPI) or `docker-compose -f docker-compose.openwebui.yml up`.
+Judge Vision combines deterministic IQA (NIMA/MUSIQ) with VLM critiques. Before running it via CLI or the ⚖️ Streamlit page:
+
+1. **Download deterministic weights**
+
+   ```bash
+   uv run python scripts/download_judge_iqa_models.py
+   ```
+
+   This populates `$IMAGEWORKS_MODEL_ROOT/weights/judge-iqa/{nima,musiq}`.
+
+2. **Start the TensorFlow IQA service** (optional—the CLI will also fall back to auto-spawn). The service exposes `/infer` so the host can keep all orchestration local.
+
+   ```bash
+   scripts/start_tf_iqa_service.sh   # launches judge-tf-iqa on http://127.0.0.1:5105
+   ```
+
+   When Stage 1 finishes the CLI posts `/shutdown` to free the GPU before Stage 2 reloads vLLM. Set `JUDGE_VISION_TF_AUTO_SHUTDOWN=0` if you prefer to keep the service running between batches.
+
+Run a full two-pass pipeline from the CLI:
+
+```bash
+uv run imageworks-judge-vision run \
+  --input-dir /path/to/competition \
+  --stage two-pass \
+  --iqa-device gpu \
+  --competition-config configs/competitions.toml \
+  --competition club_open_2025
+```
+
+Artifacts land under `outputs/` (results JSONL, summaries, IQA cache, progress JSON). The GUI wraps the same command with live progress bars, cache viewers, and result tables.
+
+### Chat Proxy & OpenWebUI
+Imageworks ships an OpenAI-compatible FastAPI proxy that fronts the shared registry (Ollama, vLLM, remote HTTP backends) so tools like OpenWebUI only need a single `/v1` endpoint. The proxy:
+
+- Returns the same human-readable model IDs shown in the CLI/GUI
+- Supports text + vision inputs, streaming responses, and optional tool passthrough
+- Exposes `/v1/models`, `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, etc.
+
+Usage:
+
+1. Launch the proxy locally (auto-manages GPU leases for Judge Vision / vLLM):
+
+   ```bash
+   uv run imageworks-chat-proxy
+   ```
+
+2. Point OpenWebUI (or any OpenAI client) at `http://localhost:8100/v1` with your chosen API key.
+
+3. Optional: use `docker-compose.openwebui.yml` to bring up the proxy + OpenWebUI stack. Mount the same model paths inside the container or set `CHAT_PROXY_INCLUDE_NON_INSTALLED=1` to show registry entries that live outside the compose volume.
 
 Docs: [Chat Proxy Reference](docs/reference/chat-proxy.md), [OpenWebUI Setup](docs/runbooks/openwebui-setup.md)
 

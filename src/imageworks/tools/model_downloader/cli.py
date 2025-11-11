@@ -30,6 +30,15 @@ from imageworks.model_loader.download_adapter import (
     remove_download as unified_remove_download,
     compute_directory_checksum,
 )
+from imageworks.tools.model_downloader.architecture import (
+    collect_architecture_metadata,
+    merge_architecture_metadata,
+)
+from imageworks.model_loader.runtime_metadata import (
+    load_runtime_events,
+    merge_runtime_payload,
+)
+from imageworks.model_loader.models import RegistryEntry
 from .config import get_config
 
 
@@ -2728,6 +2737,142 @@ def normalize_formats(
     # Persist via registry utility (uses internal cache)
     unified_registry.save_registry()
     rprint(f"✅ [green]Applied {len(changes)} changes to registry[/green]")
+
+
+@app.command("migrate-architecture")
+def migrate_architecture(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview metadata updates without writing registry"
+    ),
+    limit: Optional[int] = typer.Option(
+        None, "--limit", help="Process at most N downloaded models"
+    ),
+) -> None:
+    """Backfill architecture metadata from downloaded model assets."""
+
+    entries = unified_list_downloads()
+    if not entries:
+        rprint("⚠️ [yellow]No downloaded models found.[/yellow]")
+        return
+
+    processed = 0
+    updated: List[RegistryEntry] = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            "Collecting architecture metadata…", total=len(entries)
+        )
+        for entry in entries:
+            if limit is not None and processed >= limit:
+                break
+            processed += 1
+            download_path = getattr(entry, "download_path", None)
+            if not download_path:
+                progress.advance(task)
+                continue
+            result = collect_architecture_metadata(
+                Path(download_path).expanduser(),
+                raw_path=download_path,
+                served_model_id=getattr(entry, "served_model_id", None),
+            )
+            if dry_run:
+                summary = {
+                    key: result.fields.get(key)
+                    for key in (
+                        "num_layers",
+                        "num_attention_heads",
+                        "num_kv_heads",
+                        "hidden_size",
+                        "context_length",
+                    )
+                    if result.fields.get(key) is not None
+                }
+                rprint(
+                    f"• [cyan]{entry.name}[/cyan] -> "
+                    f"{summary or 'no metadata detected'}"
+                )
+            else:
+                entry.metadata = entry.metadata or {}
+                merged = merge_architecture_metadata(
+                    entry.metadata.get("architecture"), result
+                )
+                entry.metadata["architecture"] = merged
+                updated.append(entry)
+            progress.advance(task)
+
+    if dry_run:
+        rprint(
+            f"ℹ️ [blue]Processed {processed} models (dry-run only, no writes).[/blue]"
+        )
+        return
+
+    if not updated:
+        rprint("ℹ️ [blue]No metadata changes were required.[/blue]")
+        return
+
+    unified_registry.update_entries(updated, save=True)
+    rprint(
+        f"✅ [green]Architecture metadata updated for {len(updated)} model(s).[/green]"
+    )
+
+
+@app.command("reconcile-architecture")
+def reconcile_architecture(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview registry updates sourced from runtime loader logs",
+    )
+) -> None:
+    """Merge runtime loader observations into registry architecture metadata."""
+
+    events = load_runtime_events()
+    if not events:
+        rprint(
+            "⚠️ [yellow]No runtime metrics found at logs/model_loader_metrics.jsonl[/yellow]"
+        )
+        return
+
+    registry = _load_unified_registry(force=True)
+    updated: List[RegistryEntry] = []
+    for model_name, entry in registry.items():
+        event = events.get(model_name)
+        if not event:
+            continue
+        architecture_meta = dict((entry.metadata or {}).get("architecture") or {})
+        merged = merge_runtime_payload(
+            architecture_meta=architecture_meta,
+            runtime_payload=event.payload,
+            timestamp=event.timestamp,
+        )
+        if dry_run:
+            rprint(
+                f"• [cyan]{model_name}[/cyan] metrics: "
+                f"{event.payload.get('metrics', {})}"
+            )
+            continue
+        entry.metadata = entry.metadata or {}
+        entry.metadata["architecture"] = merged
+        updated.append(entry)
+
+    if dry_run:
+        rprint(
+            f"ℹ️ [blue]Identified runtime metadata for {len(updated)} model(s) "
+            "(dry-run only).[/blue]"
+        )
+        return
+
+    if not updated:
+        rprint("ℹ️ [blue]No registry entries matched runtime metrics log.[/blue]")
+        return
+
+    unified_registry.update_entries(updated, save=True)
+    rprint(
+        f"✅ [green]Reconciled runtime metadata for {len(updated)} model(s).[/green]"
+    )
 
 
 @app.command("tidy-empty-dirs")

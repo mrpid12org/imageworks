@@ -1,0 +1,60 @@
+# ImageWorks Chat Proxy configuration.
+# Generated automatically. Edit values as needed.
+
+[general]
+schema_version = 1
+require_template = true
+
+[server]
+host = "127.0.0.1"
+port = 8100
+enable_metrics = false
+log_path = "logs/chat_proxy.jsonl"
+max_log_bytes = 25000000
+loopback_alias = ""
+include_non_installed = false
+suppress_decorations = true
+log_prompts = false
+
+[timeouts]
+backend_timeout_ms = 120000
+stream_idle_timeout_ms = 60000
+autostart_grace_period_s = 120
+
+[autostart]
+autostart_enabled = true
+autostart_map_raw = ""
+
+[limits]
+max_image_bytes = 9000000
+disable_tool_normalization = false
+
+[vision_preprocess]
+auto_downscale_images = true
+max_image_pixels = 448
+image_jpeg_quality = 85
+vision_downscale_backends = ["vllm"]
+
+[vision_history]
+vision_truncate_history = true
+vision_keep_system = true
+vision_keep_last_n_turns = 0
+
+[reasoning_history]
+reasoning_truncate_history = false
+reasoning_keep_system = true
+reasoning_keep_last_n_turns = 1
+
+[vllm]
+vllm_single_port = true
+vllm_port = 24001
+vllm_state_path = "_staging/active_vllm.json"
+vllm_start_timeout_s = 180
+vllm_stop_timeout_s = 30
+vllm_health_timeout_s = 120
+vllm_gpu_memory_utilization = 0.75
+vllm_max_model_len = ""
+
+[ollama]
+ollama_base_url = "http://127.0.0.1:11434"
+ollama_stop_timeout_s = 30

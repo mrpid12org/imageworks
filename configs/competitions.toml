@@ -1,0 +1,19 @@
+[competition.club_dpi_2025]
+categories = ["Colour", "Mono"]
+score_bands = { Merit = [14, 15], Credit = [16, 17], Distinction = [18, 19, 20] }
+pairwise_rounds = 0
+anchors = []
+notes = """
+- Judge scores images out of 20 (typical club DPI scale).
+- Titles announced; suggest descriptive naming (e.g., No Title (Sailing at Dawn)).
+- Mono definition: single global tone; partial toning or spot colour counts as Colour.
+- Near-duplicate policy documented separately (see docs/guides/vision-history-management.pdf).
+"""
+
+[competition.club_dpi_2025.rules]
+max_width = 1600
+max_height = 1200
+colour_space = "sRGB IEC61966-2.1"
+competition_class = "Open DPI"
+entries_per_round = "Up to 2 (1 Colour, 1 Mono)"
+mono_definition = "Mono = black & white or single-tone across entire image"

@@ -198,3 +198,17 @@ Deliverable: implement extraction pipeline as described and update GUI/CLI to
 consume metadata. Most architectural detail can be recovered; the main missing
 piece is reliable KV precision and vision tower VRAM, which will still rely on
 profiles or manual overrides.
+
+## 9. Implementation Status (October 2024)
+
+- ✅ Architecture extractor shipped in `imageworks.tools.model_downloader.architecture`
+  with HuggingFace + GGUF strategies and registry persistence.
+- ✅ Downloader now seeds conservative vLLM / Ollama loading parameters after downloads.
+- ✅ CLI maintenance commands:
+  - `imageworks-download migrate-architecture`
+  - `imageworks-download reconcile-architecture`
+- ✅ vLLM manager records runtime loader metadata to `logs/model_loader_metrics.jsonl`.
+- ✅ Streamlit VRAM estimator auto-prefills fields from registry metadata and can
+  push estimator solutions back into the registry.
+- ✅ Settings page exposes one-click maintenance buttons (re-extract & reconcile).
+- 🚧 Future work: richer runtime probes for precise KV dtype / vision VRAM footprints.

@@ -13,6 +13,7 @@ from imageworks.gui.components.help_docs import (  # noqa: E402
     render_help_dialog,
     render_help_sidebar,
 )
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer  # noqa: E402
 from imageworks.gui.config import ensure_directories  # noqa: E402
 from imageworks.gui.state import init_session_state  # noqa: E402
 
@@ -119,6 +120,7 @@ def main():
 
         # Help button
         render_help_sidebar()
+        render_sidebar_footer()
 
     # Main content area
     st.title("Welcome to ImageWorks Control Center")

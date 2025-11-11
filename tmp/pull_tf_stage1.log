@@ -1,0 +1,143 @@
+Pulling Judge Vision TensorFlow backend image: nvcr.io/nvidia/tensorflow:24.02-tf2-py3
+24.02-tf2-py3: Pulling from nvidia/tensorflow
+25a11129edd6: Pulling fs layer
+835e2d5144b7: Pulling fs layer
+ead40b9641ad: Pulling fs layer
+04923829d9a5: Pulling fs layer
+2b069040cb64: Pulling fs layer
+dd6850141179: Pulling fs layer
+fe8a966cb8fc: Pulling fs layer
+314eb56baf2a: Pulling fs layer
+28d2d38f5f1a: Pulling fs layer
+ddf14aa2558a: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+2daa55bc5f5f: Pulling fs layer
+6c01c1c88bba: Pulling fs layer
+858e5e270a46: Pulling fs layer
+7dbd3eaab99b: Pulling fs layer
+8b6652143eac: Pulling fs layer
+7918c7045c3a: Pulling fs layer
+038b92444c8b: Pulling fs layer
+ce62129615dc: Pulling fs layer
+b3b41b01330b: Pulling fs layer
+58a756a0781d: Pulling fs layer
+7c6a9a9ea605: Pulling fs layer
+719729417121: Pulling fs layer
+08761131fb1f: Pulling fs layer
+b2f523e5ef5c: Pulling fs layer
+3d9b13e2879f: Pulling fs layer
+5a47232e3454: Pulling fs layer
+c69f43d431b8: Pulling fs layer
+18905287193f: Pulling fs layer
+2a6209dbb279: Pulling fs layer
+dc020fedce3d: Pulling fs layer
+fde9676b2f36: Pulling fs layer
+87f430de9c6e: Pulling fs layer
+167ef0510062: Pulling fs layer
+d52fda952b02: Pulling fs layer
+901fb3141b0d: Pulling fs layer
+9696466b83c0: Pulling fs layer
+19218bfd93bf: Pulling fs layer
+e3611b7b114c: Pulling fs layer
+1ba7f770c2b7: Pulling fs layer
+f6ad23ebb70e: Pulling fs layer
+63b237e2d539: Pulling fs layer
+0cd6ef93ad15: Pulling fs layer
+819ff86cf7fe: Pulling fs layer
+025c6550ac46: Pulling fs layer
+298d190335ed: Pulling fs layer
+819ff86cf7fe: Already exists
+ead40b9641ad: Already exists
+ddf14aa2558a: Already exists
+f6ad23ebb70e: Already exists
+2daa55bc5f5f: Already exists
+ce62129615dc: Already exists
+58a756a0781d: Already exists
+2b069040cb64: Already exists
+2a6209dbb279: Already exists
+28d2d38f5f1a: Already exists
+167ef0510062: Already exists
+901fb3141b0d: Already exists
+b3b41b01330b: Already exists
+5a47232e3454: Already exists
+3d9b13e2879f: Already exists
+4f4fb700ef54: Already exists
+858e5e270a46: Already exists
+dc020fedce3d: Already exists
+9696466b83c0: Already exists
+719729417121: Already exists
+04923829d9a5: Already exists
+c69f43d431b8: Already exists
+18905287193f: Already exists
+7dbd3eaab99b: Already exists
+19218bfd93bf: Already exists
+e3611b7b114c: Already exists
+025c6550ac46: Already exists
+8b6652143eac: Already exists
+835e2d5144b7: Already exists
+dd6850141179: Already exists
+08761131fb1f: Already exists
+314eb56baf2a: Already exists
+038b92444c8b: Already exists
+1ba7f770c2b7: Already exists
+7918c7045c3a: Already exists
+fde9676b2f36: Already exists
+d52fda952b02: Already exists
+25a11129edd6: Already exists
+7c6a9a9ea605: Already exists
+b2f523e5ef5c: Already exists
+6c01c1c88bba: Already exists
+87f430de9c6e: Already exists
+0cd6ef93ad15: Already exists
+63b237e2d539: Already exists
+298d190335ed: Already exists
+fe8a966cb8fc: Download complete
+fe8a966cb8fc: Pull complete
+04923829d9a5: Pull complete
+dd6850141179: Pull complete
+1ba7f770c2b7: Pull complete
+7c6a9a9ea605: Pull complete
+28d2d38f5f1a: Pull complete
+2b069040cb64: Pull complete
+25a11129edd6: Pull complete
+8b6652143eac: Pull complete
+f6ad23ebb70e: Pull complete
+901fb3141b0d: Pull complete
+b3b41b01330b: Pull complete
+719729417121: Pull complete
+819ff86cf7fe: Pull complete
+ead40b9641ad: Pull complete
+58a756a0781d: Pull complete
+835e2d5144b7: Pull complete
+c69f43d431b8: Pull complete
+314eb56baf2a: Pull complete
+6c01c1c88bba: Pull complete
+dc020fedce3d: Pull complete
+87f430de9c6e: Pull complete
+d52fda952b02: Pull complete
+b2f523e5ef5c: Pull complete
+ddf14aa2558a: Pull complete
+7dbd3eaab99b: Pull complete
+9696466b83c0: Pull complete
+0cd6ef93ad15: Pull complete
+19218bfd93bf: Pull complete
+63b237e2d539: Pull complete
+2daa55bc5f5f: Pull complete
+08761131fb1f: Pull complete
+5a47232e3454: Pull complete
+18905287193f: Pull complete
+038b92444c8b: Pull complete
+4f4fb700ef54: Pull complete
+298d190335ed: Pull complete
+7918c7045c3a: Pull complete
+167ef0510062: Pull complete
+2a6209dbb279: Pull complete
+3d9b13e2879f: Pull complete
+858e5e270a46: Pull complete
+fde9676b2f36: Pull complete
+ce62129615dc: Pull complete
+e3611b7b114c: Pull complete
+025c6550ac46: Pull complete
+Digest: sha256:93529abd620432f131772323465e74f14875fc28766af89c3bd45a9770015bea
+Status: Downloaded newer image for nvcr.io/nvidia/tensorflow:24.02-tf2-py3
+nvcr.io/nvidia/tensorflow:24.02-tf2-py3

@@ -28,7 +28,9 @@ class SimilarityExplainer:
         try:
             self._backend = VLMBackend(backend_name)
         except ValueError as exc:  # noqa: BLE001
-            raise RuntimeError(f"Unknown backend '{self.config.backend}' for explanations") from exc
+            raise RuntimeError(
+                f"Unknown backend '{self.config.backend}' for explanations"
+            ) from exc
         self._client = create_backend_client(
             self._backend,
             base_url=self.config.base_url,
@@ -40,7 +42,6 @@ class SimilarityExplainer:
     def explain(self, result: CandidateSimilarity) -> Optional[str]:
         if not result.matches:
             return None
-        best = result.matches[0]
         payload = self._build_payload(result)
         try:
             response = self._client.chat_completions(payload)
@@ -52,10 +53,7 @@ class SimilarityExplainer:
             return None
         data = response.json()
         content = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
+            data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         )
         return content or None
 

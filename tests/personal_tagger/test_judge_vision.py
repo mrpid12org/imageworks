@@ -4,20 +4,16 @@ from pathlib import Path
 
 from PIL import Image
 
-from imageworks.apps.personal_tagger.core.competition import (
+from imageworks.apps.judge_vision import (
     CompetitionConfig,
     CompetitionRules,
-    ScoreBands,
-    load_competition_registry,
-)
-from imageworks.apps.personal_tagger.core.compliance import evaluate_compliance
-from imageworks.apps.personal_tagger.core.judge_types import RubricScores
-from imageworks.apps.personal_tagger.core.pairwise import (
     JudgeVisionEntry,
-    run_pairwise_tournament,
-)
-from imageworks.apps.personal_tagger.core.technical_signals import (
+    RubricScores,
+    ScoreBands,
     TechnicalSignalExtractor,
+    evaluate_compliance,
+    load_competition_registry,
+    run_pairwise_tournament,
 )
 
 
@@ -71,7 +67,7 @@ def test_technical_signal_extractor_outputs_metrics(tmp_path: Path) -> None:
     image_path = tmp_path / "signals.png"
     _write_test_image(image_path, color=90)
 
-    extractor = TechnicalSignalExtractor()
+    extractor = TechnicalSignalExtractor(enable_nima=False, enable_musiq=False)
     signals = extractor.run(image_path)
 
     assert "mean_luma" in signals.metrics
@@ -84,17 +80,23 @@ def test_pairwise_tournament_orders_by_total() -> None:
         JudgeVisionEntry(
             image="A",
             total=19.0,
-            rubric=RubricScores(impact=4.5, composition=4.2, technical=4.0, category_fit=4.0),
+            rubric=RubricScores(
+                impact=4.5, composition=4.2, technical=4.0, category_fit=4.0
+            ),
         ),
         JudgeVisionEntry(
             image="B",
             total=17.0,
-            rubric=RubricScores(impact=3.5, composition=3.8, technical=3.6, category_fit=3.2),
+            rubric=RubricScores(
+                impact=3.5, composition=3.8, technical=3.6, category_fit=3.2
+            ),
         ),
         JudgeVisionEntry(
             image="C",
             total=18.5,
-            rubric=RubricScores(impact=4.2, composition=4.0, technical=3.9, category_fit=3.8),
+            rubric=RubricScores(
+                impact=4.2, composition=4.0, technical=3.9, category_fit=3.8
+            ),
         ),
     ]
 

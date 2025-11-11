@@ -10,12 +10,15 @@ from imageworks.gui.components.results_viewer import (
 )
 from imageworks.gui.components.job_history import render_job_history
 from imageworks.gui.config import OUTPUTS_DIR
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 
 
 def main():
     """Results browser page."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (ensures consistency on page refresh)
     st.markdown(
@@ -54,6 +57,7 @@ def main():
                 "Mono Checker",
                 "Image Similarity",
                 "Personal Tagger",
+                "Judge Vision",
                 "Color Narrator",
             ],
             key="results_module_select",
@@ -72,6 +76,10 @@ def main():
             "Personal Tagger": {
                 "jsonl": OUTPUTS_DIR / "results" / "tagger_results.jsonl",
                 "markdown": OUTPUTS_DIR / "summaries" / "tagger_summary.md",
+            },
+            "Judge Vision": {
+                "jsonl": OUTPUTS_DIR / "results" / "judge_vision.jsonl",
+                "markdown": OUTPUTS_DIR / "summaries" / "judge_vision_summary.md",
             },
             "Color Narrator": {
                 "jsonl": None,
@@ -124,7 +132,7 @@ def main():
         if filter_module:
             module_filter = st.selectbox(
                 "Module",
-                options=["mono", "similarity", "tagger", "narrator"],
+                options=["mono", "similarity", "tagger", "judge", "narrator"],
                 key="job_history_module_filter",
             )
         else:
@@ -157,6 +165,7 @@ def main():
                     "similarity": "pages/4_🖼️_Image_Similarity.py",
                     "tagger": "pages/5_🖼️_Personal_Tagger.py",
                     "narrator": "pages/6_🖼️_Color_Narrator.py",
+                    "judge": "pages/9_⚖️_Judge_Vision.py",
                 }
 
                 if module in page_map:
@@ -213,7 +222,7 @@ def main():
         st.markdown("---")
         st.subheader("Per-Module Statistics")
 
-        modules = ["mono", "similarity", "tagger", "narrator"]
+        modules = ["mono", "similarity", "tagger", "judge", "narrator"]
         module_stats = []
 
         for module in modules:
@@ -225,6 +234,7 @@ def main():
                 "mono": "mono_results.jsonl",
                 "similarity": "similarity_results.jsonl",
                 "tagger": "tagger_results.jsonl",
+                "judge": "judge_vision.jsonl",
                 "narrator": None,  # No JSONL for narrator
             }
 

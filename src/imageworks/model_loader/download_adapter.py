@@ -40,6 +40,13 @@ from .simplified_naming import simplified_slug_for_fields
 from .service import default_backend_port
 import os as _os
 
+from imageworks.tools.model_downloader.architecture import (
+    ArchitectureResult,
+    collect_architecture_metadata,
+    infer_default_vllm_arguments,
+    merge_architecture_metadata,
+)
+
 
 class ImportSkipped(Exception):
     """Raised when an attempted import is identified as testing/demo and is skipped."""
@@ -488,6 +495,78 @@ def record_download(
     directory_checksum = compute_directory_checksum(p)
     now = _now_iso()
 
+    architecture_result: Optional[ArchitectureResult]
+    architecture_error: Optional[str] = None
+    if p.exists():
+        try:
+            architecture_result = collect_architecture_metadata(
+                p, raw_path=path, served_model_id=served_model_id
+            )
+        except Exception as exc:  # noqa: BLE001
+            architecture_error = str(exc)
+            architecture_result = ArchitectureResult()
+    else:
+        architecture_error = f"download path missing: {p}"
+        architecture_result = collect_architecture_metadata(
+            p, raw_path=path, served_model_id=served_model_id
+        )
+    if architecture_error:
+        architecture_result.warnings.append(f"collector-error:{architecture_error}")
+
+    def _flag_present(args: List[str], flag: str) -> bool:
+        token = f"--{flag}"
+        for idx, arg in enumerate(args):
+            if arg == token:
+                return True
+            if arg.startswith(f"{token}="):
+                return True
+            if arg == token and idx + 1 < len(args):
+                return True
+        return False
+
+    def _ensure_flag(args: List[str], flag: str, value: str) -> None:
+        token = f"--{flag}"
+        for idx, arg in enumerate(args):
+            if arg == token:
+                if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+                    args[idx + 1] = value
+                else:
+                    args.insert(idx + 1, value)
+                return
+            if arg.startswith(f"{token}="):
+                args[idx] = f"{token}={value}"
+                return
+        args.extend([token, value])
+
+    def _apply_architecture(entry: RegistryEntry, *, newly_created: bool) -> None:
+        entry.metadata = entry.metadata or {}
+        existing_arch = entry.metadata.get("architecture")
+        entry.metadata["architecture"] = merge_architecture_metadata(
+            existing_arch, architecture_result
+        )
+        if newly_created:
+            existing_args = list(getattr(entry.backend_config, "extra_args", []) or [])
+            if entry.backend == "vllm":
+                defaults = infer_default_vllm_arguments(architecture_result)
+                # Seed missing flags conservatively.
+                args = list(existing_args) if existing_args else []
+                for i in range(0, len(defaults), 2):
+                    flag = defaults[i].lstrip("-")
+                    value = defaults[i + 1] if i + 1 < len(defaults) else ""
+                    if not _flag_present(args, flag):
+                        _ensure_flag(args, flag, value)
+                entry.backend_config.extra_args = args
+            elif entry.backend == "ollama":
+                ctx_tokens = architecture_result.fields.get("context_length")
+                if isinstance(ctx_tokens, int) and ctx_tokens > 0:
+                    target_ctx = max(2048, int(ctx_tokens * 0.6))
+                else:
+                    target_ctx = 4096
+                args = list(existing_args)
+                if not _flag_present(args, "num-ctx"):
+                    _ensure_flag(args, "num-ctx", str(target_ctx))
+                entry.backend_config.extra_args = args
+
     def _apply_download_updates(entry: RegistryEntry) -> RegistryEntry:
         entry.backend = backend
         entry.backend_config.model_path = str(p)
@@ -552,6 +631,7 @@ def record_download(
             aliases = entry.model_aliases or []
             if hf_id not in aliases:
                 entry.model_aliases = aliases + [hf_id]
+        _apply_architecture(entry, newly_created=False)
         return entry
 
     # Backend reconciliation on update: if an 'unassigned' variant exists for the same
@@ -687,6 +767,7 @@ def record_download(
         downloaded_at=now,
         last_accessed=now,
     )
+    _apply_architecture(entry, newly_created=True)
     if entry.backend_config.port in (None, 0):
         entry.backend_config.port = default_backend_port(entry.backend)
     if entry.backend == "ollama" and not entry.backend_config.host:

@@ -13,17 +13,51 @@ This package provides:
 - Support for both interactive and programmatic usage
 """
 
-from .downloader import ModelDownloader
-from .config import DownloaderConfig
-from .formats import FormatDetector
-from .url_analyzer import URLAnalyzer
+from typing import TYPE_CHECKING
 
-# Unified registry adapter (preferred for programmatic download metadata)
-from imageworks.model_loader.download_adapter import (
-    record_download,
-    list_downloads,
-    remove_download,
-)
+if TYPE_CHECKING:
+    from .downloader import ModelDownloader  # pragma: no cover
+    from .config import DownloaderConfig  # pragma: no cover
+    from .formats import FormatDetector  # pragma: no cover
+    from .url_analyzer import URLAnalyzer  # pragma: no cover
+
+
+def __getattr__(name):
+    if name == "ModelDownloader":
+        from .downloader import ModelDownloader as _MD
+
+        return _MD
+    if name == "DownloaderConfig":
+        from .config import DownloaderConfig as _CFG
+
+        return _CFG
+    if name == "FormatDetector":
+        from .formats import FormatDetector as _FD
+
+        return _FD
+    if name == "URLAnalyzer":
+        from .url_analyzer import URLAnalyzer as _UA
+
+        return _UA
+    raise AttributeError(name)
+
+
+def record_download(*args, **kwargs):
+    from imageworks.model_loader.download_adapter import record_download as _record
+
+    return _record(*args, **kwargs)
+
+
+def list_downloads(*args, **kwargs):
+    from imageworks.model_loader.download_adapter import list_downloads as _list
+
+    return _list(*args, **kwargs)
+
+
+def remove_download(*args, **kwargs):
+    from imageworks.model_loader.download_adapter import remove_download as _remove
+
+    return _remove(*args, **kwargs)
 
 
 # Backwards compatibility: importing ModelRegistry now raises ImportError from registry stub.

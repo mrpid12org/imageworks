@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 import json
 import logging
 from pathlib import Path
@@ -41,7 +41,6 @@ def _profile_to_dict(profile: TaggerPromptProfile) -> Dict[str, object]:
         "caption_stage": _stage_to_dict(profile.caption_stage),
         "keyword_stage": _stage_to_dict(profile.keyword_stage),
         "description_stage": _stage_to_dict(profile.description_stage),
-        "critique_stage": _stage_to_dict(profile.critique_stage),
     }
 
 
@@ -53,7 +52,6 @@ def _profile_from_dict(data: Dict[str, object]) -> TaggerPromptProfile:
         caption_stage=_stage_from_dict(data.get("caption_stage", {})),
         keyword_stage=_stage_from_dict(data.get("keyword_stage", {})),
         description_stage=_stage_from_dict(data.get("description_stage", {})),
-        critique_stage=_stage_from_dict(data.get("critique_stage", {})),
     )
 
 
@@ -98,7 +96,6 @@ class TaggerPromptProfile(PromptProfileBase):
     caption_stage: StagePrompt
     keyword_stage: StagePrompt
     description_stage: StagePrompt
-    critique_stage: StagePrompt
 
 
 _BASE_PROFILES: Dict[int, TaggerPromptProfile] = {
@@ -139,17 +136,6 @@ _BASE_PROFILES: Dict[int, TaggerPromptProfile] = {
             ),
             max_new_tokens=512,
         ),
-        critique_stage=StagePrompt(
-            system=(
-                "You are a seasoned photography competition judge providing concise critiques. "
-                "Deliver actionable feedback covering technical quality, composition, and storytelling impact."
-            ),
-            user_template=(
-                "Provide a three-point critique of this photograph aimed at improving a competition entry. "
-                "Address strengths, weaknesses, and a suggestion for improvement in separate sentences."
-            ),
-            max_new_tokens=256,
-        ),
     ),
     2: TaggerPromptProfile(
         id=2,
@@ -184,16 +170,6 @@ _BASE_PROFILES: Dict[int, TaggerPromptProfile] = {
                 "Caption context: {caption}. Keyword highlights: {keyword_preview}."
             ),
             max_new_tokens=512,
-        ),
-        critique_stage=StagePrompt(
-            system=(
-                "Judge the image as if reviewing entries for an art photography competition."
-            ),
-            user_template=(
-                "Offer a concise critique with three bullet-style sentences: (1) what works well, (2) what holds it back, "
-                "(3) the most impactful change the photographer could make."
-            ),
-            max_new_tokens=256,
         ),
     ),
     3: TaggerPromptProfile(
@@ -230,63 +206,8 @@ _BASE_PROFILES: Dict[int, TaggerPromptProfile] = {
             ),
             max_new_tokens=512,
         ),
-        critique_stage=StagePrompt(
-            system=(
-                "Provide competition-grade critiques balancing encouragement with technical honesty."
-            ),
-            user_template=(
-                "Deliver an expert critique in three sentences: strengths, areas to improve, and guidance on how to elevate the image."
-            ),
-            max_new_tokens=256,
-        ),
     ),
 }
-
-_BASE_PROFILES[4] = replace(
-    _BASE_PROFILES[1],
-    id=4,
-    name="club_judge_json",
-    description=(
-        "Competition judging critique with structured JSON output and scoring rubric."
-    ),
-    critique_stage=StagePrompt(
-        system=(
-            "You are an experienced UK camera-club competition judge.\n"
-            "Apply this rubric in order: Impact & Communication; Composition & Design; Technical Quality & Presentation; Category Fit.\n"
-            "Prioritise impact and story. Mention technical faults only when they materially affect the image.\n"
-            "Be constructive and include one actionable improvement. Respect category rules and competition brief.\n"
-            "Return ONLY the JSON object below (no commentary):\n"
-            "{\n"
-            '  "title": "<string|null>",\n'
-            '  "category": "Open|Nature|Creative|Themed|null",\n'
-            '  "critique": "<80-120 words>",\n'
-            '  "subscores": {\n'
-            '    "impact": 0-5,\n'
-            '    "composition": 0-5,\n'
-            '    "technical": 0-5,\n'
-            '    "category_fit": 0-5\n'
-            '  },\n'
-            '  "total": 0-20,\n'
-            '  "award_suggestion": "Gold|Silver|Bronze|HC|C|None",\n'
-            '  "compliance_flag": "<string|null>"\n'
-            "}"
-        ),
-        user_template=(
-            "Judge the following entry using the rubric.\n"
-            "Title: {title}\n"
-            "Category: {category}\n"
-            "Competition notes: {notes}\n"
-            "Caption context: {caption}\n"
-            "Keyword highlights: {keyword_preview}\n"
-            "Compliance signals: {compliance_findings}\n"
-            "Technical priors: {technical_signals}\n"
-            "\n"
-            "Return only the JSON object defined in the system prompt."
-        ),
-        max_new_tokens=448,
-        expects_json=True,
-    ),
-)
 
 DEFAULT_PROMPT_ID = 1
 

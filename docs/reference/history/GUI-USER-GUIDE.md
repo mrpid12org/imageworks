@@ -64,6 +64,7 @@ Navigate using the sidebar menu:
    - Mono Checker
    - Image Similarity
    - Personal Tagger
+   - Judge Vision
    - Color Narrator
 4. **📊 Results**: Browse outputs and job history
 5. **⚙️ Settings**: Configure preferences
@@ -178,13 +179,14 @@ Click "Show Advanced Options" to access all CLI flags:
 **Workflow** (4-stage):
 
 1. **Configure Tab**: Select images and options
-   - Optional *Critique Prompt Options* expander configures title templates,
-     default categories, and judge briefing notes for competition scoring workflows.
+   - Use **Send This Batch to Judge Vision** when you want competition scoring;
+     the dedicated ⚖️ page handles rubric, category, and tournament settings.
 2. **Preview Tab**: Run dry-run to see proposed tags
 3. **Edit Tab**: Review and modify tags
    - Approve/reject individual tags
    - Bulk find/replace
-   - Edit tag values (caption, keywords, description, critique, title/category, score)
+   - Edit caption/keyword/description fields; competition critiques now live solely
+     on the Judge Vision page
 4. **Commit Tab**: Write approved tags to files
 
 **IMPORTANT**: Always preview before committing!
@@ -194,9 +196,44 @@ Click "Show Advanced Options" to access all CLI flags:
 - Bulk operations (find/replace, approve all)
 - Pagination for large batches
 - Backup originals option
-- Competition critique mode with structured score/title/category controls
+- Judge Vision hand-off preserves critiques/awards while keeping rubric controls on
+  the dedicated scoring page
 
 **Output**: Tags written to image EXIF/XMP metadata
+
+---
+
+### ⚖️ Judge Vision
+
+**Purpose**: Run the multi-stage judging pipeline (compliance, rubric critique, pairwise
+tournament) independent of metadata writing.
+
+**When to use**:
+- Club competitions that need PAGB-style scoring
+- Cross-checking VLM judgements before announcing awards
+- Reviewing compliance/technical priors before a human judging night
+
+**Workflow (3 tabs)**:
+
+1. **Brief & Rules** – Point the page at `configs/competitions.toml` (default) and
+   select a competition preset generated from the registry. The selection auto-fills
+   pairwise rounds, default category, critique template, and judge notes, while you
+   choose the input directory and optional overrides. Personal Tagger can still
+   pre-stage a batch via the hand-off button.
+2. **Run Pipeline** – Executes `imageworks-judge-vision run` in dry-run/no-meta mode,
+   surfaces the live progress tracker (per-image filenames plus totals), and keeps
+   metadata writes disabled. Command previews help with auditing. The “Execution stage”
+   selector now includes **Two-pass (auto IQA → Critique)**, which runs Stage 1 on its
+   own process and then automatically launches Stage 2 once the cache is ready. When the
+   IQA device is set to GPU, the page requests a temporary GPU lease from the chat proxy:
+   vLLM is paused while TensorFlow runs, then transparently restarted before critiques
+   begin—no manual GPU juggling required.
+3. **Results** – Streams the JSONL + Markdown artifacts to show rubric tables,
+   compliance flags, awards, and tournament stability metrics. The default Judge Vision
+   outputs also feed the 📊 Results browser automatically.
+
+**Tip**: Leave the JSONL path at its default (`outputs/results/judge_vision.jsonl`) so
+the 📊 Results page can pick it up automatically.
 
 ---
 
@@ -465,6 +502,7 @@ imageworks/
 │   ├── mono_results.jsonl
 │   ├── similarity_results.jsonl
 │   ├── tagger_results.jsonl
+│   ├── judge_vision.jsonl
 │   └── narrator_results.jsonl
 ├── logs/             # Application logs
 │   └── chat_proxy.jsonl

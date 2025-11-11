@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import os
-import inspect
 import time
+from dataclasses import asdict
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from fastapi import FastAPI, Request
+from typing import Any
+
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
 from .config import ProxyConfig
+from .config_loader import (
+    list_env_overrides,
+    load_file_config,
+    update_config_file,
+)
 from .metrics import MetricsAggregator
 from .autostart import AutostartManager
 from .logging_utils import JsonlLogger
@@ -18,6 +29,7 @@ from .capabilities import supports_vision
 from .errors import ProxyError
 from .profile_manager import ProfileManager
 from .role_selector import RoleSelector
+from .gpu_leasing import GpuLeaseManager, LeaseBusyError, LeaseTokenError
 from ..model_loader.registry import (
     load_registry,
     list_models,
@@ -45,6 +57,34 @@ _forwarder = ChatForwarder(
     _vllm_manager,
     _ollama_manager,
 )
+_gpu_lease = GpuLeaseManager(_vllm_manager)
+
+
+def _configure_forwarder_file_logging() -> None:
+    """Attach a rotating file handler for forwarder vision events."""
+    try:
+        log_path = Path(_cfg.log_path).expanduser()
+        log_dir = log_path.parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+        vision_log = log_dir / "chat_proxy.vision.log"
+        handler = RotatingFileHandler(
+            vision_log,
+            maxBytes=_cfg.max_log_bytes,
+            backupCount=3,
+        )
+        handler.setLevel(logging.WARNING)
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s - %(message)s",
+            )
+        )
+        vision_logger = logging.getLogger("imageworks.chat_proxy.forwarder")
+        vision_logger.addHandler(handler)
+    except Exception:  # noqa: BLE001
+        logging.exception("[app] Failed to configure forwarder vision logging.")
+
+
+_configure_forwarder_file_logging()
 
 # Phase 2: Profile management and role-based model selection
 _profile_manager: ProfileManager | None = None
@@ -52,6 +92,35 @@ _role_selector: RoleSelector | None = None
 
 
 app = FastAPI(title="ImageWorks Chat Proxy", version="0.1")
+
+
+class LeaseRequest(BaseModel):
+    owner: str = Field(..., min_length=1, max_length=64)
+    reason: str | None = Field(None, max_length=512)
+    restart_model: bool = Field(
+        True, description="Restart previous vLLM after release."
+    )
+
+
+class LeaseResponse(BaseModel):
+    token: str
+    lease: dict
+
+
+class ReleaseRequest(BaseModel):
+    token: str = Field(..., min_length=8)
+    restart_model: bool = True
+
+
+class ForceReleaseRequest(BaseModel):
+    token: str | None = Field(None, min_length=8)
+    owner: str | None = Field(None, min_length=1, max_length=64)
+    max_age: float | None = Field(
+        None,
+        ge=0,
+        description="Only release if the lease is at least this many seconds old.",
+    )
+    restart_model: bool = True
 
 
 # Temporary debug endpoint to dump the in-memory registry
@@ -71,6 +140,11 @@ async def debug_registry():
 
 # Track all registry files (curated, discovered, merged) for auto-reload
 _REGISTRY_MTIMES: dict[str, float] = {}
+CONFIG_PRECEDENCE = [
+    "Environment variables (CHAT_PROXY_*)",
+    "Config file (configs/chat_proxy.toml)",
+    "Built-in defaults",
+]
 
 
 def _get_all_registry_paths() -> list[Path]:
@@ -97,6 +171,21 @@ def _has_served_backend(entry) -> bool:
     if not served:
         return False
     return str(served).strip().lower() != "none"
+
+
+def _extract_ollama_model_name(entry) -> str | None:
+    cfg = getattr(entry, "backend_config", None)
+    if cfg is None:
+        return None
+    candidate = getattr(cfg, "model_path", None)
+    if isinstance(candidate, str) and candidate.startswith("ollama:"):
+        candidate = candidate[len("ollama:") :]
+    elif not candidate:
+        candidate = getattr(cfg, "model", None)
+    if not isinstance(candidate, str):
+        return None
+    cleaned = candidate.strip().lstrip("/")
+    return cleaned or None
 
 
 def _refresh_registry_if_changed() -> None:
@@ -127,6 +216,107 @@ def _refresh_registry_if_changed() -> None:
     if changed:
         logging.info("[app] Registry file(s) changed, reloading...")
         load_registry(force=True)
+
+
+def _runtime_config_snapshot() -> tuple[dict[str, Any], dict[str, Any], str | None]:
+    runtime_cfg = ProxyConfig.load()
+    runtime_dict = asdict(runtime_cfg)
+    config_path = runtime_dict.pop("config_file_path", None)
+    file_dict = load_file_config()
+    return runtime_dict, file_dict, config_path
+
+
+@app.get("/v1/gpu/status")
+async def gpu_status():
+    """Return current GPU lease status."""
+    return JSONResponse(content=await _gpu_lease.status())
+
+
+@app.post("/v1/gpu/lease", response_model=LeaseResponse)
+async def gpu_lease(payload: LeaseRequest):
+    """Acquire exclusive GPU access (stops vLLM until released)."""
+    try:
+        lease = await _gpu_lease.acquire(
+            owner=payload.owner,
+            reason=payload.reason,
+            restart_model=payload.restart_model,
+        )
+    except LeaseBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return LeaseResponse(token=lease.token, lease=lease.to_dict())
+
+
+@app.post("/v1/gpu/release")
+async def gpu_release(payload: ReleaseRequest):
+    """Release GPU lease and optionally restart the previous vLLM."""
+    try:
+        await _gpu_lease.release(payload.token, restart_model=payload.restart_model)
+    except LeaseTokenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(content={"status": "released"})
+
+
+@app.post("/v1/gpu/force_release")
+async def gpu_force_release(payload: ForceReleaseRequest):
+    """Force release a lease (used when the original holder crashed)."""
+    try:
+        released = await _gpu_lease.force_release(
+            token=payload.token,
+            owner=payload.owner,
+            max_age=payload.max_age,
+            restart_model=payload.restart_model,
+        )
+    except LeaseTokenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    status = "released" if released else "idle"
+    return JSONResponse(content={"status": status})
+
+
+@app.get("/v1/config/chat-proxy")
+async def read_chat_proxy_config():
+    runtime_dict, file_dict, config_path = _runtime_config_snapshot()
+    return JSONResponse(
+        content={
+            "runtime": runtime_dict,
+            "file": file_dict,
+            "config_file_path": config_path,
+            "env_overrides": list_env_overrides(),
+            "precedence": CONFIG_PRECEDENCE,
+        }
+    )
+
+
+@app.put("/v1/config/chat-proxy")
+async def update_chat_proxy_config(payload: dict[str, Any] = Body(...)):
+    if not isinstance(payload, dict) or not payload:
+        raise HTTPException(
+            status_code=400, detail="Request body must be a non-empty object."
+        )
+    try:
+        updated = update_config_file(payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("[app] Failed to update chat proxy config.")
+        raise HTTPException(
+            status_code=500, detail="Failed to update configuration."
+        ) from exc
+
+    runtime_dict = asdict(updated)
+    config_path = runtime_dict.pop("config_file_path", None)
+    file_dict = load_file_config()
+    return JSONResponse(
+        content={
+            "status": "written",
+            "runtime": runtime_dict,
+            "file": file_dict,
+            "config_file_path": config_path,
+            "env_overrides": list_env_overrides(),
+            "precedence": CONFIG_PRECEDENCE,
+            "requires_restart": True,
+            "message": "Config file updated. Restart chat-proxy to apply changes.",
+        }
+    )
 
 
 @app.on_event("startup")
@@ -182,6 +372,8 @@ async def list_models_api():
         "on",
     }
     seen_display_ids: set[str] = set()
+    seen_backend_targets: set[tuple[str, str]] = set()
+    installed_ollama_models: set[str] | None = None
 
     logging.info("[DEBUG] All model names and display_names in registry:")
     for name in list_models():
@@ -197,20 +389,39 @@ async def list_models_api():
         has_assets = _path_exists(
             getattr(entry, "download_path", None)
         ) or _path_exists(getattr(entry.backend_config, "model_path", None))
-        if (
-            entry.backend != "ollama"
-            and not _cfg.include_non_installed
-            and not (has_assets or _has_served_backend(entry))
-        ):
-            # Hide entries that neither have local weights nor a configured backend when strict mode is on.
-            continue
-        if entry.backend == "ollama" and not _cfg.include_non_installed:
-            metadata = getattr(entry, "metadata", {}) or {}
-            created_from_download = bool(metadata.get("created_from_download"))
-            has_download = bool(getattr(entry, "download_path", None))
-            if not created_from_download and not has_download:
-                # Skip curated Ollama placeholders without local installs
-                continue
+        installed = has_assets or _has_served_backend(entry)
+        if not _cfg.include_non_installed:
+            if entry.backend == "ollama":
+                if not installed:
+                    metadata = getattr(entry, "metadata", {}) or {}
+                    if metadata.get("created_from_download") or getattr(
+                        entry, "download_path", None
+                    ):
+                        installed = True
+                if not installed:
+                    if installed_ollama_models is None:
+                        installed_ollama_models = (
+                            await _ollama_manager.list_installed_models()
+                        )
+                    candidate = _extract_ollama_model_name(entry)
+                    if candidate and candidate.strip().lower() in (
+                        installed_ollama_models or set()
+                    ):
+                        installed = True
+                if not installed:
+                    # Skip curated Ollama placeholders without local installs
+                    continue
+            else:
+                if not installed:
+                    # Hide entries that neither have local weights nor a configured backend when strict mode is on.
+                    continue
+        if entry.backend == "ollama":
+            target = _extract_ollama_model_name(entry)
+            if target:
+                key = (entry.backend, target.lower())
+                if key in seen_backend_targets:
+                    continue
+                seen_backend_targets.add(key)
         # Use registry display_name for UI display
         display = entry.display_name or entry.name or ""
         if _cfg.suppress_decorations:

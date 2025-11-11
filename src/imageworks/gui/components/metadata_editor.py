@@ -32,42 +32,6 @@ def _normalize_keywords(raw_keywords: Any) -> List[str]:
     return normalized
 
 
-def _format_compliance_display(data: Any) -> str:
-    if not isinstance(data, dict):
-        return "No compliance report"
-    status = "PASS" if data.get("passed", False) else "FAIL"
-    issues = data.get("issues") or []
-    warnings = data.get("warnings") or []
-    details = []
-    if issues:
-        details.append("Issues: " + "; ".join(str(item) for item in issues))
-    if warnings:
-        details.append("Warnings: " + "; ".join(str(item) for item in warnings))
-    if not details:
-        details.append("No findings")
-    return f"{status} — {' | '.join(details)}"
-
-
-def _format_signal_display(data: Any) -> str:
-    if not isinstance(data, dict):
-        return "No technical priors"
-    notes = str(data.get("notes", "")).strip()
-    metrics = data.get("metrics")
-    metrics_summary = ""
-    if isinstance(metrics, dict) and metrics:
-        metrics_summary = ", ".join(
-            f"{name}={value:.2f}" if isinstance(value, (int, float)) else f"{name}={value}"
-            for name, value in sorted(metrics.items())
-        )
-    if notes and metrics_summary:
-        return f"{notes} ({metrics_summary})"
-    if notes:
-        return notes
-    if metrics_summary:
-        return metrics_summary
-    return "No technical priors"
-
-
 def render_metadata_editor(
     images_with_tags: List[Dict[str, Any]],
     key_prefix: str = "metadata_editor",
@@ -229,143 +193,6 @@ def render_metadata_editor(
                 if edited_description != description:
                     images_with_tags[actual_idx]["description"] = edited_description
 
-                critique = img_data.get("critique", "")
-                edited_critique = st.text_area(
-                    "Critique",
-                    value=critique,
-                    height=140,
-                    key=f"{key_prefix}_critique_{actual_idx}",
-                )
-                if edited_critique != critique:
-                    images_with_tags[actual_idx]["critique"] = edited_critique
-
-                critique_title = img_data.get("critique_title") or ""
-                edited_title = st.text_input(
-                    "Critique title",
-                    value=critique_title,
-                    key=f"{key_prefix}_critique_title_{actual_idx}",
-                )
-                if edited_title != critique_title:
-                    images_with_tags[actual_idx]["critique_title"] = (
-                        edited_title.strip() or None
-                    )
-
-                category_options = ["", "Open", "Nature", "Creative", "Themed"]
-                current_category = img_data.get("critique_category") or ""
-                try:
-                    category_index = category_options.index(current_category)
-                except ValueError:
-                    category_index = 0
-                edited_category = st.selectbox(
-                    "Critique category",
-                    options=category_options,
-                    index=category_index,
-                    key=f"{key_prefix}_critique_category_{actual_idx}",
-                )
-                if edited_category != current_category:
-                    images_with_tags[actual_idx]["critique_category"] = (
-                        edited_category or None
-                    )
-
-                existing_score = (
-                    img_data.get("critique_score")
-                    if isinstance(img_data.get("critique_score"), int)
-                    else None
-                )
-                clear_score = st.checkbox(
-                    "No score",
-                    value=existing_score is None,
-                    key=f"{key_prefix}_critique_score_toggle_{actual_idx}",
-                )
-                default_score = existing_score if existing_score is not None else 18
-                score_value = st.number_input(
-                    "Score (0–20)",
-                    min_value=0,
-                    max_value=20,
-                    step=1,
-                    value=int(default_score),
-                    key=f"{key_prefix}_critique_score_{actual_idx}",
-                )
-                updated_score = None if clear_score else int(score_value)
-                images_with_tags[actual_idx]["critique_score"] = updated_score
-
-                subscores = img_data.get("critique_subscores")
-                if not isinstance(subscores, dict):
-                    subscores = {}
-                sub_columns = st.columns(4)
-                for col, (sub_key, label) in zip(
-                    sub_columns,
-                    [
-                        ("impact", "Impact (0–5)"),
-                        ("composition", "Composition (0–5)"),
-                        ("technical", "Technical (0–5)"),
-                        ("category_fit", "Category Fit (0–5)"),
-                    ],
-                ):
-                    existing_val = subscores.get(sub_key)
-                    default_val = (
-                        float(existing_val)
-                        if isinstance(existing_val, (int, float))
-                        else 0.0
-                    )
-                    new_val = col.number_input(
-                        label,
-                        min_value=0.0,
-                        max_value=5.0,
-                        step=0.1,
-                        value=float(default_val),
-                        key=f"{key_prefix}_critique_subscore_{sub_key}_{actual_idx}",
-                    )
-                    subscores[sub_key] = float(new_val)
-                images_with_tags[actual_idx]["critique_subscores"] = subscores
-
-                existing_total = img_data.get("critique_total")
-                total_default = (
-                    float(existing_total)
-                    if isinstance(existing_total, (int, float))
-                    else None
-                )
-                total_value = st.number_input(
-                    "Total (0–20)",
-                    min_value=0.0,
-                    max_value=20.0,
-                    step=0.1,
-                    value=float(total_default) if total_default is not None else 18.0,
-                    key=f"{key_prefix}_critique_total_{actual_idx}",
-                )
-                images_with_tags[actual_idx]["critique_total"] = (
-                    None if clear_score else float(total_value)
-                )
-
-                existing_award = img_data.get("critique_award") or ""
-                updated_award = st.text_input(
-                    "Award suggestion",
-                    value=existing_award,
-                    key=f"{key_prefix}_critique_award_{actual_idx}",
-                )
-                images_with_tags[actual_idx]["critique_award"] = (
-                    updated_award.strip() or None
-                )
-
-                existing_flag = img_data.get("critique_compliance_flag") or ""
-                updated_flag = st.text_input(
-                    "Compliance flag",
-                    value=existing_flag,
-                    key=f"{key_prefix}_critique_flag_{actual_idx}",
-                )
-                images_with_tags[actual_idx]["critique_compliance_flag"] = (
-                    updated_flag.strip() or None
-                )
-
-                compliance_summary = _format_compliance_display(
-                    img_data.get("compliance")
-                )
-                technical_summary = _format_signal_display(
-                    img_data.get("technical_signals")
-                )
-                st.caption(f"Compliance: {compliance_summary}")
-                st.caption(f"Technical signals: {technical_summary}")
-
             # Approval checkbox
             approved = img_data.get("approved", True)
             new_approved = st.checkbox(
@@ -425,28 +252,16 @@ def render_compact_tag_list(
 
         approved_str = "✅" if img_data.get("approved", True) else "❌"
 
+        description = img_data.get("description", "")
+        if len(description) > 80:
+            description = description[:80] + "…"
+
         rows.append(
             {
                 "Image": img_name,
-                "Caption": caption,
+                "Caption": caption or "<none>",
                 "Keywords": keywords_str,
-                "Critique": (img_data.get("critique", "") or "<none>")[:80],
-                "Critique Title": img_data.get("critique_title")
-                or (Path(str(img_path)).stem if img_path else ""),
-                "Category": img_data.get("critique_category") or "-",
-                "Total": (
-                    f"{float(img_data.get('critique_total')):.1f}"
-                    if isinstance(img_data.get("critique_total"), (int, float))
-                    else (
-                        str(img_data.get("critique_score"))
-                        if img_data.get("critique_score") is not None
-                        else "-"
-                    )
-                ),
-                "Award": img_data.get("critique_award") or "-",
-                "Compliance": _format_compliance_display(
-                    img_data.get("compliance")
-                ),
+                "Description": description or "<none>",
                 "Approved": approved_str,
             }
         )

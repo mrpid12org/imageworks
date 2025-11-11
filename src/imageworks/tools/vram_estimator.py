@@ -17,6 +17,8 @@ BYTES_PER_PARAM: Dict[str, float] = {
     "fp16": 2.0,
     "bf16": 2.0,
     "fp8": 1.0,
+    "mxfp8": 1.0,
+    "mxfp4": 0.50,
     "int8": 1.0,
     "int4": 0.55,
     "fp4": 0.50,

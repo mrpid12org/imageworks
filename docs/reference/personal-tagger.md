@@ -1,18 +1,19 @@
 # Personal Tagger Operations Guide
 
-Personal Tagger generates captions, keywords, descriptions, and critiques for personal photo libraries. It supports multi-model workflows, deterministic registry integration, and metadata writes compatible with Lightroom and DAM tooling.
+Personal Tagger generates captions, keywords, and descriptions for personal photo libraries. It supports multi-model workflows, deterministic registry integration, and metadata writes compatible with Lightroom and DAM tooling.
 
 ---
 ## 1. Feature Summary
 
 | Capability | Details |
 |------------|---------|
-| Multi-stage prompting | Separate caption, keyword, and description prompts with optional critique generation. |
+| Multi-stage prompting | Separate caption, keyword, and description prompts tuned for metadata quality. |
 | Backend flexibility | Works with LMDeploy, vLLM, Ollama, or remote OpenAI-compatible APIs; supports per-stage model overrides. |
 | Registry integration | `--use-loader` plus `--caption-role`, `--keyword-role`, etc. resolve models from deterministic registry. |
-| Metadata writing | Writes IPTC/XMP captions, keywords, custom namespaces, and optional critique notes. |
+| Metadata writing | Writes IPTC/XMP captions, keywords, and custom namespaces. |
 | Batch orchestration | Processes recursive directories with concurrency control, skipping previously-tagged files if desired. |
-| Preset profiles | `prompt_profile` bundles instructions, competition categories, and critique tone. |
+| Preset profiles | `prompt_profile` bundles instructions for the caption/keyword/description trio. |
+| Judge Vision hand-off | One-click staging from the Personal Tagger GUI to the dedicated Judge Vision page for critiques. |
 | Audit outputs | JSONL log per image, Markdown summary, and CLI console table. |
 | GUI integration | Streamlit page for selecting inputs, toggling registry usage, and reviewing generated metadata before commit. |
 
@@ -37,13 +38,13 @@ Personal Tagger generates captions, keywords, descriptions, and critiques for pe
   - Backend: `--backend`, `--base-url`, `--model`, `--api-key`, `--timeout`, `--max-new-tokens`, `--temperature`, `--top-p`.
   - Stage overrides: `--caption-model`, `--keyword-model`, `--description-model`, `--caption-role`, `--keyword-role`, `--description-role`.
   - Registry: `--use-loader`, per-stage registry model flags (`--caption-registry-model`, etc.).
-  - Prompting: `--prompt-profile`, `--critique-title-template`, `--critique-category`, `--critique-notes`.
+  - Prompting: `--prompt-profile`.
   - Output: `--output-jsonl`, `--summary`, `--max-keywords`, `--batch-size`, `--max-workers`.
   - Metadata: `--dry-run`, `--no-meta`, `--backup-originals`, `--overwrite-metadata`.
   - Preflight: `--skip-preflight`, `--use-loader`, `--use-registry`.
 
 ### 3.3 Outputs
-- JSONL log containing captions, keywords, critiques, metadata status.
+- JSONL log containing captions, keywords, descriptions, and metadata status.
 - Markdown summary with per-folder counts and highlight excerpts.
 - Console progress with Rich tables summarising each stage.
 
@@ -52,7 +53,7 @@ Personal Tagger generates captions, keywords, descriptions, and critiques for pe
 
 - **Input selection**: browse directories, toggle recursion, preview image counts.
 - **Model selection**: choose between explicit backend/model combos or registry roles; displays resolved served id.
-- **Prompt controls**: pick prompt profile, critique notes, max keywords.
+- **Prompt controls**: pick prompt profile and keyword limits.
 - **Process runner**: executes CLI `run` command, streaming logs.
 - **Result review**: table of generated metadata; supports “apply metadata” action when run in dry-run mode.
 - **Preset management**: save frequently used configurations per photographer.
@@ -63,7 +64,7 @@ Personal Tagger generates captions, keywords, descriptions, and critiques for pe
 Define in `[tool.imageworks.personal_tagger]`:
 - Default directories, summary/JSONL paths.
 - Backend defaults (backend/base-url/model for each stage).
-- Prompt profile defaults, critique options, keyword limits.
+- Prompt profile defaults and keyword limits.
 - Metadata behaviour (overwrite, backups, dry-run default).
 
 Environment overrides follow `IMAGEWORKS_PERSONAL_TAGGER__KEY=value` format.
@@ -82,9 +83,8 @@ Environment overrides follow `IMAGEWORKS_PERSONAL_TAGGER__KEY=value` format.
 ---
 ## 7. Best Practices
 
-1. Maintain separate prompt profiles for competition vs personal portfolio to tailor tone.
+1. Maintain separate prompt profiles for different catalog styles (e.g. travel vs studio) to tailor tone.
 2. Use registry roles for consistent backend selection across environments.
 3. Keep JSONL logs for training future prompts and auditing metadata changes.
 4. Use dry-run mode during prompt tuning; apply metadata only after reviewer approval.
 5. Schedule periodic reviews of generated keywords to refine prompt templates and synonym lists.
-

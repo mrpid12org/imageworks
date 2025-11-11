@@ -8,9 +8,6 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import tomllib
 
-from .competition import CompetitionConfig, load_competition_registry
-
-
 _CONFIG_ENV_PREFIX = "IMAGEWORKS_PERSONAL_TAGGER__"
 
 
@@ -94,7 +91,7 @@ class PersonalTaggerSettings:
     default_output_jsonl: Path = Path("outputs/results/personal_tagger.jsonl")
     default_summary_path: Path = Path("outputs/summaries/personal_tagger_summary.md")
     default_backend: str = "vllm"
-    default_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+    default_model: str = "qwen3-vl-8b-instruct_(FP8)"
     default_base_url: str = "http://localhost:8100/v1"
     default_timeout: int = 120
     default_max_new_tokens: int = 512
@@ -110,9 +107,9 @@ class PersonalTaggerSettings:
     default_backup_originals: bool = True
     default_overwrite_metadata: bool = False
     default_use_registry: bool = True
-    caption_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
-    keyword_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
-    description_model: str = "qwen3-vl-8b-instruct-abliterated_(FP8)"
+    caption_model: str = "qwen3-vl-8b-instruct_(FP8)"
+    keyword_model: str = "qwen3-vl-8b-instruct_(FP8)"
+    description_model: str = "qwen3-vl-8b-instruct_(FP8)"
     default_api_key: str = "EMPTY"
     max_keywords: int = 15
     image_extensions: Tuple[str, ...] = (
@@ -126,12 +123,6 @@ class PersonalTaggerSettings:
         ".cr3",
     )
     json_schema_version: str = "1.1"
-    critique_title_template: str = "{stem}"
-    critique_default_category: Optional[str] = None
-    critique_default_notes: str = ""
-    default_competition_config: Optional[Path] = None
-    default_competition: Optional[str] = None
-    default_pairwise_rounds: int = 0
 
 
 @dataclass(frozen=True)
@@ -167,12 +158,6 @@ class PersonalTaggerConfig:
     caption_role: str = "caption"
     keyword_role: str = "keywords"
     description_role: str = "description"
-    critique_title_template: str = "{stem}"
-    critique_category: Optional[str] = None
-    critique_notes: str = ""
-    competition_config_path: Optional[Path] = None
-    competition: Optional[CompetitionConfig] = None
-    pairwise_rounds: int = 0
 
 
 def _merge_dict(
@@ -246,14 +231,8 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         "default_overwrite_metadata": defaults.default_overwrite_metadata,
         "max_keywords": defaults.max_keywords,
         "image_extensions": defaults.image_extensions,
-        "critique_title_template": defaults.critique_title_template,
-        "critique_default_category": defaults.critique_default_category,
-        "critique_default_notes": defaults.critique_default_notes,
         "json_schema_version": defaults.json_schema_version,
         "default_preflight": defaults.default_preflight,
-        "default_competition_config": defaults.default_competition_config,
-        "default_competition": defaults.default_competition,
-        "default_pairwise_rounds": defaults.default_pairwise_rounds,
     }
 
     result = _merge_dict(result, _load_pyproject_settings(start))
@@ -346,37 +325,6 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
         result.get("default_use_registry"), defaults.default_use_registry
     )
     max_keywords = _coerce_int(result.get("max_keywords"), defaults.max_keywords)
-    critique_title_template = (
-        str(
-            result.get("critique_title_template", defaults.critique_title_template)
-        ).strip()
-        or defaults.critique_title_template
-    )
-    critique_category_raw = result.get(
-        "critique_default_category", defaults.critique_default_category
-    )
-    if critique_category_raw is None:
-        critique_category = defaults.critique_default_category
-    else:
-        critique_category = str(critique_category_raw).strip() or None
-    critique_notes = str(
-        result.get("critique_default_notes", defaults.critique_default_notes) or ""
-    ).strip()
-    competition_config_path = _as_path(
-        result.get("default_competition_config")
-    ) or defaults.default_competition_config
-    competition_identifier_raw = result.get(
-        "default_competition", defaults.default_competition
-    )
-    competition_identifier = (
-        str(competition_identifier_raw).strip()
-        if competition_identifier_raw is not None
-        else None
-    ) or None
-    pairwise_rounds = _coerce_int(
-        result.get("default_pairwise_rounds"), defaults.default_pairwise_rounds
-    )
-
     image_exts = _normalise_iterable(result.get("image_extensions"))
     if not image_exts:
         image_exts = defaults.image_extensions
@@ -416,12 +364,6 @@ def load_config(start: Optional[Path] = None) -> PersonalTaggerSettings:
             result.get("json_schema_version", defaults.json_schema_version)
         ),
         default_api_key=api_key,
-        critique_title_template=critique_title_template,
-        critique_default_category=critique_category,
-        critique_default_notes=critique_notes,
-        default_competition_config=competition_config_path,
-        default_competition=competition_identifier,
-        default_pairwise_rounds=pairwise_rounds,
     )
 
 
@@ -457,12 +399,6 @@ def build_runtime_config(
     caption_role: Optional[str] = None,
     keyword_role: Optional[str] = None,
     description_role: Optional[str] = None,
-    critique_title_template: Optional[str] = None,
-    critique_category: Optional[str] = None,
-    critique_notes: Optional[str] = None,
-    competition_config: Optional[Path] = None,
-    competition: Optional[str] = None,
-    pairwise_rounds: Optional[int] = None,
 ) -> PersonalTaggerConfig:
     """Compose a runtime configuration from defaults and CLI overrides."""
 
@@ -530,21 +466,6 @@ def build_runtime_config(
     resolved_max_keywords = (
         max_keywords if max_keywords is not None else settings.max_keywords
     )
-    if isinstance(critique_title_template, str) and critique_title_template.strip():
-        resolved_critique_title_template = critique_title_template.strip()
-    else:
-        resolved_critique_title_template = settings.critique_title_template or "{stem}"
-    if not resolved_critique_title_template:
-        resolved_critique_title_template = "{stem}"
-    if critique_category is None:
-        resolved_critique_category = settings.critique_default_category
-    else:
-        resolved_critique_category = str(critique_category).strip() or None
-    if critique_notes is None:
-        resolved_critique_notes = settings.critique_default_notes
-    else:
-        resolved_critique_notes = str(critique_notes).strip()
-
     resolved_exts: Tuple[str, ...]
     if image_extensions:
         normalised = _normalise_iterable(image_extensions)
@@ -615,30 +536,6 @@ def build_runtime_config(
         resolved_keyword_model = _resolve("keywords", resolved_keyword_model)
         resolved_description_model = _resolve("description", resolved_description_model)
 
-    resolved_competition_path = (
-        competition_config if competition_config is not None else settings.default_competition_config
-    )
-    resolved_competition: Optional[CompetitionConfig] = None
-    if resolved_competition_path:
-        registry = load_competition_registry(Path(resolved_competition_path).expanduser())
-        resolved_competition_path = registry.source
-        competition_identifier = competition or settings.default_competition
-        resolved_competition = registry.get(competition_identifier)
-        if competition_identifier and not resolved_competition:
-            raise ValueError(
-                f"Competition '{competition_identifier}' not found in {resolved_competition_path}"
-            )
-
-    resolved_pairwise_rounds = (
-        pairwise_rounds
-        if pairwise_rounds is not None
-        else (
-            resolved_competition.pairwise_rounds
-            if resolved_competition is not None
-            else settings.default_pairwise_rounds
-        )
-    )
-
     return PersonalTaggerConfig(
         input_paths=tuple(resolved_inputs),
         output_jsonl=resolved_output,
@@ -669,10 +566,4 @@ def build_runtime_config(
         caption_role=resolved_caption_role,
         keyword_role=resolved_keyword_role,
         description_role=resolved_description_role,
-        critique_title_template=resolved_critique_title_template,
-        critique_category=resolved_critique_category,
-        critique_notes=resolved_critique_notes,
-        competition_config_path=resolved_competition_path,
-        competition=resolved_competition,
-        pairwise_rounds=resolved_pairwise_rounds or 0,
     )

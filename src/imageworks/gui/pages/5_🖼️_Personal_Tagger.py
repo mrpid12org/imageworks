@@ -14,8 +14,9 @@ from imageworks.gui.components.metadata_editor import (
     render_metadata_editor,
     render_compact_tag_list,
 )
-from imageworks.gui.components.results_viewer import parse_jsonl
+from imageworks.gui.components.results_viewer import parse_jsonl, _cache_version
 from imageworks.gui.utils.cli_wrapper import build_tagger_command
+from imageworks.gui.components.file_browser import render_path_browser
 from imageworks.gui.config import (
     DEFAULT_INPUT_DIR,
     TAGGER_DEFAULT_OUTPUT_JSONL,
@@ -23,8 +24,17 @@ from imageworks.gui.config import (
     get_app_setting,
     set_app_setting,
     reset_app_settings,
+    ALL_IMAGE_EXTENSIONS,
 )
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 from imageworks.model_loader.role_selection import list_models_for_role, select_by_role
+from imageworks.apps.personal_tagger.core.prompts import (
+    list_prompt_profiles,
+    serialize_prompt_profile,
+    save_prompt_profile_data,
+    reset_prompt_profile,
+    is_user_profile,
+)
 
 
 def render_custom_overrides(preset, session_key_prefix):
@@ -43,20 +53,96 @@ def render_custom_overrides(preset, session_key_prefix):
             st.success("✅ Reset to defaults")
             st.rerun()
 
-    # Input directory
-    current_input = get_app_setting(
+    # Input selection (directory or single file)
+    current_mode = get_app_setting(
+        st.session_state, "tagger", "input_mode", "Directory"
+    )
+    mode_index = 0 if current_mode == "Directory" else 1
+    input_mode = st.radio(
+        "Input Selection Mode",
+        options=["Directory", "Single File"],
+        index=mode_index,
+        key=f"{session_key_prefix}_input_mode",
+        horizontal=True,
+    )
+    if input_mode != current_mode:
+        set_app_setting(st.session_state, "tagger", "input_mode", input_mode)
+
+    current_input_dir = get_app_setting(
         st.session_state, "tagger", "input_dir", DEFAULT_INPUT_DIR
     )
-    input_dir = st.text_input(
-        "Input Directory",
-        value=current_input,
-        key=f"{session_key_prefix}_input",
-        help="Directory containing images to tag",
+    current_input_file = get_app_setting(st.session_state, "tagger", "input_file", "")
+
+    start_path = (
+        current_input_file
+        if input_mode == "Single File" and current_input_file
+        else current_input_dir
     )
-    if input_dir and input_dir != current_input:
-        set_app_setting(st.session_state, "tagger", "input_dir", input_dir)
-    if input_dir:
-        overrides["input"] = [input_dir]
+
+    browser_state = render_path_browser(
+        key_prefix=f"{session_key_prefix}_input_browser",
+        start_path=start_path,
+        allow_file_selection=True,
+        file_types=ALL_IMAGE_EXTENSIONS,
+        initial_file=current_input_file if current_input_file else None,
+    )
+
+    selected_dir = browser_state["selected_dir"]
+    selected_file = browser_state.get("selected_file")
+
+    if selected_dir and selected_dir != current_input_dir:
+        set_app_setting(st.session_state, "tagger", "input_dir", selected_dir)
+
+    # Recursive toggle (directories only)
+    current_recursive = get_app_setting(
+        st.session_state, "tagger", "include_recursive", False
+    )
+    if input_mode == "Directory":
+        include_recursive = st.checkbox(
+            "Include subdirectories",
+            value=current_recursive,
+            key=f"{session_key_prefix}_include_recursive",
+            help="Process images in all subfolders of the selected directory.",
+        )
+        if include_recursive != current_recursive:
+            set_app_setting(
+                st.session_state, "tagger", "include_recursive", include_recursive
+            )
+        overrides["recursive"] = include_recursive
+        set_app_setting(
+            st.session_state, "tagger", "include_recursive", include_recursive
+        )
+    else:
+        # Single-file mode never recurses
+        overrides["recursive"] = False
+
+    # Preflight toggle
+    current_skip_preflight = get_app_setting(
+        st.session_state, "tagger", "skip_preflight", False
+    )
+    skip_preflight = st.checkbox(
+        "Skip backend preflight checks",
+        value=current_skip_preflight,
+        key=f"{session_key_prefix}_skip_preflight",
+        help="Skip availability checks before running. Enable if preflight fails but you know the backend is reachable.",
+    )
+    if skip_preflight != current_skip_preflight:
+        set_app_setting(st.session_state, "tagger", "skip_preflight", skip_preflight)
+    overrides["skip_preflight"] = skip_preflight
+
+    if input_mode == "Directory":
+        if selected_dir:
+            st.info(f"Using directory: `{selected_dir}`")
+            overrides["input"] = [selected_dir]
+        else:
+            st.warning("Select a valid directory to continue.")
+    else:
+        if selected_file:
+            set_app_setting(st.session_state, "tagger", "input_file", selected_file)
+            st.info(f"Using file: `{selected_file}`")
+            overrides["input"] = [selected_file]
+        else:
+            st.warning("Select a file from the list to process a single image.")
 
     # Output paths
     col1, col2 = st.columns(2)
@@ -135,6 +221,7 @@ def render_custom_overrides(preset, session_key_prefix):
         "Dry Run (preview only)",
         value=preset.flags.get("dry_run", True),
         key=f"{session_key_prefix}_dry_run_main",
+        help="Run the models but skip writing metadata back to your images.",
     )
     overrides["dry_run"] = dry_run
 
@@ -318,6 +405,8 @@ def main():
     """Personal tagger page."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (ensures consistency on page refresh)
     st.markdown(
@@ -343,7 +432,7 @@ def main():
     st.markdown("Generate captions, keywords, and descriptions for your images")
 
     # Workflow tabs
-    tabs = st.tabs(["⚙️ Configure", "▶️ Preview", "✏️ Edit", "✅ Commit"])
+    tabs = st.tabs(["⚙️ Configure", "▶️ Preview", "✏️ Edit", "📝 Prompts", "✅ Commit"])
 
     # === CONFIGURE TAB ===
     with tabs[0]:
@@ -377,6 +466,27 @@ def main():
         # Configuration summary
         with st.expander("📋 Configuration Summary", expanded=False):
             st.json(config)
+
+        st.markdown("### ⚖️ Judge Vision")
+        st.info(
+            "Competition critiques now live on the dedicated ⚖️ Judge Vision page. "
+            "Stage your current selection below and switch pages when you're ready to score."
+        )
+        if st.button("📤 Send This Batch to Judge Vision", key="tagger_to_judge"):
+            keys_to_copy = [
+                "input",
+                "output_jsonl",
+                "summary",
+            ]
+            payload = {}
+            for key in keys_to_copy:
+                if config.get(key) is not None:
+                    payload[key] = config.get(key)
+            if payload:
+                st.session_state["judge_prefill"] = payload
+                st.success(
+                    "Batch staged for ⚖️ Judge Vision. Open the Judge Vision page from the sidebar."
+                )
 
     # === PREVIEW TAB ===
     with tabs[1]:
@@ -413,7 +523,7 @@ def main():
                 # Parse results
                 output_jsonl = preview_config.get("output_jsonl")
                 if output_jsonl and Path(output_jsonl).exists():
-                    results = parse_jsonl(output_jsonl)
+                    results = parse_jsonl(output_jsonl, _cache_version(output_jsonl))
 
                     if results:
                         # Store in session state for editing
@@ -442,7 +552,9 @@ def main():
 
             for result in preview_data:
                 img_data = {
-                    "path": result.get("image_path", ""),
+                    "path": result.get("image_path")
+                    or result.get("image")
+                    or result.get("path", ""),
                     "caption": result.get("caption", ""),
                     "keywords": result.get("keywords", []),
                     "description": result.get("description", ""),
@@ -462,8 +574,114 @@ def main():
             st.markdown("---")
             render_compact_tag_list(edited_data, show_approved_only=False)
 
-    # === COMMIT TAB ===
+    # === PROMPTS TAB ===
     with tabs[3]:
+        st.markdown("### Prompt Profiles")
+        profiles = list_prompt_profiles()
+
+        if not profiles:
+            st.warning("No prompt profiles available.")
+        else:
+            option_labels = [
+                f"{profile.name} (id={profile.id})" for profile in profiles
+            ]
+            default_index = 0
+            selected_label = st.selectbox(
+                "Select profile",
+                options=option_labels,
+                index=default_index,
+            )
+            selected_profile = profiles[option_labels.index(selected_label)]
+            profile_data = serialize_prompt_profile(selected_profile.id)
+
+            name = st.text_input("Profile name", value=profile_data["name"])
+            description = st.text_area(
+                "Description", value=profile_data.get("description", ""), height=80
+            )
+
+            stage_inputs = {}
+            stage_definitions = [
+                ("Caption", "caption_stage"),
+                ("Keyword", "keyword_stage"),
+                ("Description", "description_stage"),
+            ]
+
+            for label, key in stage_definitions:
+                stage_data = profile_data.get(key, {})
+                with st.expander(f"{label} Stage", expanded=True):
+                    system_text = st.text_area(
+                        f"{label} system prompt",
+                        value=stage_data.get("system", ""),
+                        height=100,
+                        key=f"{selected_profile.id}_{key}_system",
+                    )
+                    user_text = st.text_area(
+                        f"{label} user prompt",
+                        value=stage_data.get("user_template", ""),
+                        height=180,
+                        key=f"{selected_profile.id}_{key}_user",
+                    )
+                    max_tokens_default = stage_data.get("max_new_tokens") or 0
+                    max_tokens_val = st.number_input(
+                        f"{label} max new tokens",
+                        value=int(max_tokens_default),
+                        min_value=0,
+                        step=32,
+                        key=f"{selected_profile.id}_{key}_tokens",
+                    )
+                    max_tokens_clean = int(max_tokens_val)
+                    expects_json_default = bool(stage_data.get("expects_json"))
+                    expects_json_val = st.checkbox(
+                        f"{label} expects JSON output",
+                        value=expects_json_default,
+                        key=f"{selected_profile.id}_{key}_expects_json",
+                    )
+                    stage_inputs[key] = {
+                        "system": system_text,
+                        "user_template": user_text,
+                        "max_new_tokens": max_tokens_clean or None,
+                        "expects_json": expects_json_val,
+                    }
+
+            payload = {
+                "id": profile_data["id"],
+                "name": name.strip() or profile_data["name"],
+                "description": description,
+                "caption_stage": stage_inputs["caption_stage"],
+                "keyword_stage": stage_inputs["keyword_stage"],
+                "description_stage": stage_inputs["description_stage"],
+            }
+
+            col_save, col_save_as, col_reset = st.columns(3)
+            with col_save:
+                if st.button("💾 Save Changes", use_container_width=True):
+                    save_prompt_profile_data(payload, as_new=False)
+                    st.success("Prompt profile saved.")
+                    st.experimental_rerun()
+
+            with col_save_as:
+                if st.button("📝 Save As New", use_container_width=True):
+                    new_payload = dict(payload)
+                    new_payload.pop("id", None)
+                    if not name.strip():
+                        st.error("Provide a name before saving a new profile.")
+                    else:
+                        new_payload["name"] = name.strip()
+                        save_prompt_profile_data(new_payload, as_new=True)
+                        st.success("New prompt profile created.")
+                        st.experimental_rerun()
+
+            with col_reset:
+                if is_user_profile(int(profile_data["id"])):
+                    if st.button("♻️ Reset to Default", use_container_width=True):
+                        reset_prompt_profile(int(profile_data["id"]))
+                        st.success("Profile reset to project defaults.")
+                        st.experimental_rerun()
+                else:
+                    st.info("Base profile (read-only)")
+
+    # === COMMIT TAB ===
+    with tabs[4]:
         st.markdown("### Write Tags to Files")
 
         edited_data = st.session_state.get("tagger_edited_data", [])

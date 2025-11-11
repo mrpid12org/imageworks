@@ -18,6 +18,7 @@ from imageworks.gui.config import (
     set_app_setting,
     reset_app_settings,
 )
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 
 
 def render_custom_overrides(preset, session_key_prefix):
@@ -146,6 +147,8 @@ def main():
     """Image similarity checker page."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (ensures consistency on page refresh)
     st.markdown(

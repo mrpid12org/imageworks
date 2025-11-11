@@ -6,7 +6,7 @@ Operational checklist for running the personal tagging pipeline.
 ## 1. Preparation
 
 1. Organise input directories (e.g., per shoot) and ensure backups exist.
-2. Decide on prompt profile and critique settings for the batch.
+2. Decide on prompt profile and keyword limits for the batch.
 3. Confirm chosen backend/registry models are online (use `imageworks-models select` for registry names).
 4. Review metadata overwrite policy to avoid clobbering existing captions.
 
@@ -35,7 +35,7 @@ Operational checklist for running the personal tagging pipeline.
 1. Open Streamlit → “Personal Tagger”.
 2. Select directories and recursion preference.
 3. Choose backend/registry models (GUI will display resolved served IDs).
-4. Configure prompt profile, critique notes, keyword limit, metadata toggle.
+4. Configure prompt profile, keyword limit, metadata toggle.
 5. Execute run and watch progress.
 6. Use results table to preview generated metadata; apply metadata if run was dry-run.
 
@@ -55,7 +55,7 @@ Operational checklist for running the personal tagging pipeline.
 | Preflight fails due to capability mismatch | Adjust roles or use explicit models that advertise required capabilities. |
 | API timeout | Increase `--timeout`, reduce `--batch-size`, or check backend load. |
 | Prompt profile missing | Run `imageworks-personal-tagger --help` to confirm profile names; update configuration if custom profile removed. |
-| Excessive runtime | Increase `--max-workers`, reduce image count per run, or disable critiques. |
+| Excessive runtime | Increase `--max-workers`, reduce image count per run, or narrow the directory scope. |
 | Metadata not written | Ensure run not in dry-run mode and no permission issues on filesystem. |
 
 ---
@@ -66,4 +66,3 @@ Operational checklist for running the personal tagging pipeline.
 3. Notify stakeholders (photographers, DAM admins) when new metadata ready for review.
 4. Review randomly sampled images to ensure tone and keywords meet expectations; adjust prompts for next run if needed.
 5. Update GUI preset if configuration changes should persist.
-

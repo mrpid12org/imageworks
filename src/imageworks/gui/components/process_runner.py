@@ -1,9 +1,20 @@
 """Process runner component for executing CLI commands."""
 
-import streamlit as st
+from __future__ import annotations
+
+import os
 import subprocess
-from typing import List, Dict, Any, Optional
+import tempfile
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+import streamlit as st
+
+
+def _mark_judge_run_inactive() -> None:
+    if "judge_run_active" in st.session_state:
+        st.session_state["judge_run_active"] = False
 
 
 def execute_command(
@@ -66,6 +77,9 @@ def render_process_runner(
     result_key: str,
     show_command: bool = True,
     timeout: Optional[int] = None,
+    on_execute: Optional[Callable[[], None]] = None,
+    *,
+    async_mode: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Render process runner with execute button.
@@ -78,6 +92,7 @@ def render_process_runner(
         result_key: Session state key to store results
         show_command: Whether to display the command being run
         timeout: Command timeout in seconds
+        on_execute: Optional callback invoked before the command starts
 
     Returns:
         Execution result dict if command was run, None otherwise
@@ -94,6 +109,9 @@ def render_process_runner(
     if show_command:
         with st.expander("🔍 Command Preview", expanded=False):
             st.code(" ".join(command), language="bash")
+
+    process_state_key = f"{key_prefix}_process_state"
+    process_state = st.session_state.get(process_state_key)
 
     # Execute button
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -122,38 +140,152 @@ def render_process_runner(
 
     # Execute command
     if execute:
-        with st.status(
-            "⏳ Running command...", state="running", expanded=True
-        ) as status:
-            result = execute_command(command, capture_output=True, timeout=timeout)
-            if result["success"]:
-                status.update(label="✅ Command completed", state="complete")
-            else:
-                status.update(
-                    label=f"❌ Command failed (exit {result['exit_code']})",
-                    state="error",
+        if on_execute:
+            try:
+                on_execute()
+            except Exception as exc:  # pragma: no cover - defensive UI
+                st.error(f"❌ Unable to start command: {exc}")
+                return None
+        if async_mode:
+            stdout_fd, stdout_path = tempfile.mkstemp(
+                prefix=f"{key_prefix}_stdout_", suffix=".log"
+            )
+            stderr_fd, stderr_path = tempfile.mkstemp(
+                prefix=f"{key_prefix}_stderr_", suffix=".log"
+            )
+            os.close(stdout_fd)
+            os.close(stderr_fd)
+            stdout_handle = open(stdout_path, "w", encoding="utf-8")
+            stderr_handle = open(stderr_path, "w", encoding="utf-8")
+            try:
+                process = subprocess.Popen(
+                    command,
+                    stdout=stdout_handle,
+                    stderr=stderr_handle,
+                    text=True,
                 )
+            except Exception as exc:  # noqa: BLE001
+                stdout_handle.close()
+                stderr_handle.close()
+                Path(stdout_path).unlink(missing_ok=True)
+                Path(stderr_path).unlink(missing_ok=True)
+                st.error(f"❌ Failed to start command: {exc}")
+                _mark_judge_run_inactive()
+                return None
+            finally:
+                stdout_handle.close()
+                stderr_handle.close()
 
-        # Store in session state
-        st.session_state[result_key] = result
-        st.session_state["last_command"] = result["command"]
-        st.session_state["last_exit_code"] = result["exit_code"]
+            st.session_state[process_state_key] = {
+                "process": process,
+                "stdout_path": stdout_path,
+                "stderr_path": stderr_path,
+                "command": " ".join(command),
+                "started": datetime.now().isoformat(),
+                "timeout": timeout,
+                "config": config.copy(),
+                "button_label": button_label,
+            }
+            st.session_state.pop(result_key, None)
+            st.session_state["last_command"] = " ".join(command)
+            st.session_state["last_exit_code"] = None
+            st.rerun()
+            return None
+        else:
+            with st.status(
+                "⏳ Running command...", state="running", expanded=True
+            ) as status:
+                result = execute_command(command, capture_output=True, timeout=timeout)
+                if result["success"]:
+                    status.update(label="✅ Command completed", state="complete")
+                else:
+                    status.update(
+                        label=f"❌ Command failed (exit {result['exit_code']})",
+                        state="error",
+                    )
 
-        # Add to job history
-        job_entry = {
-            "timestamp": result["timestamp"],
-            "module": key_prefix.split("_")[0] if "_" in key_prefix else key_prefix,
-            "command": result["command"],
-            "config": config.copy(),
-            "status": "success" if result["success"] else "failed",
-            "description": button_label,
+            # Store in session state
+            st.session_state[result_key] = result
+            st.session_state["last_command"] = result["command"]
+            st.session_state["last_exit_code"] = result["exit_code"]
+            _mark_judge_run_inactive()
+
+            # Add to job history
+            job_entry = {
+                "timestamp": result["timestamp"],
+                "module": key_prefix.split("_")[0] if "_" in key_prefix else key_prefix,
+                "command": result["command"],
+                "config": config.copy(),
+                "status": "success" if result["success"] else "failed",
+                "description": button_label,
+            }
+
+            if "job_history" not in st.session_state:
+                st.session_state["job_history"] = []
+            st.session_state["job_history"].append(job_entry)
+
+            return result
+
+    if async_mode and process_state:
+        process = process_state["process"]
+        retcode = process.poll()
+        stdout_path = process_state["stdout_path"]
+        stderr_path = process_state["stderr_path"]
+        command_str = process_state["command"]
+
+        def _read_output(path: str, limit: int = 4000) -> str:
+            try:
+                data = Path(path).read_text()
+            except Exception:
+                return ""
+            return data[-limit:]
+
+        col_run, col_stop = st.columns([3, 1])
+        with col_run:
+            st.info("⏳ Command is running in the background.")
+            with st.expander("📄 Live stdout (tail)", expanded=False):
+                st.text(_read_output(stdout_path))
+            with st.expander("⚠️ Live stderr (tail)", expanded=False):
+                st.text(_read_output(stderr_path))
+        with col_stop:
+            if st.button("🛑 Stop Run", key=f"{key_prefix}_stop"):
+                process.terminate()
+                st.warning("Termination signal sent.")
+
+        if retcode is None:
+            st.caption("Progress updates will appear below while the run continues.")
+            return None
+
+        stdout = Path(stdout_path).read_text(encoding="utf-8", errors="ignore")
+        stderr = Path(stderr_path).read_text(encoding="utf-8", errors="ignore")
+        Path(stdout_path).unlink(missing_ok=True)
+        Path(stderr_path).unlink(missing_ok=True)
+        st.session_state.pop(process_state_key, None)
+        _mark_judge_run_inactive()
+
+        result_payload = {
+            "command": command_str,
+            "exit_code": retcode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "success": retcode == 0,
+            "timestamp": datetime.now().isoformat(),
         }
+        st.session_state[result_key] = result_payload
+        st.session_state["last_command"] = command_str
+        st.session_state["last_exit_code"] = retcode
 
+        job_entry = {
+            "timestamp": result_payload["timestamp"],
+            "module": key_prefix.split("_")[0] if "_" in key_prefix else key_prefix,
+            "command": command_str,
+            "config": process_state.get("config", {}).copy(),
+            "status": "success" if retcode == 0 else "failed",
+            "description": process_state.get("button_label", button_label),
+        }
         if "job_history" not in st.session_state:
             st.session_state["job_history"] = []
         st.session_state["job_history"].append(job_entry)
-
-        return result
 
     # Display previous result if exists
     if result_key in st.session_state and st.session_state[result_key]:

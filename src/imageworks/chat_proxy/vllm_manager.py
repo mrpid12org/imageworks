@@ -12,11 +12,12 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import httpx
 
 from .config import ProxyConfig
+from imageworks.model_loader.runtime_metadata import log_runtime_metrics
 
 logger = logging.getLogger("imageworks.vllm_manager")
 
@@ -169,6 +170,17 @@ class VllmManager:
                 started_at=started_at,
             )
             await self._write_state(new_state)
+            try:
+                runtime_payload = await self._collect_runtime_metrics(entry, new_state)
+            except Exception:  # noqa: BLE001
+                runtime_payload = None
+            if runtime_payload:
+                log_runtime_metrics(
+                    entry_name=entry.name,
+                    backend=entry.backend,
+                    served_model_id=new_state.served_model_id,
+                    payload=runtime_payload,
+                )
             logger.info(
                 "[vllm-manager] Model %s active on port %s (pid=%s)",
                 logical_name,
@@ -547,6 +559,136 @@ class VllmManager:
                 return rebased
 
         return None
+
+    async def _collect_runtime_metrics(
+        self, entry, state: ActiveVllmState
+    ) -> Optional[dict]:
+        """Gather runtime loader observations for reconciliation."""
+
+        extra_args = list(getattr(entry.backend_config, "extra_args", []) or [])
+
+        def _extract_flag(name: str) -> Optional[str]:
+            token = f"--{name}"
+            for idx, arg in enumerate(extra_args):
+                if arg == token:
+                    if idx + 1 < len(extra_args):
+                        next_arg = extra_args[idx + 1]
+                        if not next_arg.startswith("--"):
+                            return next_arg
+                    return None
+                if arg.startswith(f"{token}="):
+                    return arg.split("=", 1)[1]
+            return None
+
+        metrics: Dict[str, Any] = {}
+
+        flag_map = {
+            "configured_max_model_len": ("max-model-len", int),
+            "configured_max_num_seqs": ("max-num-seqs", int),
+            "configured_gpu_memory_utilization": ("gpu-memory-utilization", float),
+            "configured_tensor_parallel_size": ("tensor-parallel-size", int),
+            "configured_kv_cache_dtype": ("kv-cache-dtype", str),
+        }
+
+        for metric_key, (flag_name, caster) in flag_map.items():
+            raw = _extract_flag(flag_name)
+            if raw is None:
+                continue
+            try:
+                metrics[metric_key] = caster(raw)
+            except Exception:  # noqa: BLE001
+                metrics[metric_key] = raw
+
+        # Query vLLM for runtime model info
+        base_url = f"http://127.0.0.1:{state.port}"
+        try:
+            resp = await self._http.get(f"{base_url}/v1/models")
+            if resp.status_code < 400:
+                data = resp.json()
+                models = data.get("data")
+                selected = None
+                if isinstance(models, list) and models:
+                    if len(models) == 1:
+                        selected = models[0]
+                    else:
+                        for candidate in models:
+                            if (
+                                candidate.get("id") == state.served_model_id
+                                or candidate.get("root") == state.served_model_id
+                            ):
+                                selected = candidate
+                                break
+                        if selected is None:
+                            selected = models[0]
+                if isinstance(selected, dict):
+                    runtime_ctx = (
+                        selected.get("max_context_length")
+                        or selected.get("max_model_len")
+                        or selected.get("max_sequence_length")
+                    )
+                    if runtime_ctx:
+                        metrics["runtime_context_tokens"] = runtime_ctx
+                    max_batch = selected.get("max_batch_size")
+                    if max_batch:
+                        metrics["runtime_max_batch_size"] = max_batch
+        except Exception:  # noqa: BLE001
+            pass
+
+        gpu_snapshot = self._snapshot_gpu_usage()
+        if gpu_snapshot:
+            metrics["gpu_memory_gib"] = {
+                "index": gpu_snapshot["index"],
+                "used": round(gpu_snapshot["used_gib"], 3),
+                "total": round(gpu_snapshot["total_gib"], 3),
+            }
+
+        if not metrics:
+            return None
+        return {
+            "source": "vllm-manager",
+            "metrics": metrics,
+            "extra_args": extra_args,
+        }
+
+    @staticmethod
+    def _snapshot_gpu_usage() -> Optional[Dict[str, float]]:
+        """Return current GPU memory usage (first device) if available."""
+
+        cmd = [
+            "nvidia-smi",
+            "--query-gpu=index,memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=3,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+
+        output = (result.stdout or "").strip()
+        if not output:
+            return None
+        first_line = output.splitlines()[0]
+        parts = [p.strip() for p in first_line.split(",")]
+        if len(parts) < 3:
+            return None
+        try:
+            index = int(parts[0])
+            used_mb = float(parts[1])
+            total_mb = float(parts[2])
+        except Exception:  # noqa: BLE001
+            return None
+
+        return {
+            "index": index,
+            "used_gib": used_mb / 1024.0,
+            "total_gib": total_mb / 1024.0,
+        }
 
     async def _wait_for_health(self, port: int, started_at: float) -> bool:
         deadline = started_at + self.cfg.vllm_start_timeout_s

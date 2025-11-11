@@ -247,18 +247,6 @@ def build_tagger_command(config: Dict[str, Any]) -> List[str]:
     if prompt_profile:
         cmd.extend(["--prompt-profile", prompt_profile])
 
-    if config.get("critique_title_template"):
-        cmd.extend(
-            [
-                "--critique-title-template",
-                str(config["critique_title_template"]),
-            ]
-        )
-    if config.get("critique_category"):
-        cmd.extend(["--critique-category", str(config["critique_category"])])
-    if config.get("critique_notes"):
-        cmd.extend(["--critique-notes", str(config["critique_notes"])])
-
     batch_size = config.get("batch_size")
     if batch_size is None:
         batch_size = settings.default_batch_size
@@ -347,6 +335,120 @@ def build_tagger_command(config: Dict[str, Any]) -> List[str]:
         cmd.extend(["--output-jsonl", str(config["output_jsonl"])])
     if config.get("summary"):
         cmd.extend(["--summary", str(config["summary"])])
+
+    return cmd
+
+
+def build_judge_command(config: Dict[str, Any]) -> List[str]:
+    """Build Judge Vision command from config dict.
+
+    We invoke the module directly (`python -m imageworks.apps.judge_vision.cli.main`)
+    so GUI users don't need to reinstall the package every time a console script is added.
+    """
+
+    settings = load_config()
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "imageworks.apps.judge_vision.cli.main",
+    ]
+
+    input_paths = config.get("input") or []
+    if isinstance(input_paths, str):
+        input_paths = [input_paths]
+    if not input_paths:
+        raise ValueError("Judge Vision requires at least one input path")
+    for path in input_paths:
+        cmd.extend(["--input-dir", str(path)])
+
+    if config.get("recursive") is False:
+        cmd.append("--no-recursive")
+
+    backend = (config.get("backend") or settings.default_backend).strip()
+    base_url = (config.get("base_url") or settings.default_base_url).strip()
+    api_key = (config.get("api_key") or settings.default_api_key).strip()
+    if backend:
+        cmd.extend(["--backend", backend])
+    if base_url:
+        cmd.extend(["--base-url", base_url])
+    if api_key and api_key != "EMPTY":
+        cmd.extend(["--api-key", api_key])
+
+    int_fields = {
+        "--timeout": config.get("timeout") or settings.default_timeout,
+        "--max-new-tokens": config.get("max_new_tokens")
+        or settings.default_max_new_tokens,
+    }
+    for flag, value in int_fields.items():
+        if value is not None:
+            cmd.extend([flag, str(value)])
+
+    float_fields = {
+        "--temperature": config.get("temperature") or settings.default_temperature,
+        "--top-p": config.get("top_p") or settings.default_top_p,
+    }
+    for flag, value in float_fields.items():
+        if value is not None:
+            cmd.extend([flag, str(value)])
+
+    if config.get("model"):
+        cmd.extend(["--model", str(config["model"])])
+
+    use_registry = config.get("use_registry")
+    if use_registry is False:
+        cmd.append("--no-registry")
+    else:
+        cmd.append("--use-registry")
+
+    if config.get("critique_role"):
+        cmd.extend(["--critique-role", str(config["critique_role"])])
+
+    if config.get("skip_preflight"):
+        cmd.append("--skip-preflight")
+
+    if config.get("competition_config"):
+        cmd.extend(["--competition-config", str(config["competition_config"])])
+    if config.get("competition"):
+        cmd.extend(["--competition", str(config["competition"])])
+
+    if config.get("critique_title_template"):
+        cmd.extend(
+            ["--critique-title-template", str(config["critique_title_template"])]
+        )
+    if config.get("critique_category"):
+        cmd.extend(["--critique-category", str(config["critique_category"])])
+    if config.get("critique_notes"):
+        cmd.extend(["--critique-notes", str(config["critique_notes"])])
+
+    if config.get("output_jsonl"):
+        cmd.extend(["--output-jsonl", str(config["output_jsonl"])])
+    if config.get("summary"):
+        cmd.extend(["--summary", str(config["summary"])])
+    if config.get("progress_file"):
+        cmd.extend(["--progress-file", str(config["progress_file"])])
+    if config.get("iqa_cache"):
+        cmd.extend(["--iqa-cache", str(config["iqa_cache"])])
+    if config.get("stage") and config.get("stage") != "full":
+        cmd.extend(["--stage", str(config["stage"])])
+    if config.get("iqa_device"):
+        cmd.extend(["--iqa-device", str(config["iqa_device"])])
+    threshold = config.get("pairwise_threshold")
+    if threshold is not None:
+        cmd.extend(["--pairwise-threshold", str(int(threshold))])
+    if config.get("pairwise_enabled"):
+        cmd.append("--pairwise")
+    else:
+        cmd.append("--no-pairwise")
+    if config.get("pairwise_rounds") is not None:
+        cmd.extend(["--pairwise-rounds", str(int(config["pairwise_rounds"]))])
+
+    if config.get("enable_musiq") is False:
+        cmd.append("--disable-musiq")
+
+    if config.get("enable_nima") is False:
+        cmd.append("--disable-nima")
 
     return cmd
 

@@ -1,5 +1,6 @@
 """GUI configuration and constants."""
 
+import os
 from pathlib import Path
 
 # Paths
@@ -29,6 +30,14 @@ MONO_DEFAULT_OVERLAYS_DIR = OUTPUTS_DIR / "overlays"
 TAGGER_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "personal_tagger.jsonl"
 TAGGER_DEFAULT_SUMMARY_PATH = OUTPUTS_DIR / "summaries" / "personal_tagger_summary.md"
 
+# Judge Vision defaults (GUI-managed)
+JUDGE_VISION_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "judge_vision.jsonl"
+JUDGE_VISION_DEFAULT_SUMMARY_PATH = (
+    OUTPUTS_DIR / "summaries" / "judge_vision_summary.md"
+)
+JUDGE_VISION_DEFAULT_COMPETITION_CONFIG = CONFIGS_DIR / "competitions.toml"
+JUDGE_VISION_DEFAULT_IQA_CACHE = OUTPUTS_DIR / "cache" / "judge_vision_iqa.jsonl"
+
 # Image Similarity defaults (from pyproject.toml [tool.imageworks.image_similarity_checker])
 SIMILARITY_DEFAULT_LIBRARY_ROOT = "/mnt/d/Proper Photos/photos/ccc competition images"
 SIMILARITY_DEFAULT_OUTPUT_JSONL = OUTPUTS_DIR / "results" / "similarity_results.jsonl"
@@ -51,11 +60,15 @@ DEFAULT_OVERLAYS_DIR = MONO_DEFAULT_OVERLAYS_DIR
 
 # Backend URLs
 # Note: vLLM runs inside chat_proxy docker container, not as separate service
+_OLLAMA_URL = (
+    os.environ.get("IMAGEWORKS_OLLAMA_HOST")
+    or os.environ.get("CHAT_PROXY_OLLAMA_BASE_URL")
+    or "http://localhost:11434"
+)
+
 DEFAULT_BACKENDS = {
     "chat_proxy": "http://localhost:8100/v1",
-    # Ollama defaults to the docker service exposed within the compose stack.
-    # Override via CHAT_PROXY_OLLAMA_BASE_URL / IMAGEWORKS_OLLAMA_HOST if needed.
-    "ollama": "http://imageworks-ollama:11434",
+    "ollama": _OLLAMA_URL.rstrip("/"),
 }
 
 # File type filters

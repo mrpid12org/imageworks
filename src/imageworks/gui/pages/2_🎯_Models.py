@@ -1,11 +1,14 @@
 """Models management hub page with comprehensive CLI parity."""
 
+from __future__ import annotations
+
 import json
 import shlex
 import streamlit as st
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import re
+import requests
 
 from imageworks.gui.state import init_session_state
 from imageworks.gui.components.backend_monitor import (
@@ -20,11 +23,63 @@ from imageworks.gui.config import (
 )
 from imageworks.model_loader.registry import save_registry
 from imageworks.model_loader.registry import load_registry as load_model_registry
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 
 
 _QUANT_TOKEN_PATTERN = re.compile(
     r"(iq\d+_[a-z]+|q\d+_[a-z]+|q\d+|fp\d+|bf16|int\d+)", re.IGNORECASE
 )
+
+_PROXY_CONFIG_SECTIONS: Dict[str, List[str]] = {
+    "General": ["require_template"],
+    "Server": [
+        "host",
+        "port",
+        "enable_metrics",
+        "log_path",
+        "max_log_bytes",
+        "loopback_alias",
+        "include_non_installed",
+        "suppress_decorations",
+        "log_prompts",
+    ],
+    "Timeouts": [
+        "backend_timeout_ms",
+        "stream_idle_timeout_ms",
+        "autostart_grace_period_s",
+    ],
+    "Autostart": ["autostart_enabled", "autostart_map_raw"],
+    "Limits": ["max_image_bytes", "disable_tool_normalization"],
+    "Vision Preprocessing": [
+        "auto_downscale_images",
+        "max_image_pixels",
+        "image_jpeg_quality",
+    ],
+    "Vision History": [
+        "vision_truncate_history",
+        "vision_keep_system",
+        "vision_keep_last_n_turns",
+    ],
+    "Reasoning History": [
+        "reasoning_truncate_history",
+        "reasoning_keep_system",
+        "reasoning_keep_last_n_turns",
+    ],
+    "vLLM Defaults": [
+        "vllm_single_port",
+        "vllm_port",
+        "vllm_state_path",
+        "vllm_start_timeout_s",
+        "vllm_stop_timeout_s",
+        "vllm_health_timeout_s",
+        "vllm_gpu_memory_utilization",
+        "vllm_max_model_len",
+    ],
+    "Ollama": ["ollama_base_url", "ollama_stop_timeout_s"],
+}
+
+_PROXY_OPTIONAL_STR_KEYS = {"autostart_map_raw", "loopback_alias"}
+_PROXY_READ_ONLY_KEYS = {"schema_version"}
 
 
 def _format_bytes(num: int) -> str:
@@ -47,6 +102,44 @@ def _guess_quant_label(filename: str) -> Optional[str]:
     if match:
         return match[-1].upper()
     return None
+
+
+def _chat_proxy_base_url() -> str:
+    return DEFAULT_BACKENDS.get("chat_proxy", "http://localhost:8100/v1").rstrip("/")
+
+
+def fetch_chat_proxy_config(
+    timeout: int = 5,
+) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    url = f"{_chat_proxy_base_url()}/config/chat-proxy"
+    try:
+        response = requests.get(url, timeout=timeout)
+        if response.status_code != 200:
+            try:
+                detail = response.json()
+            except ValueError:
+                detail = response.text
+            return None, f"HTTP {response.status_code}: {detail}"
+        return response.json(), None
+    except requests.RequestException as exc:
+        return None, str(exc)
+
+
+def update_chat_proxy_config_api(
+    payload: Dict[str, Any], timeout: int = 5
+) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    url = f"{_chat_proxy_base_url()}/config/chat-proxy"
+    try:
+        response = requests.put(url, json=payload, timeout=timeout)
+        if response.status_code not in (200, 201, 202):
+            try:
+                detail = response.json()
+            except ValueError:
+                detail = response.text
+            return None, f"HTTP {response.status_code}: {detail}"
+        return response.json(), None
+    except requests.RequestException as exc:
+        return None, str(exc)
 
 
 def _classify_discovered_provider(entry: Dict[str, Any]) -> str:
@@ -2229,7 +2322,9 @@ def render_advanced_tab():
     st.error("⚠️ **DANGEROUS OPERATIONS** - Can delete files permanently")
 
     # Sub-sections
-    subtabs = st.tabs(["🗑️ Remove Models", "✅ Verify", "📊 Profiles"])
+    subtabs = st.tabs(
+        ["🗑️ Remove Models", "✅ Verify", "📊 Profiles", "🛠️ Proxy Settings"]
+    )
 
     # === REMOVE MODELS ===
     with subtabs[0]:
@@ -2456,11 +2551,159 @@ def render_advanced_tab():
         else:
             st.error("pyproject.toml not found")
 
+    # === PROXY SETTINGS ===
+    with subtabs[3]:
+        st.markdown("#### Chat Proxy Settings")
+        st.caption(
+            "View the active runtime configuration and edit the persisted defaults stored in `configs/chat_proxy.toml`."
+        )
+
+        config_data, error = fetch_chat_proxy_config()
+        if error:
+            st.error(f"Unable to load chat proxy configuration: {error}")
+            st.info(
+                "Ensure the chat proxy is running and reachable at "
+                f"`{_chat_proxy_base_url()}`."
+            )
+        else:
+            runtime_dict = config_data.get("runtime", {})
+            file_dict = config_data.get("file", {})
+            env_overrides = config_data.get("env_overrides", {})
+            config_path = config_data.get("config_file_path")
+            precedence = config_data.get("precedence", [])
+
+            if config_path:
+                st.markdown(f"**Config file:** `{config_path}`")
+
+            if precedence:
+                st.markdown("Configuration precedence: " + " > ".join(precedence))
+
+            if env_overrides:
+                st.warning(
+                    "Environment overrides detected. These values take precedence over file edits "
+                    "until the environment variable is unset:\n\n"
+                    + "\n".join(f"- `{k}` = `{v}`" for k, v in env_overrides.items())
+                )
+
+            with st.expander("🔍 Runtime Snapshot", expanded=False):
+                st.json(runtime_dict or {"info": "Runtime configuration unavailable"})
+
+            st.markdown("##### Edit File Defaults")
+            form_values: Dict[str, Any] = {}
+            with st.form("proxy_settings_form"):
+                for section_label, keys in _PROXY_CONFIG_SECTIONS.items():
+                    section_entries = {
+                        k: file_dict.get(k) for k in keys if k in file_dict
+                    }
+                    if not section_entries:
+                        continue
+                    with st.expander(
+                        section_label, expanded=section_label in {"Server", "Limits"}
+                    ):
+                        for key, value in section_entries.items():
+                            widget_key = f"proxy_setting_{key}"
+                            label = key.replace("_", " ").title()
+
+                            if key in _PROXY_READ_ONLY_KEYS:
+                                st.text_input(
+                                    label,
+                                    value=str(value),
+                                    disabled=True,
+                                    key=f"{widget_key}_ro",
+                                )
+                                continue
+
+                            if isinstance(value, bool):
+                                form_values[key] = st.checkbox(
+                                    label, value=bool(value), key=widget_key
+                                )
+                            elif isinstance(value, int):
+                                form_values[key] = st.number_input(
+                                    label,
+                                    value=int(value),
+                                    step=1,
+                                    format="%d",
+                                    key=widget_key,
+                                )
+                            elif isinstance(value, float):
+                                form_values[key] = st.number_input(
+                                    label,
+                                    value=float(value),
+                                    format="%.4f",
+                                    key=widget_key,
+                                )
+                            else:
+                                current_str = "" if value is None else str(value)
+                                if (
+                                    key in _PROXY_OPTIONAL_STR_KEYS
+                                    or len(current_str) > 120
+                                ):
+                                    form_values[key] = st.text_area(
+                                        label,
+                                        value=current_str,
+                                        key=widget_key,
+                                        height=120,
+                                    )
+                                else:
+                                    form_values[key] = st.text_input(
+                                        label,
+                                        value=current_str,
+                                        key=widget_key,
+                                    )
+
+                submitted = st.form_submit_button("💾 Save Changes")
+
+            if submitted:
+                updates: Dict[str, Any] = {}
+                for key, new_value in form_values.items():
+                    if key in _PROXY_READ_ONLY_KEYS:
+                        continue
+                    original = file_dict.get(key)
+                    if isinstance(original, bool):
+                        coerced = bool(new_value)
+                    elif isinstance(original, int) and not isinstance(original, bool):
+                        coerced = int(new_value)
+                    elif isinstance(original, float):
+                        coerced = float(new_value)
+                    else:
+                        if isinstance(new_value, str):
+                            new_value = new_value.strip()
+                            if key in _PROXY_OPTIONAL_STR_KEYS and new_value == "":
+                                coerced = None
+                            else:
+                                coerced = new_value
+                        else:
+                            coerced = new_value
+                    if coerced != original:
+                        updates[key] = coerced
+
+                if not updates:
+                    st.info("No changes detected.")
+                else:
+                    response, update_error = update_chat_proxy_config_api(
+                        updates, timeout=10
+                    )
+                    if update_error:
+                        st.error(f"Failed to write configuration: {update_error}")
+                    else:
+                        message = (
+                            response.get("message")
+                            if isinstance(response, dict)
+                            else None
+                        )
+                        st.success(
+                            message
+                            or "Configuration updated. Restart chat proxy to apply changes."
+                        )
+                        st.rerun()
+
 
 def main():
     """Models management hub page with comprehensive CLI parity."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (consistent with global settings)
     st.markdown(

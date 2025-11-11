@@ -1,5 +1,7 @@
 # Python / venv
 .venv/
+.venv-tf/
+.tf-backend/
 __pycache__/
 *.pyc
 

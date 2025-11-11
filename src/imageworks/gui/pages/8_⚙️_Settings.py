@@ -17,12 +17,16 @@ from imageworks.gui.utils.config_manager import (
     get_tool_config,
     update_tool_config,
 )
+from imageworks.gui.utils.error_handling import safe_subprocess_run, ValidationError
+from imageworks.gui.components.sidebar_footer import render_sidebar_footer
 
 
 def main():
     """Settings page."""
     st.set_page_config(layout="wide")
     init_session_state()
+    with st.sidebar:
+        render_sidebar_footer()
 
     # Apply wide layout CSS (ensures consistency on page refresh)
     st.markdown(
@@ -116,6 +120,54 @@ def main():
             value=True,
             help="Create backups before modifying files",
         )
+
+        st.markdown("---")
+        st.markdown("#### Model Metadata Maintenance")
+        meta_col1, meta_col2 = st.columns(2)
+
+        with meta_col1:
+            if st.button("Re-extract architecture metadata"):
+                try:
+                    with st.spinner("Extracting architecture metadata..."):
+                        result = safe_subprocess_run(
+                            [
+                                "uv",
+                                "run",
+                                "imageworks-download",
+                                "migrate-architecture",
+                            ],
+                            timeout=900,
+                            check=True,
+                        )
+                    st.success("✅ Architecture metadata refreshed.")
+                    if result.stdout:
+                        st.code(result.stdout.strip())
+                    if result.stderr:
+                        st.warning(result.stderr.strip())
+                except ValidationError as exc:
+                    st.error(f"❌ Command failed: {exc}")
+
+        with meta_col2:
+            if st.button("Reconcile runtime metadata"):
+                try:
+                    with st.spinner("Reconciling runtime metrics..."):
+                        result = safe_subprocess_run(
+                            [
+                                "uv",
+                                "run",
+                                "imageworks-download",
+                                "reconcile-architecture",
+                            ],
+                            timeout=900,
+                            check=True,
+                        )
+                    st.success("✅ Runtime metadata merged into registry.")
+                    if result.stdout:
+                        st.code(result.stdout.strip())
+                    if result.stderr:
+                        st.warning(result.stderr.strip())
+                except ValidationError as exc:
+                    st.error(f"❌ Command failed: {exc}")
 
     # === PATHS SETTINGS ===
     with tabs[1]:

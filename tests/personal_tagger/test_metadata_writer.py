@@ -32,13 +32,11 @@ def test_writer_builds_expected_command(tmp_path):
         keywords=[KeywordPrediction(keyword="forest trail", score=0.91)],
         caption="A dense forest path.",
         description="A narrow trail winds through dense evergreen trees with light filtering from above.",
-        critique="Judges praise the mood but suggest leading lines to tighten the story.",
         backend="test",
         models=GenerationModels(
             caption="test/caption",
             keywords="test/keywords",
             description="test/description",
-            critique="test/description",
         ),
     )
 
