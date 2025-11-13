@@ -20,6 +20,7 @@ from .errors import (
     err_capability_mismatch,
     err_payload_too_large,
     err_template_required,
+    err_gpu_lease_active,
 )
 from .normalization import normalize_response
 from .metrics import MetricsAggregator, MetricSample
@@ -28,6 +29,7 @@ from .logging_utils import JsonlLogger
 from .vllm_manager import VllmManager
 from ..model_loader.registry import get_entry
 from .capabilities import supports_vision, supports_reasoning
+from .gpu_leasing import GpuLeaseManager, LeaseState
 
 if TYPE_CHECKING:  # pragma: no cover
     from .ollama_manager import OllamaManager
@@ -45,6 +47,7 @@ class ChatForwarder:
         logger: JsonlLogger,
         vllm_manager: VllmManager | None = None,
         ollama_manager: Optional["OllamaManager"] = None,
+        lease_manager: Optional[GpuLeaseManager] = None,
     ):
         self.cfg = cfg
         self.metrics = metrics
@@ -53,6 +56,7 @@ class ChatForwarder:
         self.client = httpx.AsyncClient(timeout=cfg.backend_timeout_ms / 1000)
         self.vllm_manager = vllm_manager
         self.ollama_manager = ollama_manager
+        self.lease_manager = lease_manager
         self._last_backend: str | None = None
         allowed = getattr(cfg, "vision_downscale_backends", None) or []
         self._downscale_backends = {
@@ -64,6 +68,21 @@ class ChatForwarder:
     @staticmethod
     def _clean_generation_text(text: str | None) -> str | None:
         return text
+
+    async def _enforce_gpu_lease(
+        self,
+        backend: str,
+        lease_token: Optional[str],
+        active_lease: Optional["LeaseState"],
+    ) -> None:
+        if backend != "vllm" or not self.lease_manager:
+            return
+        lease = active_lease
+        if lease:
+            if lease_token and lease_token == lease.token:
+                return
+            owner = lease.owner or "unknown"
+            raise err_gpu_lease_active(owner)
 
     async def _probe(self, base_url: str) -> bool:
         try:
@@ -153,16 +172,19 @@ class ChatForwarder:
             if isinstance(content, list):
                 for part in content:
                     if isinstance(part, dict) and part.get("type") == "image_url":
-                        url = (part.get("image_url") or {}).get("url") or ""
+                        image_meta = part.get("image_url") or {}
+                        url = (image_meta.get("url") or "").strip()
                         if url:
                             has = True
-                if url.startswith("data:image"):
-                    # Rough size estimate: base64 length * 3/4
-                    b64 = url.split(",", 1)[-1]
-                    total += int(len(b64) * 0.75)
-                else:
-                    # Non-base64 URL present; count as minimal bytes to trigger image flow
-                    total = max(total, 1)
+                        if url.startswith("data:image"):
+                            # Rough size estimate: base64 length * 3/4
+                            try:
+                                b64 = url.split(",", 1)[-1]
+                                total += int(len(b64) * 0.75)
+                            except Exception:
+                                total += 1
+                        else:
+                            total = max(total, 1)
         return has, total
 
     def _rewrite_inline_image_data_urls(
@@ -213,9 +235,11 @@ class ChatForwarder:
 
     def _resolve_vision_target_edge(self, entry) -> int:
         meta = getattr(entry, "metadata", {}) or {}
-        candidate = meta.get("vision_target_long_edge") or (
-            meta.get("vision") or {}
-        ).get("target_long_edge")
+        candidate = meta.get("vision_target_long_edge")
+        if not candidate:
+            vision_meta = meta.get("vision")
+            if isinstance(vision_meta, dict):
+                candidate = vision_meta.get("target_long_edge")
         try:
             edge = int(candidate)
         except (TypeError, ValueError):
@@ -577,7 +601,9 @@ class ChatForwarder:
             result = f"{alias_clean}:{port}"
         return result
 
-    async def handle_chat(self, payload: dict) -> Dict[str, Any]:
+    async def handle_chat(
+        self, payload: dict, lease_token: Optional[str] = None
+    ) -> Dict[str, Any]:
         requested_model = payload.get("model")
         if not requested_model:
             raise err_model_not_found("<empty>")
@@ -688,8 +714,8 @@ class ChatForwarder:
             if len(truncated_messages) < original_count:
                 import logging
 
-                logger = logging.getLogger(__name__)
-                logger.info(
+                vision_logger = logging.getLogger(__name__)
+                vision_logger.info(
                     "[forwarder] Truncated vision history: %d → %d messages "
                     "(keep_system=%s, keep_last_n_turns=%d)",
                     original_count,
@@ -717,8 +743,8 @@ class ChatForwarder:
             if len(truncated_messages) < original_count:
                 import logging
 
-                logger = logging.getLogger(__name__)
-                logger.info(
+                reasoning_logger = logging.getLogger(__name__)
+                reasoning_logger.info(
                     "[forwarder] Truncated reasoning history: %d → %d messages "
                     "(keep_system=%s, keep_last_n_turns=%d)",
                     original_count,
@@ -743,21 +769,55 @@ class ChatForwarder:
         backend_id = served or entry.name
         # Backend-specific base URL and API path
         backend = getattr(entry, "backend", "")
+        active_lease = (
+            await self.lease_manager.current_lease() if self.lease_manager else None
+        )
+        await self._enforce_gpu_lease(backend, lease_token, active_lease)
         previous_backend = self._last_backend
 
         if backend == "ollama":
+            if (
+                not self.cfg.ollama_allow_cpu_fallback
+                and active_lease
+                and active_lease.token
+                and (not lease_token or lease_token != active_lease.token)
+            ):
+                raise err_gpu_lease_active(active_lease.owner or "unknown")
             if self.vllm_manager and previous_backend and previous_backend != "ollama":
-                try:
-                    await self.vllm_manager.deactivate()
-                except Exception:  # noqa: BLE001
-                    pass
+                should_deactivate = True
+                if active_lease and active_lease.token:
+                    if not lease_token or lease_token != active_lease.token:
+                        should_deactivate = False
+                        logger.info(
+                            "[forwarder] Skipping vLLM deactivate (lease held by %s)",
+                            active_lease.owner or "unknown",
+                        )
+                if should_deactivate:
+                    try:
+                        await self.vllm_manager.deactivate()
+                    except Exception:  # noqa: BLE001
+                        pass
             if self.ollama_manager:
                 await self.ollama_manager.ensure_available()
         else:
             if self.ollama_manager and (
                 previous_backend == "ollama" or previous_backend is None
             ):
-                await self.ollama_manager.unload_all()
+                try:
+                    unloaded = await self.ollama_manager.unload_all()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "[forwarder] Failed to unload Ollama model before activating %s: %s",
+                        backend,
+                        exc,
+                    )
+                    unloaded = 0
+                if unloaded:
+                    logger.info(
+                        "[forwarder] Unloaded %d Ollama model(s) before activating %s",
+                        unloaded,
+                        backend,
+                    )
 
         base_url, api_path = self._resolve_backend_base(entry)
         vllm_started = False
@@ -765,7 +825,7 @@ class ChatForwarder:
             try:
                 vllm_started = await self.autostart.ensure_started(model, entry)
             except VllmActivationError as exc:
-                raise err_model_start_timeout(model) from exc
+                raise err_model_start_timeout(model, hint=str(exc)) from exc
             except Exception:
                 vllm_started = False
 
@@ -828,7 +888,10 @@ class ChatForwarder:
                     if await self._probe(base_url):
                         started = True
                 if not started:
-                    raise err_model_start_timeout(model)
+                    raise err_model_start_timeout(
+                        model,
+                        hint="Backend did not pass health check within grace period",
+                    )
             else:
                 raise err_backend_unavailable(
                     model, hint="Enable autostart or start backend manually"

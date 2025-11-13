@@ -73,10 +73,19 @@ def _decide_winner(left: JudgeVisionEntry, right: JudgeVisionEntry) -> JudgeVisi
         return right
     left_score = left.rubric.as_dict()
     right_score = right.rubric.as_dict()
-    for key in ("impact", "composition", "technical", "category_fit"):
-        if left_score.get(key, 0.0) > right_score.get(key, 0.0):
+    metric_keys = ["impact", "composition", "technical"]
+    if any(
+        score.get("category_fit") is not None for score in (left_score, right_score)
+    ):
+        metric_keys.append("category_fit")
+    for key in metric_keys:
+        left_value = left_score.get(key)
+        right_value = right_score.get(key)
+        if left_value is None and right_value is None:
+            continue
+        if (left_value or 0.0) > (right_value or 0.0):
             return left
-        if right_score.get(key, 0.0) > left_score.get(key, 0.0):
+        if (right_value or 0.0) > (left_value or 0.0):
             return right
     return left if left.image < right.image else right
 
@@ -85,13 +94,23 @@ def _render_reason(winner: JudgeVisionEntry, loser: JudgeVisionEntry) -> str:
     winner_scores = winner.rubric.as_dict()
     loser_scores = loser.rubric.as_dict()
     advantages = []
-    for key, label in (
+    metric_labels = [
         ("impact", "impact"),
         ("composition", "composition"),
         ("technical", "technical"),
-        ("category_fit", "category fit"),
+    ]
+    if winner_scores.get("category_fit") is not None or loser_scores.get(
+        "category_fit"
     ):
-        if winner_scores.get(key, 0.0) > loser_scores.get(key, 0.0):
+        metric_labels.append(("category_fit", "category fit"))
+    for key, label in metric_labels:
+        w_value = winner_scores.get(key)
+        l_value = loser_scores.get(key)
+        if w_value is None or l_value is None:
+            if w_value is not None and l_value is None:
+                advantages.append(label)
+            continue
+        if w_value > l_value:
             advantages.append(label)
     if not advantages:
         return "Marginal edge on tie-break"

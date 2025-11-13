@@ -197,16 +197,9 @@ Guidelines:
 Return valid JSON only:
 {
   "title": "<string>",
-  "category": "Open|Nature|Creative|Themed|null",
-  "style": "Open|Nature|Creative|Documentary|Abstract|Record|Other|null",
+  "style": "Open|Nature|Portrait|Creative|Documentary|Abstract|Street|Landscape|Other|null",
   "critique": "<100–130 words>",
-  "score": <integer>,
-  "subscores": {
-    "impact": 0-5,
-    "composition": 0-5,
-    "technical": 0-5,
-    "category_fit": 0-5
-  }
+  "score": <integer>
 }
 ```
 

@@ -5,7 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import datetime
+
+try:  # Python 3.11+
+    from datetime import UTC  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover
+    from datetime import timezone
+
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 

@@ -5,6 +5,7 @@ Provides a user-friendly CLI with typer for downloading and managing models
 following imageworks conventions.
 """
 
+import os
 from pathlib import Path
 from typing import Optional, Any, List, Dict, Set
 import typer
@@ -49,6 +50,29 @@ app = typer.Typer(
 )
 console = Console()
 LOG_PATH = configure_logging("model_downloader")
+
+
+def _detect_ollama_store_root() -> Optional[Path]:
+    """Best-effort detection of the local Ollama store directory."""
+
+    candidates: List[Path] = []
+
+    env_override = os.environ.get("OLLAMA_MODELS")
+    if env_override:
+        candidates.append(Path(env_override).expanduser())
+
+    candidates.append(Path.home() / ".ollama" / "models")
+
+    try:
+        linux_root = get_config().linux_wsl.root
+        candidates.append(linux_root / "ollama-data" / "models")
+    except Exception:
+        pass
+
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return None
 
 
 def _prune_empty_repo_and_owner_dirs(repo_dir: Path) -> None:
@@ -1091,7 +1115,7 @@ def backfill_ollama_paths(
     Behaviour:
       - For each entry with backend==ollama AND download_path is null/empty:
           * Sets download_path to <store>/<served_model_id or name>
-            (store autodetected via $OLLAMA_MODELS or ~/.ollama/models)
+            (store autodetected via $OLLAMA_MODELS, ~/.ollama/models, or <linux_wsl_root>/ollama-data/models)
             If store not found, uses synthetic scheme ollama://<served_model_id|name>
           * Sets download_format to 'gguf' if missing and --set-format
           * Leaves quantization untouched
@@ -1105,8 +1129,7 @@ def backfill_ollama_paths(
             rprint("❌ [red]Registry file not found[/red]")
             raise typer.Exit(code=1)
         raw = json.loads(reg_path.read_text(encoding="utf-8"))
-        env_root = Path.home() / ".ollama" / "models"
-        store_root = env_root if env_root.exists() else None
+        store_root = _detect_ollama_store_root()
         changed = []
         for entry in raw:
             if entry.get("backend") != "ollama":

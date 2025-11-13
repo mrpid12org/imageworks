@@ -36,6 +36,10 @@ class ProxyConfig:
     vllm_health_timeout_s: int = 120
     vllm_gpu_memory_utilization: float = 0.75
     vllm_max_model_len: int | None = None
+    vllm_remote_executor_url: Optional[str] = None
+    vllm_executor_workdir: Optional[str] = None
+    vllm_health_host: str = "127.0.0.1"
+    vllm_restart_backoff_s: float = 2.0
     # History truncation for vision models
     vision_truncate_history: bool = True
     vision_keep_system: bool = True
@@ -46,6 +50,7 @@ class ProxyConfig:
     reasoning_keep_last_n_turns: int = 1  # Keep 1 turn of context
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_stop_timeout_s: int = 30
+    ollama_allow_cpu_fallback: bool = False
     config_file_path: Optional[str] = None
 
     @classmethod

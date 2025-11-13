@@ -16,10 +16,10 @@ compliance/technical/tournament helpers. The pipeline performs four coordinated 
    * Summaries surface as prompt context and appear in the GUI for human review.
 
 3. **Stage 2 – VLM Critique**
-   * The `club_judge_json` prompt profile now returns 100–130 word critiques plus rubric
-     subscores. We deterministically map the subscore total to the 14–20 competition band
-     (18–20 → 19–20, 15–17 → 17–18, 12–14 → 16–17, 9–11 → 14–15, ≤ 8 → 14) and store both the raw sum
-     and the mapped score in the JSONL for auditability.
+   * The `club_judge_json` prompt profile now returns 100–150 word critiques plus a direct
+     0–20 score from the model. We record the raw VLM score (before rounding/clamping) and
+     the rounded/clamped integer so the GUI can display both the judge narrative and the
+     numeric total without re-deriving it from subscores.
 
 4. **Stage 3 – Pairwise Playoff**
    * Optional post-processing for the ≥17 cohort. Colour and Mono entries each play ~5 head-to-head
@@ -51,6 +51,7 @@ The script places the assets under `$IMAGEWORKS_MODEL_ROOT/weights/judge-iqa/` (
 
 Stage 1 no longer tries to run the entire pipeline inside Docker. The host performs all orchestration,
 while the TensorFlow-heavy MUSIQ/NIMA scoring runs inside a tiny NVIDIA container that exposes an HTTP API.
+`docker-compose.chat-proxy.yml` now builds this helper as `imageworks-tf-iqa` (via `Dockerfile.tf-iqa`), so the service can stay warm alongside the chat proxy and vLLM executor.
 
 1. **Prerequisites**
    * Docker with NVIDIA Container Toolkit so `docker run --gpus all …` works.
@@ -58,6 +59,10 @@ while the TensorFlow-heavy MUSIQ/NIMA scoring runs inside a tiny NVIDIA containe
 2. **Start/stop helpers**
 
    ```bash
+   # Recommended: compose-managed service
+   docker compose -f docker-compose.chat-proxy.yml up -d tf-iqa-service
+
+   # Legacy helpers (still available for ad-hoc hosts)
    scripts/start_tf_iqa_service.sh   # pulls image if needed and starts judge-tf-iqa
    scripts/stop_tf_iqa_service.sh    # removes the container
    ```
@@ -86,6 +91,7 @@ while the TensorFlow-heavy MUSIQ/NIMA scoring runs inside a tiny NVIDIA containe
 5. **CPU fallback**
    * Passing `--iqa-device cpu` (or losing the GPU lease) skips the service entirely and runs TensorFlow with the
      local wheel. This is handy on laptops or WSL installations without Docker but is slower than the GPU path.
+   * When Compose is running you can keep `tf-iqa-service` up; the host simply bypasses it if CPU mode is selected.
 
 Documenting both options here so we can revisit once all workstations have reliable GPU-enabled Docker access.
 
@@ -110,15 +116,21 @@ and streams status updates into `outputs/metrics/judge_vision_progress.json`. On
 verifies the cache exists and immediately starts Stage 2 (critique-only) using the same cache path.
 Set `--iqa-device gpu` to keep TensorFlow on the GPU; switch to `cpu` if VRAM is limited.
 When GPU mode is enabled, the CLI now asks the chat proxy for a temporary **GPU lease**: the proxy pauses
-any running vLLM model, frees the accelerator for TensorFlow, and then automatically reloads the previous
-model as soon as Stage 1 finishes (the lease release now also triggers the TF service shutdown). This works
-for both the CLI and GUI so you never need to manually stop/start Qwen just to run deterministic IQA.
+any running vLLM model, issues a keep-alive unload to Ollama (since `/api/stop` never existed), and only then hands the lease to TensorFlow.
+As soon as Stage 1 finishes, the lease release triggers `/shutdown` on `tf-iqa-service` and tells the vLLM admin service to reload the previous model.
+This works for both the CLI and GUI so you never need to manually stop/start Qwen just to run deterministic IQA.
+
+#### Watching the hand-off
+- `logs/judge_vision.log` – look for `GPU lease granted` / `GPU lease released`.
+- `docker logs imageworks-chat-proxy` – confirms `[ollama-manager] Requesting unload…` and `[vllm-manager] Starting model …` lines.
+- `docker logs imageworks-vllm` – shows `/admin/activate` handling plus per-model stdout/stderr.
+- `nvidia-smi` – VRAM usage should drop when Stage 1 acquires the lease and spike again when Stage 2 starts.
 
 > Prefer the GUI? Pick **Execution stage → Two-pass (auto IQA → Critique)** and the Streamlit runner will launch
 > a single command that performs both passes sequentially. The progress indicator resets automatically between
 > stages so you can monitor the full run without manually reloading anything.
 
-You can still run the stages manually when needed:
+You can still run the stages manually when needed, or interrogate the new admin endpoints:
 
 1. **IQA stage** (CPU or GPU):
 
@@ -173,7 +185,7 @@ You can still run the stages manually when needed:
    JSONL/summary artifacts automatically once the run finishes.
 
 3. Exported JSON records now include:
-   * `critique_subscores` (impact, composition, technical, category_fit)
+  * `critique_subscores` (impact, composition, technical)
    * `critique_total`, `critique_award`, and `critique_compliance_flag`
    * `technical_signals.metrics` and compliance `issues`/`warnings`
 * Optional Pass 3 `pairwise` rounds/final rankings/stability metrics
@@ -191,7 +203,7 @@ pairwise_rounds = 4
 
 ## GUI Enhancements
 
-* Subscores (0–5) and total scores (0–20) are editable via number inputs.
+* Final scores (0–20) are editable via number inputs.
 * Award suggestions and compliance flags can be edited or cleared.
 * Compliance summaries and technical priors render as captions for quick scanning.
 * Compact summaries include total score, award, and compliance status per image.

@@ -9,7 +9,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from datetime import UTC, datetime
+from datetime import datetime
+
+try:  # Python 3.11+
+    from datetime import UTC  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover
+    from datetime import timezone
+
+    UTC = timezone.utc
 
 _PROGRESS_REDIRECT_NAME = ".progress.json"
 

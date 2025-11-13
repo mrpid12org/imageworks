@@ -16,9 +16,8 @@ This guide captures the practical steps and lessons from hosting vision-language
 - Ubuntu 22.04+ or WSL2 with CUDA pass-through
 - NVIDIA driver supporting **CUDA 12.8** or later
 - Python tooling managed via `uv`
-- `vllm` `>=0.4` installed in the project environment (`uv sync` handles this)
-  *(or rebuild the CUDA-enabled `Dockerfile.chat-proxy` image which now bundles
-  `vllm[vision]` alongside the chat proxy).*
+- `vllm` `>=0.4` installed in the project environment (`uv sync` handles this) **or**
+  build the dedicated executor image via `Dockerfile.vllm` (used by `docker-compose.chat-proxy.yml`).
 - Leave a buffer of GPU memory when running inside Docker. The chat proxy’s
   orchestrator defaults to `CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION=0.75`; lower
   it further if you are tight on VRAM (e.g., 16 GB cards running AWQ models),
@@ -61,6 +60,10 @@ uv run python -m vllm.entrypoints.openai.pull \
 ```
 
 ### 3. Launch the Server (Examples)
+
+> ⚠️ Since Stage 1 shipped, the recommended approach is to run `docker compose -f docker-compose.chat-proxy.yml up -d vllm-executor`
+> and let the chat proxy talk to `http://imageworks-vllm:8600/admin/activate`. The direct `vllm serve` commands below remain useful
+> for debugging or bespoke deployments but are no longer wired directly into the proxy container.
 
 #### a. Qwen2.5-VL-7B-Instruct-AWQ (16 GB card)
 ```bash
@@ -120,6 +123,7 @@ PY
 - **Health Checks** – Reuse `VLMClient.health_check()` (see `core/vlm.py`) or add an HTTP probe hitting `/v1/models`.
 - **Scaling Requests** – Tune `--max-num-seqs` and `max_concurrent_requests` (client-side) to balance throughput and latency.
 - **Upgrades** – Validate new vLLM releases in a separate environment; compatibility across minor versions is good but not guaranteed.
+- **Admin service** – The `imageworks-vllm` container exposes `/admin/activate`, `/admin/deactivate`, and `/admin/state`. The chat proxy calls these endpoints before forwarding any Stage 2 traffic, so keep this container healthy even if you host the inference workers elsewhere.
 
 ### Networking from Docker / WSL
 

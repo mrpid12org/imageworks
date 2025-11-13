@@ -50,6 +50,7 @@ class JudgeVisionConfig:
     iqa_cache_path: Path
     stage: str
     iqa_device: str
+    gpu_lease_token: Optional[str] = None
 
     def resolved_input_paths(self) -> List[Path]:
         return [path.expanduser().resolve() for path in self.input_paths]
@@ -66,6 +67,7 @@ class JudgeVisionConfig:
         data["iqa_cache_path"] = str(self.iqa_cache_path)
         data["pairwise_threshold"] = self.pairwise_threshold
         data["pairwise_enabled"] = self.pairwise_enabled
+        data["gpu_lease_token"] = self.gpu_lease_token
         return data
 
     @classmethod
@@ -109,6 +111,7 @@ class JudgeVisionConfig:
             iqa_cache_path=Path(data["iqa_cache_path"]),
             stage=data.get("stage", "full"),
             iqa_device=data.get("iqa_device", "cpu"),
+            gpu_lease_token=data.get("gpu_lease_token"),
         )
 
 

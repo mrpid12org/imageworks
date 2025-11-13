@@ -182,36 +182,30 @@ def score_nima(
     if flavor not in _NIMA_FILENAMES:
         raise ValueError(f"Unknown NIMA flavor '{flavor}'")
 
-    # If GPU mode requested and containerized TF is enabled, use container
-    # But NOT if we're already inside a container (prevent recursion)
     inside_container = os.environ.get("JUDGE_VISION_INSIDE_CONTAINER") == "1"
-    if (
-        use_gpu
-        and not inside_container
-        and os.environ.get("JUDGE_VISION_USE_TF_CONTAINER", "1") == "1"
-    ):
+    if inside_container:
         try:
-            results = _get_container_results(image_path, use_gpu=True)
+            return _NimaClient.score(flavor, image_path, use_gpu)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Container inference failed, falling back to local: %s", exc)
-        else:
-            if not results:
-                return None
-            if "error" in results:
-                logger.warning("Container inference error: %s", results["error"])
-                return None
-            payload = results.get(f"nima_{flavor}")
-            if payload:
-                return payload
-            logger.warning("NIMA %s not in container results: %s", flavor, results)
+            logger.warning("NIMA %s inference failed inside container: %s", flavor, exc)
             return None
 
-    # Fall back to local TensorFlow
     try:
-        return _NimaClient.score(flavor, image_path, use_gpu)
+        results = _get_container_results(image_path, use_gpu=use_gpu)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("NIMA %s inference failed: %s", flavor, exc)
+        logger.error("Container inference failed for NIMA %s: %s", flavor, exc)
         return None
+    if not results:
+        logger.error("Empty response from TensorFlow IQA container for %s", flavor)
+        return None
+    if "error" in results:
+        logger.error("Container inference error for %s: %s", flavor, results["error"])
+        return None
+    payload = results.get(f"nima_{flavor}")
+    if payload:
+        return payload
+    logger.error("NIMA %s not present in container response: %s", flavor, results)
+    return None
 
 
 def score_musiq(
@@ -220,36 +214,36 @@ def score_musiq(
     if variant not in _MUSIQ_URLS:
         raise ValueError(f"Unknown MUSIQ variant '{variant}'")
 
-    # If GPU mode requested and containerized TF is enabled, use container
-    # But NOT if we're already inside a container (prevent recursion)
     inside_container = os.environ.get("JUDGE_VISION_INSIDE_CONTAINER") == "1"
-    if (
-        use_gpu
-        and not inside_container
-        and os.environ.get("JUDGE_VISION_USE_TF_CONTAINER", "1") == "1"
-    ):
+    if inside_container:
         try:
-            results = _get_container_results(image_path, use_gpu=True)
+            return _MusiqClient.score(variant, image_path, use_gpu)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Container inference failed, falling back to local: %s", exc)
-        else:
-            if not results:
-                return None
-            if "error" in results:
-                logger.warning("Container inference error: %s", results["error"])
-                return None
-            payload = results.get(f"musiq_{variant}")
-            if payload is not None:
-                return payload
-            logger.warning("MUSIQ %s not in container results: %s", variant, results)
+            logger.warning(
+                "MUSIQ (%s) inference failed inside container: %s", variant, exc
+            )
             return None
 
-    # Fall back to local TensorFlow
     try:
-        return _MusiqClient.score(variant, image_path, use_gpu)
+        results = _get_container_results(image_path, use_gpu=use_gpu)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("MUSIQ (%s) inference failed: %s", variant, exc)
+        logger.error("Container inference failed for MUSIQ %s: %s", variant, exc)
         return None
+    if not results:
+        logger.error(
+            "Empty response from TensorFlow IQA container for MUSIQ %s", variant
+        )
+        return None
+    if "error" in results:
+        logger.error(
+            "Container inference error for MUSIQ %s: %s", variant, results["error"]
+        )
+        return None
+    payload = results.get(f"musiq_{variant}")
+    if payload is not None:
+        return payload
+    logger.error("MUSIQ %s not present in container response: %s", variant, results)
+    return None
 
 
 __all__ = ["score_nima", "score_musiq"]

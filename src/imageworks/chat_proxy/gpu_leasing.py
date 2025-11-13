@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import logging
 import os
 import time
 import uuid
@@ -11,6 +13,7 @@ from typing import Callable, Optional
 
 from imageworks.model_loader.registry import get_entry
 
+from .ollama_manager import OllamaManager
 from .vllm_manager import ActiveVllmState, VllmManager
 
 
@@ -48,6 +51,7 @@ class GpuLeaseManager:
         vllm_manager: VllmManager,
         entry_resolver: Callable[[str], object] = get_entry,
         stale_max_age: float | None = None,
+        ollama_manager: OllamaManager | None = None,
     ):
         self._vllm_manager = vllm_manager
         self._entry_resolver = entry_resolver
@@ -57,6 +61,8 @@ class GpuLeaseManager:
         self._stale_max_age = (
             stale_max_age if stale_max_age is not None else default_max_age
         )
+        self._ollama_manager = ollama_manager
+        self._logger = logging.getLogger("imageworks.gpu_lease")
 
     async def acquire(
         self,
@@ -71,6 +77,10 @@ class GpuLeaseManager:
             if self._current is not None:
                 raise LeaseBusyError("GPU already leased")
 
+            if not await self._drain_aux_backends():
+                raise LeaseBusyError(
+                    "GPU lease blocked: Ollama model still unloading from GPU"
+                )
             saved_model = await self._vllm_manager.current_state()
             if saved_model is not None:
                 await self._vllm_manager.deactivate()
@@ -103,6 +113,12 @@ class GpuLeaseManager:
                 "lease": self._current.to_dict(),
             }
 
+    async def current_lease(self) -> Optional[LeaseState]:
+        async with self._lock:
+            if self._current is None:
+                return None
+            return copy.deepcopy(self._current)
+
     async def force_release(
         self,
         *,
@@ -126,6 +142,24 @@ class GpuLeaseManager:
             self._current = None
 
         await self._restore_saved_model(lease, restart_model)
+        return True
+
+    async def _drain_aux_backends(self) -> bool:
+        if not self._ollama_manager:
+            return True
+        try:
+            unloaded = await self._ollama_manager.unload_all()
+        except Exception as exc:  # noqa: BLE001
+            self._logger.error(
+                "[lease] Failed to unload Ollama models before lease grant: %s",
+                exc,
+            )
+            return False
+        if unloaded:
+            self._logger.info(
+                "[lease] Unloaded %d Ollama model(s) before granting GPU lease",
+                unloaded,
+            )
         return True
 
     async def _prune_stale(self, *, owner: str | None = None) -> None:

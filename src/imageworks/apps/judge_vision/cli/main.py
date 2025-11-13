@@ -17,12 +17,6 @@ import typer
 from imageworks.logging_utils import configure_logging
 
 from imageworks.apps.judge_vision.config import JudgeVisionConfig, build_runtime_config
-from imageworks.apps.judge_vision.models import JudgeVisionRecord
-from imageworks.apps.judge_vision.pairwise_playoff import (
-    PairwisePlayoffRunner,
-    recommended_pairwise_rounds,
-)
-from imageworks.apps.judge_vision.progress import ProgressTracker
 from imageworks.apps.judge_vision.runner import (
     JudgeVisionRunner,
     load_records_from_jsonl,
@@ -241,6 +235,7 @@ def _maybe_acquire_gpu_lease(
             handle = GpuLeaseHandle(token=token, client=client)
             _set_active_lease(handle)
             logger.info("GPU lease granted (token=%s…)", token[:8])
+            config.gpu_lease_token = token
             return config, handle
         except GpuLeaseUnavailable as exc:
             last_error = exc
@@ -265,12 +260,14 @@ def _maybe_acquire_gpu_lease(
     return replace(config, iqa_device="cpu"), None
 
 
-def _release_gpu_lease(handle: GpuLeaseHandle | None) -> None:
+def _release_gpu_lease(
+    handle: GpuLeaseHandle | None, *, restart_model: bool = True
+) -> None:
     if not handle:
         return
     try:
         try:
-            handle.client.release(handle.token, restart_model=False)
+            handle.client.release(handle.token, restart_model=restart_model)
         except TypeError:
             handle.client.release(handle.token)
         logger.info("GPU lease released (no automatic model restart)")
@@ -278,6 +275,54 @@ def _release_gpu_lease(handle: GpuLeaseHandle | None) -> None:
         handle.client.close()
         if _ACTIVE_LEASE is handle:
             _set_active_lease(None)
+
+
+def _acquire_gpu_lease_strict(
+    config: JudgeVisionConfig,
+    *,
+    reason: str,
+) -> Optional[GpuLeaseHandle]:
+    """Acquire a GPU lease for vLLM stages, exiting if unavailable."""
+
+    if (config.backend or "").lower() != "vllm":
+        return None
+    proxy_root = _proxy_root_from_base(config.base_url)
+    if not proxy_root:
+        typer.echo("❌ GPU lease requires chat proxy base URL")
+        raise typer.Exit(code=1)
+
+    last_error: Optional[GpuLeaseUnavailable] = None
+    for attempt in range(1, max(1, GPU_LEASE_RETRIES) + 1):
+        client = GpuLeaseClient(config.base_url or proxy_root)
+        try:
+            token = client.acquire(owner="judge-vision", reason=reason)
+            handle = GpuLeaseHandle(token=token, client=client)
+            _set_active_lease(handle)
+            logger.info("GPU lease granted for %s (token=%s…)", reason, token[:8])
+            config.gpu_lease_token = token
+            return handle
+        except GpuLeaseUnavailable as exc:
+            last_error = exc
+            client.close()
+            busy = "busy" in str(exc).lower() or "leased" in str(exc).lower()
+            if busy and attempt < GPU_LEASE_RETRIES:
+                logger.warning(
+                    "GPU lease busy for %s (attempt %d/%d); retrying in %.1fs",
+                    reason,
+                    attempt,
+                    GPU_LEASE_RETRIES,
+                    GPU_LEASE_RETRY_DELAY,
+                )
+                _log_gpu_status(proxy_root)
+                if _maybe_force_release_stale_self_lease(proxy_root):
+                    continue
+                time.sleep(max(0.1, GPU_LEASE_RETRY_DELAY))
+                continue
+            break
+    msg = str(last_error) if last_error else "unknown error"
+    typer.echo(f"❌ GPU lease unavailable for {reason}: {msg}")
+    _set_active_lease(None)
+    raise typer.Exit(code=1)
 
 
 def _run_chained_two_pass(config: JudgeVisionConfig) -> None:
@@ -295,63 +340,39 @@ def _run_chained_two_pass(config: JudgeVisionConfig) -> None:
 
     logger.info("Two-pass mode: Stage 2 → Critique (reusing cache)")
     stage2_config = replace(config, stage="critique")
-    JudgeVisionRunner(stage2_config).run()
+    lease_handle = _acquire_gpu_lease_strict(
+        stage2_config, reason="Judge Vision Stage 2 (two-pass)"
+    )
+    try:
+        JudgeVisionRunner(stage2_config).run()
+    finally:
+        _release_gpu_lease(lease_handle)
+        stage2_config.gpu_lease_token = None
 
 
 def _run_pairwise_stage(config: JudgeVisionConfig) -> None:
     if not config.pairwise_enabled:
         raise ValueError("Pairwise stage requested but pairwise is disabled")
     records = load_records_from_jsonl(config.output_jsonl)
-    candidate_count = sum(
-        1 for rec in records if (rec.critique_total or 0) >= config.pairwise_threshold
-    )
-    comparisons = config.pairwise_rounds or recommended_pairwise_rounds(candidate_count)
-    if comparisons <= 0:
-        logger.info("Pairwise skipped: zero comparisons requested")
-        return
-    phase_label = "Stage 3 – Pairwise"
-    progress = ProgressTracker(config.progress_path)
-    progress.reset(total=1, phase=phase_label)
     runner = JudgeVisionRunner(config)
-    playoff_runner = PairwisePlayoffRunner(
-        base_url=config.base_url,
-        model_name=runner._resolved_model_name(),
-        api_key=config.api_key,
-        timeout=config.timeout,
-        comparisons_per_image=comparisons,
-        threshold=config.pairwise_threshold,
-    )
+    if not records:
+        runner.progress.reset(total=1, phase="Stage 3 – Pairwise")
+        runner.progress.update(processed=1, current_image="No images available")
+        runner.progress.complete()
+        return
 
-    def _on_schedule(total_matches: int) -> None:
-        if total_matches <= 0:
-            return
-        progress.reset(total=total_matches, phase=phase_label)
-
-    def _on_progress(
-        processed: int,
-        total_matches: int,
-        category: str,
-        left: JudgeVisionRecord,
-        right: JudgeVisionRecord,
-    ) -> None:
-        current = f"{left.image.name} vs {right.image.name} ({category})"
-        progress.update(processed=processed, current_image=current)
-
-    try:
-        matches = playoff_runner.apply(
-            records,
-            on_schedule=_on_schedule,
-            on_progress=_on_progress,
+    plans = runner._build_pairwise_plans(records)
+    if not plans:
+        runner.progress.reset(total=1, phase="Stage 3 – Pairwise")
+        runner.progress.update(
+            processed=1,
+            current_image=f"No eligible ≥{config.pairwise_threshold} images",
         )
-        if matches == 0:
-            progress.update(
-                processed=1,
-                current_image=f"No eligible ≥{config.pairwise_threshold} images",
-            )
-        progress.complete()
-    finally:
-        playoff_runner.close()
-
+        runner.progress.complete()
+    else:
+        model_name = config.model or config.critique_role or "judge"
+        for plan in plans:
+            runner._run_pairwise_plan(plan, model_name=model_name)
     runner._rewrite_jsonl(records)
     runner._write_summary(records)
 
@@ -367,6 +388,7 @@ def _execute_stage1(config: JudgeVisionConfig, *, reason: str) -> None:
         if AUTO_SHUTDOWN_TF:
             _maybe_shutdown_tf_service()
         _release_gpu_lease(lease_handle)
+        adjusted.gpu_lease_token = None
 
 
 def _run_stage1_backend(config: JudgeVisionConfig) -> None:
@@ -506,10 +528,36 @@ def run(  # noqa: PLR0913
     elif intended_stage == "iqa":
         _execute_stage1(config, reason="Judge Vision Stage 1 (IQA)")
     elif intended_stage == "pairwise":
-        _run_pairwise_stage(config)
+        lease_handle = _acquire_gpu_lease_strict(
+            config, reason="Judge Vision Stage 3 (Pairwise)"
+        )
+        try:
+            _run_pairwise_stage(config)
+        finally:
+            _release_gpu_lease(lease_handle)
+            config.gpu_lease_token = None
+    elif intended_stage == "critique":
+        lease_handle = _acquire_gpu_lease_strict(
+            config, reason="Judge Vision Stage 2 (Critique)"
+        )
+        try:
+            runner = JudgeVisionRunner(config)
+            runner.run()
+        finally:
+            _release_gpu_lease(lease_handle)
+            config.gpu_lease_token = None
     else:
+        lease_handle = None
+        if intended_stage == "full":
+            lease_handle = _acquire_gpu_lease_strict(
+                config, reason="Judge Vision (Full)"
+            )
         runner = JudgeVisionRunner(config)
-        runner.run()
+        try:
+            runner.run()
+        finally:
+            _release_gpu_lease(lease_handle)
+            config.gpu_lease_token = None
 
 
 if __name__ == "__main__":

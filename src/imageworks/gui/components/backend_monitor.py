@@ -1,17 +1,185 @@
 """Backend monitoring component."""
 
-import streamlit as st
-import requests
-from typing import Dict, Any, Optional, List
-from datetime import datetime
-import psutil
+from __future__ import annotations
+
 import subprocess
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import psutil
+import requests
+import streamlit as st
+
 from imageworks.gui.config import DEFAULT_BACKENDS
+
+
+_BACKEND_METADATA: Dict[str, Dict[str, str]] = {
+    "chat_proxy": {
+        "label": "Chat Proxy",
+        "role": "Orchestrator",
+        "icon": "🧠",
+        "type": "chat_proxy",
+        "order": "0",
+    },
+    "vllm_executor": {
+        "label": "vLLM Container",
+        "role": "LLM Backend",
+        "icon": "⚙️",
+        "type": "vllm_executor",
+        "order": "1",
+    },
+    "tf_iqa": {
+        "label": "TF IQA Service",
+        "role": "Vision Backend",
+        "icon": "🧪",
+        "type": "tf_iqa",
+        "order": "2",
+    },
+    "ollama": {
+        "label": "Ollama",
+        "role": "LLM Backend",
+        "icon": "🤖",
+        "type": "ollama",
+        "order": "3",
+    },
+}
+
+
+def _normalized_name(name: str) -> str:
+    return name.strip().lower().replace(" ", "_")
+
+
+def _pretty_label(name: str, metadata: Optional[Dict[str, str]]) -> str:
+    if metadata and metadata.get("label"):
+        return metadata["label"]
+    cleaned = name.replace("_", " ").title()
+    return cleaned
+
+
+def _build_status_record(status: str, responsive: bool, **extra: Any) -> Dict[str, Any]:
+    payload = {
+        "status": status,
+        "responsive": responsive,
+        "checked_at": datetime.now().isoformat(),
+    }
+    payload.update(extra)
+    return payload
+
+
+def _check_simple_health(
+    url: str, timeout: int, path: str = "health"
+) -> Dict[str, Any]:
+    base = url.rstrip("/")
+    target = f"{base}/{path.lstrip('/')}" if path else base
+    try:
+        response = requests.get(target, timeout=timeout)
+        if response.status_code == 200:
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+            return _build_status_record(
+                "healthy",
+                True,
+                details=data,
+            )
+        return _build_status_record(
+            "unhealthy",
+            True,
+            error=f"HTTP {response.status_code}",
+        )
+    except requests.Timeout:
+        return _build_status_record("timeout", False, error="Request timed out")
+    except requests.ConnectionError:
+        return _build_status_record("offline", False, error="Connection refused")
+    except Exception as exc:  # noqa: BLE001
+        return _build_status_record("error", False, error=str(exc))
+
+
+def _check_chat_proxy_health(url: str, timeout: int) -> Dict[str, Any]:
+    base = url.rstrip("/")
+    if base.endswith("/health"):
+        health_path = ""
+    elif base.endswith("/v1"):
+        health_path = "health"
+    else:
+        base = f"{base}/v1"
+        health_path = "health"
+    result = _check_simple_health(base, timeout, health_path)
+    if result["status"] == "healthy":
+        # Add uptime in friendly format if available
+        details = result.get("details") or {}
+        uptime = details.get("uptime_seconds")
+        if isinstance(uptime, (int, float)):
+            hours = uptime / 3600.0
+            result["uptime_hours"] = hours
+    return result
+
+
+def _check_ollama_health(url: str, timeout: int) -> Dict[str, Any]:
+    base = url.rstrip("/")
+    tags_url = f"{base}/api/tags"
+    try:
+        response = requests.get(tags_url, timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            models = []
+            if isinstance(data, dict):
+                if isinstance(data.get("models"), list):
+                    models = [m.get("name", "unknown") for m in data["models"]]
+            return _build_status_record(
+                "healthy",
+                True,
+                models=models,
+            )
+        return _build_status_record(
+            "unhealthy",
+            True,
+            error=f"HTTP {response.status_code}",
+        )
+    except requests.Timeout:
+        return _build_status_record("timeout", False, error="Request timed out")
+    except requests.ConnectionError:
+        return _build_status_record("offline", False, error="Connection refused")
+    except Exception as exc:  # noqa: BLE001
+        return _build_status_record("error", False, error=str(exc))
+
+
+def _check_openai_backend(url: str, timeout: int) -> Dict[str, Any]:
+    base = url.rstrip("/")
+    models_url = f"{base}/models"
+    try:
+        response = requests.get(models_url, timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            models: List[str] = []
+            if isinstance(data, dict) and isinstance(data.get("data"), list):
+                models = [m.get("id", "unknown") for m in data["data"]]
+            return _build_status_record(
+                "healthy",
+                True,
+                models=models,
+            )
+        return _build_status_record(
+            "unhealthy",
+            True,
+            error=f"HTTP {response.status_code}",
+        )
+    except requests.Timeout:
+        return _build_status_record("timeout", False, error="Request timed out")
+    except requests.ConnectionError:
+        return _build_status_record("offline", False, error="Connection refused")
+    except Exception as exc:  # noqa: BLE001
+        return _build_status_record("error", False, error=str(exc))
 
 
 @st.cache_data(ttl=10, show_spinner=False)
 def check_backend_health(
-    url: str, backend_name: str = "", timeout: int = 2
+    url: str,
+    backend_name: str = "",
+    timeout: int = 2,
+    backend_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Check backend health (CACHED for 10 seconds).
@@ -20,78 +188,32 @@ def check_backend_health(
         url: Backend URL
         backend_name: Backend name for special handling
         timeout: Request timeout
+        backend_type: Optional explicit backend type hint
 
     Returns:
         Dict with health status
     """
-    try:
-        # Ollama uses different API endpoint
-        if "11434" in url or backend_name.lower() == "ollama":
-            models_url = f"{url}/api/tags"
-        else:
-            # OpenAI-compatible APIs (chat_proxy, vllm, lmdeploy)
-            models_url = f"{url}/models" if not url.endswith("/v1") else f"{url}/models"
 
-        response = requests.get(models_url, timeout=timeout)
+    backend_key = _normalized_name(backend_type or backend_name)
 
-        if response.status_code == 200:
-            data = response.json()
-            models = []
+    if backend_key == "chat_proxy":
+        return _check_chat_proxy_health(url, timeout)
+    if backend_key == "vllm_executor":
+        return _check_simple_health(url, timeout, "health")
+    if backend_key == "ollama":
+        return _check_ollama_health(url, timeout)
+    if backend_key == "tf_iqa":
+        return _check_simple_health(url, timeout, "health")
 
-            # Handle different response formats
-            if "data" in data:
-                # OpenAI-compatible format
-                models = [m.get("id", "unknown") for m in data["data"]]
-            elif "models" in data and isinstance(data["models"], list):
-                # Ollama format
-                models = [m.get("name", "unknown") for m in data["models"]]
-            elif "models" in data:
-                # Generic list format
-                models = data["models"]
-
-            return {
-                "status": "healthy",
-                "responsive": True,
-                "models": models,
-                "checked_at": datetime.now().isoformat(),
-            }
-        else:
-            return {
-                "status": "unhealthy",
-                "responsive": True,
-                "error": f"HTTP {response.status_code}",
-                "checked_at": datetime.now().isoformat(),
-            }
-
-    except requests.Timeout:
-        return {
-            "status": "timeout",
-            "responsive": False,
-            "error": "Request timed out",
-            "checked_at": datetime.now().isoformat(),
-        }
-
-    except requests.ConnectionError:
-        return {
-            "status": "offline",
-            "responsive": False,
-            "error": "Connection refused",
-            "checked_at": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "responsive": False,
-            "error": str(e),
-            "checked_at": datetime.now().isoformat(),
-        }
+    # Default to OpenAI-compatible probing
+    return _check_openai_backend(url, timeout)
 
 
 def render_backend_card(
     name: str,
     url: str,
     key_prefix: str,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Render single backend status card.
@@ -105,16 +227,26 @@ def render_backend_card(
         Health status dict
     """
 
+    display_name = _pretty_label(name, metadata)
+    role = (metadata or {}).get("role")
+    icon = (metadata or {}).get("icon", "")
+    backend_type = (metadata or {}).get("type") or name
+
     with st.container():
         col1, col2, col3 = st.columns([2, 1, 1])
 
         with col1:
-            st.markdown(f"**{name}**")
+            title = f"{icon} {display_name}".strip()
+            st.markdown(f"**{title}**")
+            if role:
+                st.caption(role)
             st.caption(url)
 
         with col2:
             # Check health with backend name for special handling
-            health = check_backend_health(url, backend_name=name)
+            health = check_backend_health(
+                url, backend_name=name, backend_type=backend_type
+            )
 
             status = health["status"]
             if status == "healthy":
@@ -142,6 +274,18 @@ def render_backend_card(
         # Show error if any
         if health.get("error"):
             st.caption(f"⚠️ {health['error']}")
+        elif health.get("details"):
+            details = health["details"]
+            if isinstance(details, dict):
+                detail_bits = []
+                uptime_hours = health.get("uptime_hours")
+                if isinstance(uptime_hours, (int, float)):
+                    detail_bits.append(f"Uptime: {uptime_hours:,.2f} h")
+                status_detail = details.get("status")
+                if status_detail and status_detail != "ok":
+                    detail_bits.append(f"Status: {status_detail}")
+                if detail_bits:
+                    st.caption(" • ".join(detail_bits))
 
         st.markdown("---")
 
@@ -179,11 +323,19 @@ def render_backend_monitor(
         time.sleep(10)
         st.rerun()
 
-    # Check all backends
+    # Check all backends (sorted by declared priority to keep orchestrators on top)
     health_status = {}
 
-    for name, url in backends.items():
-        health = render_backend_card(name, url, key_prefix)
+    sorted_backends = sorted(
+        backends.items(),
+        key=lambda item: _BACKEND_METADATA.get(_normalized_name(item[0]), {}).get(
+            "order", "9"
+        ),
+    )
+
+    for name, url in sorted_backends:
+        meta = _BACKEND_METADATA.get(_normalized_name(name))
+        health = render_backend_card(name, url, key_prefix, metadata=meta)
         health_status[name] = health
 
     # Summary
@@ -442,3 +594,62 @@ def render_gpu_monitor() -> None:
                     st.caption(f"**{proc['memory_mb']:,} MB**")
     else:
         st.info("ℹ️ No GPU processes detected")
+
+    render_gpu_lease_panel()
+
+
+@st.cache_data(ttl=5, show_spinner=False)
+def get_gpu_lease_status() -> Dict[str, Any]:
+    """Fetch GPU lease status from the chat proxy."""
+
+    base = DEFAULT_BACKENDS.get("chat_proxy", "http://127.0.0.1:8100").rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    status_url = f"{base}/gpu/status"
+    try:
+        response = requests.get(status_url, timeout=3)
+        if response.status_code == 200:
+            return response.json()
+        return {"error": f"HTTP {response.status_code}"}
+    except requests.Timeout:
+        return {"error": "timeout"}
+    except requests.ConnectionError:
+        return {"error": "connection-refused"}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+def render_gpu_lease_panel() -> None:
+    """Show current GPU lease owner and copyable token."""
+
+    st.subheader("🔒 GPU Lease Status")
+    data = get_gpu_lease_status()
+
+    if not data or data.get("error"):
+        st.warning(f"⚠️ Unable to retrieve lease status: {data.get('error', 'unknown')}")
+        return
+
+    if not data.get("leased"):
+        st.success("GPU is free – no active lease.")
+        st.caption("Run Judge Vision or other GPU-exclusive jobs to acquire a lease.")
+        return
+
+    lease = data.get("lease") or {}
+    owner = lease.get("owner") or "unknown"
+    reason = lease.get("reason") or "unspecified"
+    token = lease.get("token") or "N/A"
+    granted_at = lease.get("granted_at")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Owner", owner)
+    with col2:
+        st.metric("Reason", reason)
+
+    if granted_at:
+        age_seconds = max(0.0, time.time() - float(granted_at))
+        minutes, seconds = divmod(int(age_seconds), 60)
+        st.caption(f"Lease age: {minutes}m {seconds}s")
+
+    st.info("Use this header when calling the chat proxy while the lease is active:")
+    st.code(f"X-GPU-Lease-Token: {token}", language="http")

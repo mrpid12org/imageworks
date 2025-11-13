@@ -6,7 +6,11 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-import tomllib
+
+try:  # Python 3.11+
+    import tomllib  # type: ignore[attr-defined]
+except ModuleNotFoundError:  # pragma: no cover - Py3.10 compatibility
+    import tomli as tomllib  # type: ignore[import]
 
 _CONFIG_ENV_PREFIX = "IMAGEWORKS_PERSONAL_TAGGER__"
 

@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -17,6 +16,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from .config import ProxyConfig
+from .vllm_process import LocalProcessController
 from imageworks.model_loader.runtime_metadata import log_runtime_metrics
 
 logger = logging.getLogger("imageworks.vllm_manager")
@@ -109,9 +109,42 @@ class VllmManager:
         self._lock_path = self._state_path.with_suffix(".lock")
         self._process_lock = asyncio.Lock()
         self._http = httpx.AsyncClient(timeout=max(cfg.vllm_health_timeout_s, 10))
+        workspace_default = Path(__file__).resolve().parents[3]
+        self._workspace_root = str(
+            Path(cfg.vllm_executor_workdir).expanduser()
+            if cfg.vllm_executor_workdir
+            else workspace_default
+        )
+        remote_url = (cfg.vllm_remote_executor_url or "").strip()
+        self._remote_executor_enabled = bool(remote_url)
+        self._admin_base: Optional[str] = None
+        self._admin_client: Optional[httpx.AsyncClient] = None
+        if remote_url:
+            self._admin_base = remote_url.rstrip("/")
+            self._admin_client = httpx.AsyncClient(
+                base_url=self._admin_base,
+                timeout=max(cfg.vllm_health_timeout_s, 10),
+            )
+            self._executor: Optional[LocalProcessController] = None
+        else:
+            self._executor = LocalProcessController()
+        self._health_host = (cfg.vllm_health_host or "127.0.0.1").strip() or "127.0.0.1"
+        self._log_dir = Path("logs/vllm").expanduser()
+        self._restart_backoff = max(
+            0.0, float(getattr(cfg, "vllm_restart_backoff_s", 0.0))
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()
+        if self._admin_client:
+            await self._admin_client.aclose()
+        if self._executor:
+            close_fn = getattr(self._executor, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:  # noqa: BLE001
+                    pass
 
     async def activate(self, entry) -> ActiveVllmState:
         """Ensure the requested registry entry is the active vLLM instance."""
@@ -126,20 +159,22 @@ class VllmManager:
                 state
                 and state.logical_name == logical_name
                 and state.port == port
-                and self._process_alive(state.pid)
+                and await self._process_alive(state.pid)
             ):
                 logger.info(
                     "[vllm-manager] Reusing active %s (pid=%s)", logical_name, state.pid
                 )
                 return state
 
-            if state and self._process_alive(state.pid):
+            if state and await self._process_alive(state.pid):
                 logger.info(
                     "[vllm-manager] Stopping existing model %s (pid=%s)",
                     state.logical_name,
                     state.pid,
                 )
                 await self._terminate_process(state.pid)
+                if self._restart_backoff:
+                    await asyncio.sleep(self._restart_backoff)
             await self._clear_state()
 
             logger.info(
@@ -148,18 +183,21 @@ class VllmManager:
                 served_model_id,
                 port,
             )
-            pid = await self._launch(entry, served_model_id, port)
+            pid, log_file = await self._launch(entry, served_model_id, port)
 
             started_at = time.time()
             if not await self._wait_for_health(port, started_at):
+                failure_hint = self._summarise_launch_failure(log_file)
                 logger.error(
-                    "[vllm-manager] Health check failed for %s (pid=%s)",
+                    "[vllm-manager] Health check failed for %s (pid=%s)%s",
                     logical_name,
                     pid,
+                    f": {failure_hint}" if failure_hint else "",
                 )
                 await self._terminate_process(pid, force=True)
                 raise VllmActivationError(
                     f"vLLM model '{logical_name}' failed health check"
+                    + (f": {failure_hint}" if failure_hint else "")
                 )
 
             new_state = ActiveVllmState(
@@ -196,7 +234,7 @@ class VllmManager:
             state = await self._load_state()
             if not state:
                 return
-            if self._process_alive(state.pid):
+            if await self._process_alive(state.pid):
                 logger.info(
                     "[vllm-manager] Stopping model %s (pid=%s)",
                     state.logical_name,
@@ -212,7 +250,7 @@ class VllmManager:
             state = await self._load_state()
             if not state:
                 return None
-            if not self._process_alive(state.pid):
+            if not await self._process_alive(state.pid):
                 await self._clear_state()
                 return None
             return state
@@ -268,19 +306,64 @@ class VllmManager:
                 "\n".join(warnings),
             )
 
-    async def _launch(self, entry, served_model_id: str, port: int) -> int:
+    async def _launch(self, entry, served_model_id: str, port: int) -> tuple[int, Path]:
+        self._log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = self._log_dir / f"{entry.name.replace('/', '_')}.log"
+        if self._remote_executor_enabled:
+            pid = await self._remote_launch(entry, served_model_id, port, log_file)
+        else:
+            pid = await self._local_launch(entry, served_model_id, port, log_file)
+        return pid, log_file
+
+    async def _local_launch(
+        self,
+        entry,
+        served_model_id: str,
+        port: int,
+        log_file: Path,
+    ) -> int:
+        if not self._executor:
+            raise RuntimeError("Local executor not configured")
         command = self._build_command(entry, served_model_id, port)
-        stdout_path = Path("logs/vllm").expanduser()
-        stdout_path.mkdir(parents=True, exist_ok=True)
-        log_file = stdout_path / f"{entry.name.replace('/', '_')}.log"
-        with open(log_file, "a", buffering=1) as log_fh:  # noqa: PTH123
-            proc = subprocess.Popen(  # noqa: S603
-                command,
-                stdout=log_fh,
-                stderr=subprocess.STDOUT,
-                env=self._inherited_env(),
+        env = self._inherited_env()
+        pid = await asyncio.to_thread(
+            self._executor.spawn,
+            command,
+            env=env,
+            cwd=self._workspace_root,
+            log_file=log_file,
+        )
+        return pid
+
+    async def _remote_launch(
+        self,
+        entry,
+        served_model_id: str,
+        port: int,
+        log_file: Path,
+    ) -> int:
+        if not self._admin_client:
+            raise RuntimeError("Remote admin client not available")
+        command = self._build_command(entry, served_model_id, port)
+        env = self._inherited_env()
+        payload = {
+            "command": command,
+            "env": env,
+            "cwd": self._workspace_root,
+            "log_file": str(log_file),
+            "logical_name": entry.name,
+            "served_model_id": served_model_id,
+        }
+        resp = await self._admin_client.post("/admin/activate", json=payload)
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"Remote vLLM activation failed ({resp.status_code}): {resp.text}"
             )
-        return proc.pid
+        data = resp.json()
+        pid = int(data.get("pid") or 0)
+        if pid <= 0:
+            raise RuntimeError("Remote vLLM activation did not return a valid PID")
+        return pid
 
     def _build_command(self, entry, served_model_id: str, port: int) -> list[str]:
         model_path = self._resolve_model_path(entry)
@@ -400,6 +483,40 @@ class VllmManager:
             command,
         )
         return command
+
+    @staticmethod
+    def _summarise_launch_failure(log_path: Path | None) -> Optional[str]:
+        if not log_path or not log_path.exists():
+            return None
+        try:
+            size = log_path.stat().st_size
+        except Exception:  # noqa: BLE001
+            size = 0
+        try:
+            with open(log_path, "rb") as fh:  # noqa: PTH123
+                if size > 16384:
+                    fh.seek(-16384, os.SEEK_END)
+                data = fh.read().decode("utf-8", errors="ignore")
+        except Exception:  # noqa: BLE001
+            try:
+                data = log_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:  # noqa: BLE001
+                return None
+        lines = [line.strip() for line in data.splitlines() if line.strip()]
+        if not lines:
+            return None
+        keywords = [
+            "ValueError",
+            "RuntimeError",
+            "CUDA",
+            "No available memory",
+            "free memory",
+        ]
+        for line in reversed(lines):
+            lowered = line.lower()
+            if any(keyword.lower() in lowered for keyword in keywords):
+                return line
+        return lines[-1]
 
     @staticmethod
     def _resolve_model_path(entry) -> str:
@@ -600,7 +717,7 @@ class VllmManager:
                 metrics[metric_key] = raw
 
         # Query vLLM for runtime model info
-        base_url = f"http://127.0.0.1:{state.port}"
+        base_url = f"http://{self._health_host}:{state.port}"
         try:
             resp = await self._http.get(f"{base_url}/v1/models")
             if resp.status_code < 400:
@@ -634,7 +751,9 @@ class VllmManager:
         except Exception:  # noqa: BLE001
             pass
 
-        gpu_snapshot = self._snapshot_gpu_usage()
+        gpu_snapshot = None
+        if not self._remote_executor_enabled:
+            gpu_snapshot = self._snapshot_gpu_usage()
         if gpu_snapshot:
             metrics["gpu_memory_gib"] = {
                 "index": gpu_snapshot["index"],
@@ -692,7 +811,7 @@ class VllmManager:
 
     async def _wait_for_health(self, port: int, started_at: float) -> bool:
         deadline = started_at + self.cfg.vllm_start_timeout_s
-        base_url = f"http://127.0.0.1:{port}"
+        base_url = f"http://{self._health_host}:{port}"
         health_paths = ("/health", "/v1/health")
         backoff = 0.5
         while time.time() < deadline:
@@ -733,38 +852,45 @@ class VllmManager:
         return False
 
     async def _terminate_process(self, pid: int, *, force: bool = False) -> None:
-        if not self._process_alive(pid):
-            return
-        timeout = self.cfg.vllm_stop_timeout_s
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            return
-        except Exception:  # noqa: BLE001
-            if force:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except Exception:  # noqa: BLE001
-                    pass
-            return
-        deadline = time.time() + max(timeout, 1)
-        while time.time() < deadline:
-            if not self._process_alive(pid):
+        if self._remote_executor_enabled:
+            if not self._admin_client:
                 return
-            await asyncio.sleep(0.5)
-        if not force and self._process_alive(pid):
-            await self._terminate_process(pid, force=True)
+            try:
+                await self._admin_client.post("/admin/deactivate")
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        if pid <= 0 or not self._executor:
+            return
+        timeout = max(self.cfg.vllm_stop_timeout_s, 1)
+        await asyncio.to_thread(
+            self._executor.terminate,
+            pid,
+            force=force,
+            timeout=timeout,
+        )
 
-    def _process_alive(self, pid: int) -> bool:
-        if pid <= 0:
+    async def _process_alive(self, pid: int) -> bool:
+        if self._remote_executor_enabled:
+            return await self._remote_alive()
+        if pid <= 0 or not self._executor:
             return False
         try:
-            os.kill(pid, 0)
-            return True
-        except ProcessLookupError:
-            return False
+            return self._executor.is_alive(pid)
         except Exception:  # noqa: BLE001
             return False
+
+    async def _remote_alive(self) -> bool:
+        if not self._admin_client:
+            return False
+        try:
+            resp = await self._admin_client.get("/admin/state")
+        except Exception:  # noqa: BLE001
+            return False
+        if resp.status_code >= 400:
+            return False
+        data = resp.json()
+        return data.get("status") == "running"
 
     async def _load_state(self) -> Optional[ActiveVllmState]:
         if not self._state_path.exists():

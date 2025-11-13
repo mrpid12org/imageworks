@@ -62,8 +62,11 @@ _SECTION_MAP: dict[str, list[str]] = {
         "vllm_health_timeout_s",
         "vllm_gpu_memory_utilization",
         "vllm_max_model_len",
+        "vllm_remote_executor_url",
+        "vllm_executor_workdir",
+        "vllm_health_host",
     ],
-    "ollama": ["ollama_base_url", "ollama_stop_timeout_s"],
+    "ollama": ["ollama_base_url", "ollama_stop_timeout_s", "ollama_allow_cpu_fallback"],
 }
 
 
@@ -283,6 +286,22 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
             if env.get("CHAT_PROXY_VLLM_MAX_MODEL_LEN")
             else config["vllm_max_model_len"]
         ),
+        "vllm_remote_executor_url": env_str(
+            "CHAT_PROXY_VLLM_REMOTE_URL",
+            config.get("vllm_remote_executor_url"),
+        ),
+        "vllm_executor_workdir": env_str(
+            "CHAT_PROXY_VLLM_EXECUTOR_CWD",
+            config.get("vllm_executor_workdir"),
+        ),
+        "vllm_health_host": env_str(
+            "CHAT_PROXY_VLLM_HEALTH_HOST",
+            config.get("vllm_health_host"),
+        ),
+        "vllm_restart_backoff_s": env_float(
+            "CHAT_PROXY_VLLM_RESTART_BACKOFF_S",
+            config.get("vllm_restart_backoff_s", 2.0),
+        ),
         "vision_truncate_history": env_bool(
             "CHAT_PROXY_VISION_TRUNCATE_HISTORY", config["vision_truncate_history"]
         ),
@@ -308,6 +327,10 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         ),
         "ollama_stop_timeout_s": env_int(
             "CHAT_PROXY_OLLAMA_STOP_TIMEOUT_S", config["ollama_stop_timeout_s"]
+        ),
+        "ollama_allow_cpu_fallback": env_bool(
+            "CHAT_PROXY_OLLAMA_ALLOW_CPU_FALLBACK",
+            config.get("ollama_allow_cpu_fallback", False),
         ),
     }
     config.update(overrides)

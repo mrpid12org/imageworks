@@ -9,7 +9,7 @@ Personal Tagger generates captions, keywords, and descriptions for personal phot
 |------------|---------|
 | Multi-stage prompting | Separate caption, keyword, and description prompts tuned for metadata quality. |
 | Backend flexibility | Works with LMDeploy, vLLM, Ollama, or remote OpenAI-compatible APIs; supports per-stage model overrides. |
-| Registry integration | `--use-loader` plus `--caption-role`, `--keyword-role`, etc. resolve models from deterministic registry. |
+| Registry integration | `--use-registry` plus `--caption-role`, `--keyword-role`, etc. resolve models from deterministic registry (chat proxy defaults to `http://localhost:8100/v1`). |
 | Metadata writing | Writes IPTC/XMP captions, keywords, and custom namespaces. |
 | Batch orchestration | Processes recursive directories with concurrency control, skipping previously-tagged files if desired. |
 | Preset profiles | `prompt_profile` bundles instructions for the caption/keyword/description trio. |
@@ -37,7 +37,7 @@ Personal Tagger generates captions, keywords, and descriptions for personal phot
   - Input selection: repeatable `--input-dir`, `--recursive`, `--image-exts`.
   - Backend: `--backend`, `--base-url`, `--model`, `--api-key`, `--timeout`, `--max-new-tokens`, `--temperature`, `--top-p`.
   - Stage overrides: `--caption-model`, `--keyword-model`, `--description-model`, `--caption-role`, `--keyword-role`, `--description-role`.
-  - Registry: `--use-loader`, per-stage registry model flags (`--caption-registry-model`, etc.).
+  - Registry: `--use-registry` (enabled by default), per-stage registry model flags (`--caption-registry-model`, etc.).
   - Prompting: `--prompt-profile`.
   - Output: `--output-jsonl`, `--summary`, `--max-keywords`, `--batch-size`, `--max-workers`.
   - Metadata: `--dry-run`, `--no-meta`, `--backup-originals`, `--overwrite-metadata`.
@@ -74,7 +74,7 @@ Environment overrides follow `IMAGEWORKS_PERSONAL_TAGGER__KEY=value` format.
 
 | Symptom | Likely Cause | Resolution |
 |---------|--------------|------------|
-| Preflight failure | Backend unreachable or capabilities mismatch. | Use `--skip-preflight` during triage; verify backend endpoints and registry roles. |
+| Preflight failure | Backend unreachable, GPU lease held by Judge Vision, or capabilities mismatch. | Use `--skip-preflight` during triage; verify `imageworks-chat-proxy` is running, wait for Stage 2 leases to end, or target another registry role. |
 | Metadata skipped | `--no-meta` true or file already tagged. | Remove flag or allow overwrite via `--overwrite-metadata`. |
 | Keyword overflow | `max_keywords` too low. | Increase via CLI or config. |
 | Registry lookup error | Role name missing in registry. | Run `imageworks-personal-tagger list-registry` to inspect available entries. |

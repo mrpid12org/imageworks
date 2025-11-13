@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime
+
+try:  # Python 3.11+
+    from datetime import UTC  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover - Py3.10 compatibility
+    from datetime import timezone
+
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,6 +36,14 @@ from imageworks.apps.judge_vision.pairwise_playoff import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _PairwiseCategoryPlan:
+    category: str
+    records: List["JudgeVisionRecord"]
+    eligible_count: int
+    comparisons: int
 
 
 def _phase_label(stage: str) -> str:
@@ -78,7 +94,6 @@ class JudgeVisionRunner:
         self.config.output_jsonl.parent.mkdir(parents=True, exist_ok=True)
         jsonl_handle = self.config.output_jsonl.open("w", encoding="utf-8")
         write_iqa = stage == "full"
-        playoff_runner = None
         try:
             for idx, image_path in enumerate(images, 1):
                 current_path = image_path
@@ -93,59 +108,19 @@ class JudgeVisionRunner:
                 "full",
                 "critique",
             }
-            playoff_runner = None
             if should_run_pairwise:
                 # Close out the critique phase so the GUI records completion before Stage 3 starts.
                 self.progress.complete()
-
-                comparisons, candidate_count = self._resolve_pairwise_comparisons(
-                    records
-                )
-                if comparisons <= 0 or candidate_count == 0:
+                plans = self._build_pairwise_plans(records)
+                if not plans:
                     self.progress.reset(total=1, phase=_phase_label("pairwise"))
                     msg = f"No eligible ≥{self.config.pairwise_threshold} images"
                     self.progress.update(processed=1, current_image=msg)
                     self.progress.complete()
                 else:
-                    playoff_runner = PairwisePlayoffRunner(
-                        base_url=self.config.base_url,
-                        model_name=engine._resolved_model_name(),
-                        api_key=self.config.api_key,
-                        timeout=self.config.timeout,
-                        comparisons_per_image=comparisons,
-                        threshold=self.config.pairwise_threshold,
-                    )
-
-                def _on_schedule(total_matches: int) -> None:
-                    if total_matches <= 0:
-                        return
-                    self.progress.reset(
-                        total=total_matches, phase=_phase_label("pairwise")
-                    )
-
-                def _on_progress(
-                    processed: int,
-                    total_matches: int,
-                    category: str,
-                    left: JudgeVisionRecord,
-                    right: JudgeVisionRecord,
-                ) -> None:
-                    label = f"{left.image.name} vs {right.image.name} ({category})"
-                    self.progress.update(processed=processed, current_image=label)
-
-                    matches_run = playoff_runner.apply(
-                        records,
-                        on_schedule=_on_schedule,
-                        on_progress=_on_progress,
-                    )
-                    if matches_run == 0:
-                        self.progress.reset(total=1, phase=_phase_label("pairwise"))
-                        self.progress.update(
-                            processed=1,
-                            current_image=f"No eligible ≥{self.config.pairwise_threshold} images",
-                        )
-                    self.progress.complete()
-
+                    model_name = engine._resolved_model_name()
+                    for plan in plans:
+                        self._run_pairwise_plan(plan, model_name=model_name)
             else:
                 self.progress.complete()
 
@@ -164,8 +139,6 @@ class JudgeVisionRunner:
             logger.exception("Judge Vision failed after %d image(s)", len(records))
             raise
         finally:
-            if playoff_runner:
-                playoff_runner.close()
             engine.close()
 
     # ------------------------------------------------------------------
@@ -176,7 +149,7 @@ class JudgeVisionRunner:
                 logger.warning("Input path does not exist: %s", base)
                 continue
             if base.is_file():
-                if self._matches_extension(base) and not self._is_lab_derivative(base):
+                if self._matches_extension(base) and not self._should_ignore_file(base):
                     discovered.append(base)
                 continue
             iterator = base.rglob("*") if self.config.recursive else base.glob("*")
@@ -184,7 +157,7 @@ class JudgeVisionRunner:
                 if (
                     candidate.is_file()
                     and self._matches_extension(candidate)
-                    and not self._is_lab_derivative(candidate)
+                    and not self._should_ignore_file(candidate)
                 ):
                     discovered.append(candidate)
         return sorted({path.resolve() for path in discovered})
@@ -194,8 +167,9 @@ class JudgeVisionRunner:
         return suffix in {ext.lower() for ext in self.config.image_extensions}
 
     @staticmethod
-    def _is_lab_derivative(path: Path) -> bool:
-        return "_lab_" in path.stem.lower()
+    def _should_ignore_file(path: Path) -> bool:
+        stem = path.stem.lower()
+        return "_lab_" in stem or "backup" in stem
 
     def _load_competition(self) -> Optional[CompetitionConfig]:
         if not self.config.competition_config or not self.config.competition_id:
@@ -349,21 +323,95 @@ class JudgeVisionRunner:
                 cache[str(Path(image).resolve())] = signals
         return cache
 
-    def _resolve_pairwise_comparisons(
+    def _build_pairwise_plans(
         self, records: List[JudgeVisionRecord]
-    ) -> tuple[int, int]:
+    ) -> List[_PairwiseCategoryPlan]:
+        grouped: Dict[str, List[JudgeVisionRecord]] = {}
+        for record in records:
+            category = (
+                record.competition_category or "Uncategorised"
+            ).strip() or "Uncategorised"
+            grouped.setdefault(category, []).append(record)
+
+        plans: List[_PairwiseCategoryPlan] = []
         threshold = self.config.pairwise_threshold
-        candidates = [
-            rec
-            for rec in records
-            if (rec.critique_total or 0) >= threshold and rec.image.exists()
-        ]
-        count = len(candidates)
-        if count == 0:
-            return 0, 0
-        if self.config.pairwise_rounds:
-            return int(self.config.pairwise_rounds), count
-        return recommended_pairwise_rounds(count), count
+        override = self.config.pairwise_rounds
+        for category in sorted(grouped):
+            cat_records = grouped[category]
+            eligible = [
+                rec
+                for rec in cat_records
+                if (rec.critique_total or 0) >= threshold and rec.image.exists()
+            ]
+            comparisons = override
+            if comparisons is None:
+                comparisons = recommended_pairwise_rounds(len(eligible))
+            plans.append(
+                _PairwiseCategoryPlan(
+                    category=category,
+                    records=cat_records,
+                    eligible_count=len(eligible),
+                    comparisons=int(comparisons or 0),
+                )
+            )
+        return plans
+
+    def _run_pairwise_plan(
+        self, plan: _PairwiseCategoryPlan, *, model_name: str
+    ) -> None:
+        threshold = self.config.pairwise_threshold
+        phase_label = f"Stage 3 – Pairwise ({plan.category})"
+
+        if plan.eligible_count < 2 or plan.comparisons <= 0:
+            self.progress.reset(total=1, phase=phase_label)
+            if plan.eligible_count == 0:
+                msg = f"{plan.category}: No eligible ≥{threshold} images"
+            else:
+                msg = f"{plan.category}: Need at least two eligible ≥{threshold} images"
+            self.progress.update(processed=1, current_image=msg)
+            self.progress.complete()
+            return
+
+        self.progress.reset(total=1, phase=phase_label)
+        playoff_runner = PairwisePlayoffRunner(
+            base_url=self.config.base_url,
+            model_name=model_name,
+            api_key=self.config.api_key,
+            timeout=self.config.timeout,
+            comparisons_per_image=plan.comparisons,
+            threshold=threshold,
+        )
+
+        def _on_schedule(total_matches: int) -> None:
+            if total_matches <= 0:
+                return
+            self.progress.reset(total=total_matches, phase=phase_label)
+
+        def _on_progress(
+            processed: int,
+            total_matches: int,
+            category: str,
+            left: JudgeVisionRecord,
+            right: JudgeVisionRecord,
+        ) -> None:
+            label = f"{left.image.name} vs {right.image.name} ({category})"
+            self.progress.update(processed=processed, current_image=label)
+
+        try:
+            matches_run = playoff_runner.apply(
+                plan.records,
+                on_schedule=_on_schedule,
+                on_progress=_on_progress,
+            )
+            if matches_run == 0:
+                self.progress.reset(total=1, phase=phase_label)
+                self.progress.update(
+                    processed=1,
+                    current_image=f"{plan.category}: No eligible ≥{threshold} images",
+                )
+            self.progress.complete()
+        finally:
+            playoff_runner.close()
 
 
 def load_records_from_jsonl(path: Path) -> List[JudgeVisionRecord]:

@@ -74,7 +74,7 @@ The ImageWorks model downloader acquires, organises, and audits model weights ac
   export IMAGEWORKS_DEBUG=1                     # verbose tracing
   export IMAGEWORKS_TEST_MODEL_PATTERNS="testzzz,model-awq,model-fp16"
   export IMAGEWORKS_OLLAMA_HOST=imageworks-ollama
-  export OLLAMA_MODELS=/srv/ollama/models
+  export OLLAMA_MODELS=/home/stewa/ai-models/ollama-data/models   # Windows UNC: \\wsl.localhost\Ubuntu\home\stewa\ai-models\ollama-data\models
   export OLLAMA_BASE_URL=http://127.0.0.1:11434
   export IMAGEWORKS_REGISTRY_DIR=/tmp/test-registry  # for integration tests
   ```
@@ -166,7 +166,7 @@ Each workflow lists CLI steps first, followed by GUI parity.
    ```
    - Strategy A naming: `<name>:<tag>` becomes `<family>-ollama-gguf[-<quant>]` with `served_model_id` preserved.
    - Name normalisation replaces `/` and spaces with `-`, collapses repeated dashes, and preserves underscores inside quant tokens (e.g. `Q6_K` → `q6_k`).
-   - Detects Ollama store via `$OLLAMA_MODELS` or `~/.ollama/models`; falls back to `ollama://<id>` when path unavailable.
+  - Detects the Ollama store via `$OLLAMA_MODELS`, otherwise falls back to `~/.ollama/models` or `<linux_wsl_root>/ollama-data/models`; if none exist it uses the placeholder scheme `ollama://<id>`.
 2. **GUI** – *Download & Import → Import Ollama*
    - Choose dry-run, backend, location, placeholder deprecation; execute with preview.
 

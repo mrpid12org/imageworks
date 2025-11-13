@@ -79,20 +79,14 @@ Input Images ──► Stage0 Compliance Checks
      ```json
      {
        "title": "<string|null>",
-       "category": "Open|Nature|Creative|Themed|null",
+       "style": "Open|Nature|Portrait|Creative|Documentary|Abstract|Street|Landscape|Other|null",
        "critique": "<80-120 words>",
-       "subscores": {
-         "impact": 0-5,
-         "composition": 0-5,
-         "technical": 0-5,
-         "category_fit": 0-5
-       },
        "total": 0-20,
        "award_suggestion": "Gold|Silver|Bronze|HC|C|None",
        "compliance_flag": "<optional string>"
      }
      ```
-   - Critique must reference rubric dimensions, mention technical faults only when material, and include one actionable improvement.
+   - Critique must reference rubric dimensions, mention technical faults only when material, and include one actionable improvement. Category suitability is now described narratively instead of via a numeric “category fit” subscore.
 
 4. **Pairwise Judging/Tournament Module** (Stage 3)
    - Pairwise comparisons using Swiss or Bradley–Terry/Thurstone aggregation.

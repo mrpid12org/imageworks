@@ -162,8 +162,8 @@ pip install -q 'numpy<2.0' tomli tensorflow-hub
 
 # In aesthetic_models.py - check flag
 inside_container = os.environ.get("JUDGE_VISION_INSIDE_CONTAINER") == "1"
-if use_gpu and not inside_container and os.environ.get("JUDGE_VISION_USE_TF_CONTAINER", "1") == "1":
-    # Use container
+if not inside_container:
+    # Always use the container path
 ```
 
 **Files Modified:**
@@ -322,8 +322,7 @@ docker run --rm --gpus all \
 - `JUDGE_VISION_TF_SERVICE_URL` – Override the default `http://127.0.0.1:5105` endpoint (useful for remote GPUs).
 - `JUDGE_VISION_TF_PORT` / `JUDGE_VISION_TF_CONTAINER` / `JUDGE_VISION_TF_IMAGE` – customise the service name, port, and Docker image.
 - `JUDGE_VISION_TF_AUTO_SHUTDOWN=0` – keep the service running after Stage 1 (default `1`, meaning shut down automatically).
-- `JUDGE_VISION_USE_TF_SERVICE=0` – skip the HTTP call entirely and fall back to per-request `docker run` (mainly for debugging).
-- `JUDGE_VISION_USE_TF_CONTAINER=0` – force CPU TensorFlow even when `--iqa-device gpu` is selected.
+- `JUDGE_VISION_USE_TF_SERVICE=0` – skip the HTTP call entirely and fall back to per-request `docker run` (mainly for debugging). Without this service Judge Vision now fails fast instead of silently using local TensorFlow.
 - `IMAGEWORKS_MODEL_ROOT` – location of the shared `weights/` tree.
 
 ### Container Side (set automatically by the scripts)

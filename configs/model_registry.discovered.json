@@ -507,7 +507,10 @@
     },
     "capabilities": {
       "text": true,
-      "vision": true,
+      "vision": {
+        "enabled": true,
+        "target_long_edge": 448
+      },
       "embedding": false,
       "audio": false,
       "thinking": false,
@@ -628,7 +631,10 @@
     },
     "capabilities": {
       "text": true,
-      "vision": true,
+      "vision": {
+        "enabled": true,
+        "target_long_edge": 448
+      },
       "embedding": false,
       "audio": false,
       "thinking": false,
@@ -2106,7 +2112,10 @@
       "default_system_prompt": "You are a helpful assistant. Answer in concise English.",
       "format": "awq",
       "quantization": "awq",
-      "vision": true,
+      "vision": {
+        "enabled": true,
+        "target_long_edge": 448
+      },
       "parameter_size": "7B",
       "context_length": 32768,
       "architecture": {

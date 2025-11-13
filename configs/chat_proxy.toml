@@ -54,7 +54,12 @@ vllm_stop_timeout_s = 30
 vllm_health_timeout_s = 120
 vllm_gpu_memory_utilization = 0.75
 vllm_max_model_len = ""
+vllm_remote_executor_url = ""
+vllm_executor_workdir = ""
+vllm_health_host = "127.0.0.1"
+vllm_restart_backoff_s = 2.0
 
 [ollama]
 ollama_base_url = "http://127.0.0.1:11434"
 ollama_stop_timeout_s = 30
+ollama_allow_cpu_fallback = false

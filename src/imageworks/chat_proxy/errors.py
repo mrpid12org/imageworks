@@ -29,9 +29,20 @@ def err_backend_unavailable(model: str, hint: str | None = None) -> ProxyError:
     )
 
 
-def err_model_start_timeout(model: str) -> ProxyError:
+def err_model_start_timeout(model: str, hint: str | None = None) -> ProxyError:
     return ProxyError(
-        424, "model_start_timeout", f"Autostart did not make '{model}' healthy in time"
+        424,
+        "model_start_timeout",
+        f"Autostart did not make '{model}' healthy in time",
+        hint,
+    )
+
+
+def err_gpu_lease_active(owner: str) -> ProxyError:
+    return ProxyError(
+        423,
+        "gpu_lease_active",
+        f"GPU currently leased by '{owner}'. Please retry once it is released.",
     )
 
 

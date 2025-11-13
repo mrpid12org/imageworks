@@ -222,15 +222,20 @@ tournament) independent of metadata writing.
    pre-stage a batch via the hand-off button.
 2. **Run Pipeline** – Executes `imageworks-judge-vision run` in dry-run/no-meta mode,
    surfaces the live progress tracker (per-image filenames plus totals), and keeps
-   metadata writes disabled. Command previews help with auditing. The “Execution stage”
-   selector now includes **Two-pass (auto IQA → Critique)**, which runs Stage 1 on its
-   own process and then automatically launches Stage 2 once the cache is ready. When the
-   IQA device is set to GPU, the page requests a temporary GPU lease from the chat proxy:
-   vLLM is paused while TensorFlow runs, then transparently restarted before critiques
-   begin—no manual GPU juggling required.
+   metadata writes disabled. Command previews help with auditing. The execution controls
+   now offer three checkboxes (Pass 1 IQA, Pass 2 Critique, Pass 3 Pairwise) so you can
+   rerun any combination: e.g., replay pairwise on the latest Stage 2 results without
+   touching deterministic IQA. Selecting Pass 1 + Pass 2 still triggers the “Two-pass”
+   flow so Stage 2 waits for the IQA cache automatically. When the IQA device is GPU,
+   the page leases the accelerator from the chat proxy, pauses vLLM while TensorFlow
+   runs, then restarts the model before critiques begin—no manual GPU juggling required.
 3. **Results** – Streams the JSONL + Markdown artifacts to show rubric tables,
-   compliance flags, awards, and tournament stability metrics. The default Judge Vision
-   outputs also feed the 📊 Results browser automatically.
+   compliance flags, awards, score histograms, and tournament metrics. Colour and Mono
+   competitions now occupy separate tabs so every table, histogram, and bucket viewer is
+   filtered to that division. Stage 3 also runs separately per category—the recommended
+   rounds and playoff matches are computed from the number of ≥ threshold entries for
+   Colour and Mono independently. The default Judge Vision outputs also feed the 📊
+   Results browser automatically.
 
 **Tip**: Leave the JSONL path at its default (`outputs/results/judge_vision.jsonl`) so
 the 📊 Results page can pick it up automatically.

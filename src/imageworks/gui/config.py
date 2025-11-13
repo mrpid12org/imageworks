@@ -59,7 +59,16 @@ DEFAULT_SUMMARY_PATH = MONO_DEFAULT_SUMMARY_PATH
 DEFAULT_OVERLAYS_DIR = MONO_DEFAULT_OVERLAYS_DIR
 
 # Backend URLs
-# Note: vLLM runs inside chat_proxy docker container, not as separate service
+_CHAT_PROXY_BASE = os.environ.get("IMAGEWORKS_CHAT_PROXY_URL", "http://localhost:8100")
+_CHAT_PROXY_API = os.environ.get(
+    "IMAGEWORKS_CHAT_PROXY_API", f"{_CHAT_PROXY_BASE.rstrip('/')}/v1"
+)
+
+_VLLM_EXECUTOR_URL = os.environ.get(
+    "IMAGEWORKS_VLLM_EXECUTOR_URL", "http://localhost:8600"
+)
+_TF_IQA_URL = os.environ.get("IMAGEWORKS_TF_IQA_URL", "http://localhost:5105")
+
 _OLLAMA_URL = (
     os.environ.get("IMAGEWORKS_OLLAMA_HOST")
     or os.environ.get("CHAT_PROXY_OLLAMA_BASE_URL")
@@ -67,7 +76,9 @@ _OLLAMA_URL = (
 )
 
 DEFAULT_BACKENDS = {
-    "chat_proxy": "http://localhost:8100/v1",
+    "chat_proxy": _CHAT_PROXY_API.rstrip("/"),
+    "vllm_executor": _VLLM_EXECUTOR_URL.rstrip("/"),
+    "tf_iqa": _TF_IQA_URL.rstrip("/"),
     "ollama": _OLLAMA_URL.rstrip("/"),
 }
 

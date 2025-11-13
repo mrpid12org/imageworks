@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile.chat-proxy
     container_name: imageworks-chat-proxy
     restart: unless-stopped
+    depends_on:
+      - vllm-executor
+      - tf-iqa-service
     gpus: all
     environment:
       - CHAT_PROXY_HOST=0.0.0.0
@@ -13,8 +16,40 @@ services:
       - CHAT_PROXY_INCLUDE_NON_INSTALLED=0
       - CHAT_PROXY_AUTOSTART_ENABLED=1
       - CHAT_PROXY_OLLAMA_BASE_URL=http://imageworks-ollama:11434
+      - CHAT_PROXY_LOOPBACK_ALIAS=imageworks-vllm
+      - CHAT_PROXY_VLLM_REMOTE_URL=http://imageworks-vllm:8600
+      - CHAT_PROXY_VLLM_HEALTH_HOST=imageworks-vllm
+      - CHAT_PROXY_LOOPBACK_ALIAS=imageworks-vllm
     ports:
       - "8100:8100"
+    volumes:
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - ./models:/app/models:ro
+      - ./outputs:/app/outputs
+      - ./src:/app/src:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./scripts:/app/scripts:ro
+      - ./_staging:/app/_staging
+      - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8100/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  vllm-executor:
+    build:
+      context: .
+      dockerfile: Dockerfile.vllm
+    container_name: imageworks-vllm
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - IMAGEWORKS_MODEL_ROOT=/home/stewa/ai-models
     volumes:
       - ./configs:/app/configs
       - ./logs:/app/logs
@@ -24,9 +59,52 @@ services:
       - ./scripts:/app/scripts:ro
       - ./_staging:/app/_staging
       - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command: ["uvicorn", "imageworks.chat_proxy.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    ports:
+      - "8600:8600"
+    command: ["uvicorn", "imageworks.chat_proxy.vllm_admin_service:app", "--host", "0.0.0.0", "--port", "8600"]
+
+  tf-iqa-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.tf-iqa
+    container_name: imageworks-tf-iqa
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - IMAGEWORKS_MODEL_ROOT=/home/stewa/ai-models
+      - JUDGE_VISION_INSIDE_CONTAINER=1
+    volumes:
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./_staging:/app/_staging
+      - /home/stewa/ai-models/weights:/home/stewa/ai-models/weights
+    ports:
+      - "5105:5105"
+    command: ["python3", "-m", "imageworks.apps.judge_vision.tf_inference_service", "serve", "--host", "0.0.0.0", "--port", "5105"]
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: openwebui
+    restart: unless-stopped
+    depends_on:
+      chat-proxy:
+        condition: service_healthy
+    environment:
+      - OPENAI_API_BASE_URL=http://chat-proxy:8100/v1
+      - OPENAI_API_KEY=EMPTY
+      - ENABLE_OLLAMA_API=false
+      - OLLAMA_BASE_URLS=
+      - OLLAMA_API_CONFIGS=
+      - RESET_CONFIG_ON_START=true
+    ports:
+      - "3000:8080"
+    volumes:
+      - openwebui-data:/app/backend/data
+    gpus: all
 
   ollama:
     image: ollama/ollama:latest
@@ -36,6 +114,9 @@ services:
     environment:
       - OLLAMA_ORIGINS=*
     volumes:
-      - ./ollama-data:/root/.ollama
+      - /home/stewa/ai-models/ollama-data:/root/.ollama
     ports:
       - "11434:11434"
+
+volumes:
+  openwebui-data:

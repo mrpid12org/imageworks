@@ -52,13 +52,23 @@ class OpenAIChatClient:
         model_name: str,
         api_key: str,
         timeout: int,
+        max_retries: int = 3,
+        retry_backoff: float = 5.0,
+        lease_token: Optional[str] = None,
     ) -> None:
         self.model_name = model_name
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        if lease_token:
+            headers["X-GPU-Lease-Token"] = lease_token
         self._client = httpx.Client(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {api_key}"} if api_key else None,
+            headers=headers or None,
             timeout=timeout,
         )
+        self._max_retries = max(1, int(max_retries))
+        self._retry_backoff = max(0.0, float(retry_backoff))
 
     def chat(
         self,
@@ -76,23 +86,40 @@ class OpenAIChatClient:
             "top_p": max(0.0, min(1.0, top_p)),
             "stream": False,
         }
-        response = self._client.post("/chat/completions", json=payload)
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:  # noqa: BLE001
-            snippet = ""
+        last_exc: Exception | None = None
+        for attempt in range(1, self._max_retries + 1):
             try:
-                snippet = exc.response.text[:600]
-            except Exception:  # noqa: BLE001
-                snippet = "<unavailable>"
-            logger.error(
-                "Judge Vision backend returned HTTP %s for model '%s': %s",
-                exc.response.status_code if exc.response else "???",
-                self.model_name,
-                snippet,
-            )
-            raise
-        return response.json()
+                response = self._client.post("/chat/completions", json=payload)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as exc:  # noqa: BLE001
+                snippet = ""
+                try:
+                    snippet = exc.response.text[:600]
+                except Exception:  # noqa: BLE001
+                    snippet = "<unavailable>"
+                logger.error(
+                    "Judge Vision backend returned HTTP %s for model '%s': %s",
+                    exc.response.status_code if exc.response else "???",
+                    self.model_name,
+                    snippet,
+                )
+                raise
+            except httpx.RequestError as exc:  # noqa: BLE001
+                last_exc = exc
+                logger.warning(
+                    "Judge Vision backend request failed for model '%s' "
+                    "(attempt %s/%s): %s",
+                    self.model_name,
+                    attempt,
+                    self._max_retries,
+                    exc,
+                )
+                if attempt < self._max_retries:
+                    time.sleep(self._retry_backoff)
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("chat request failed without exception")
 
     def close(self) -> None:
         self._client.close()
@@ -115,7 +142,7 @@ class JudgeVisionInferenceEngine:
             use_gpu=(config.iqa_device.lower() == "gpu"),
         )
         self._prompt = get_prompt("club_judge_json")
-        self._client_cache: Dict[str, OpenAIChatClient] = {}
+        self._client_cache: Dict[tuple[str, Optional[str]], OpenAIChatClient] = {}
 
     def close(self) -> None:
         for client in self._client_cache.values():
@@ -137,16 +164,28 @@ class JudgeVisionInferenceEngine:
         )
 
         subscores_payload = critique_payload.get("subscores") or {}
-        impact = _clamp_subscore(_safe_float(subscores_payload.get("impact")))
-        composition = _clamp_subscore(_safe_float(subscores_payload.get("composition")))
-        technical_score = _clamp_subscore(
-            _safe_float(subscores_payload.get("technical"))
-        )
-        category_fit = _clamp_subscore(
-            _safe_float(subscores_payload.get("category_fit"))
-        )
-        subscores_total = impact + composition + technical_score + category_fit
-        mapped_score = _normalise_score(subscores_total)
+
+        def _maybe_subscore(key: str) -> Optional[float]:
+            value = _safe_float(subscores_payload.get(key))
+            return _clamp_subscore(value) if value is not None else None
+
+        impact = _maybe_subscore("impact")
+        composition = _maybe_subscore("composition")
+        technical_score = _maybe_subscore("technical")
+        category_fit = _maybe_subscore("category_fit")
+
+        raw_score = _safe_float(critique_payload.get("score"))
+        if raw_score is not None:
+            mapped_score = _normalise_score(raw_score)
+            baseline_score = float(raw_score)
+        else:
+            contributing = [
+                value
+                for value in (impact, composition, technical_score, category_fit)
+                if value is not None
+            ]
+            baseline_score = sum(contributing) if contributing else 0.0
+            mapped_score = _normalise_score(baseline_score)
 
         inferred_style = self._normalise_style_label(critique_payload.get("style"))
         if inferred_style is None:
@@ -162,7 +201,7 @@ class JudgeVisionInferenceEngine:
             competition_category=competition_category,
             style_inference=inferred_style,
             image_title=image_title,
-            critique_total_initial=subscores_total,
+            critique_total_initial=baseline_score,
             critique_total=float(mapped_score),
             critique_award=critique_payload.get("award_suggestion"),
             critique_compliance_flag=critique_payload.get("compliance_flag"),
@@ -197,13 +236,15 @@ class JudgeVisionInferenceEngine:
         return self.config.critique_role or "judge"
 
     def _get_client(self) -> OpenAIChatClient:
-        key = self._resolved_model_name()
+        logical_name = self._resolved_model_name()
+        key = (logical_name, self.config.gpu_lease_token)
         if key not in self._client_cache:
             self._client_cache[key] = OpenAIChatClient(
                 base_url=self.config.base_url,
-                model_name=key,
+                model_name=logical_name,
                 api_key=self.config.api_key,
                 timeout=self.config.timeout,
+                lease_token=self.config.gpu_lease_token,
             )
         return self._client_cache[key]
 

@@ -13,7 +13,7 @@ This document summarizes the evolution of Ollama model integration into the unif
     canonical way to ingest locally-pulled Ollama models.
 3.  **Logical Entries**: Imported Ollama models are treated as "logical" entries.
     - Are visible via `imageworks-download list` and downstream tooling.
-    - `download_path` points to the Ollama store (`~/.ollama/models/...`).
+    - `download_path` points to the Ollama store (now `/home/stewa/ai-models/ollama-data/models/...` inside WSL, i.e. `\\wsl.localhost\Ubuntu\home\stewa\ai-models\ollama-data\models` from Windows).
     - `served_model_id` stores the canonical Ollama tag (e.g., `llava:7b`).
 
 ### Evolution of Naming and Discovery

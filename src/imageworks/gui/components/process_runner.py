@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime
@@ -15,6 +16,21 @@ import streamlit as st
 def _mark_judge_run_inactive() -> None:
     if "judge_run_active" in st.session_state:
         st.session_state["judge_run_active"] = False
+
+
+_ERROR_PATTERN = re.compile(
+    r"\b(error|warning|traceback|exception|critical)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_error_lines(stderr_text: str) -> List[str]:
+    """Return only lines that look like warnings/errors for display."""
+    lines: List[str] = []
+    for line in stderr_text.splitlines():
+        if _ERROR_PATTERN.search(line):
+            lines.append(line)
+    return lines
 
 
 def execute_command(
@@ -243,10 +259,6 @@ def render_process_runner(
         col_run, col_stop = st.columns([3, 1])
         with col_run:
             st.info("⏳ Command is running in the background.")
-            with st.expander("📄 Live stdout (tail)", expanded=False):
-                st.text(_read_output(stdout_path))
-            with st.expander("⚠️ Live stderr (tail)", expanded=False):
-                st.text(_read_output(stderr_path))
         with col_stop:
             if st.button("🛑 Stop Run", key=f"{key_prefix}_stop"):
                 process.terminate()
@@ -302,7 +314,22 @@ def render_process_runner(
                 st.text(result["stdout"])
 
         if result["stderr"]:
-            with st.expander("⚠️ Errors", expanded=result["success"] is False):
+            error_lines = _extract_error_lines(result["stderr"])
+            has_errors = bool(error_lines)
+            label = (
+                f"⚠️ Errors ({len(error_lines)})"
+                if has_errors
+                else "✅ Errors · No warnings or errors detected"
+            )
+            with st.expander(
+                label, expanded=has_errors and (result["success"] is False)
+            ):
+                if has_errors:
+                    st.text("\n".join(error_lines))
+                else:
+                    st.caption("No warnings or errors detected in stderr output.")
+
+            with st.expander("📄 Full stderr", expanded=False):
                 st.text(result["stderr"])
 
     return None

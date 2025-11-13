@@ -7,7 +7,7 @@ The chat proxy exposes a FastAPI layer that normalises requests from GUI clients
 
 | Area | Details |
 |------|---------|
-| Multi-backend routing | Supports vLLM single-port activation, Ollama tag switching, and generic OpenAI-compatible HTTP relay via `ChatForwarder`. |
+| Multi-backend routing | Supports remote vLLM activation (via the `imageworks-vllm` admin service), Ollama tag switching, and generic OpenAI-compatible HTTP relay via `ChatForwarder`. |
 | Model registry integration | Reads from layered registry (`model_loader.registry`) with hot reload when curated/discovered layers change; honours profile-based whitelists and testing filters. |
 | Autostart orchestration | `AutostartManager` can start/stop services (vLLM, Ollama) on demand using `CHAT_PROXY_AUTOSTART_MAP` definitions with configurable grace periods. |
 | Payload normalisation | Enforces template requirements, strips images for text-only models, down-samples oversize base64 payloads, harmonises tool calls, and truncates history for vision/reasoning models. |
@@ -21,9 +21,9 @@ The chat proxy exposes a FastAPI layer that normalises requests from GUI clients
 1. **FastAPI app (`chat_proxy.app`)** – wires configuration, managers, and routers; reloads registry on disk change.
 2. **`ChatForwarder`** – central request pipeline: resolves registry entry, ensures backend availability, prepares backend-specific payloads, streams responses, and records metrics/logs.
 3. **Managers**
-   - `VllmManager` manages single-port vLLM lifecycle using state persisted in `_staging/active_vllm.json`.
-   - `OllamaManager` issues load/unload commands to Ollama REST endpoints.
-   - `AutostartManager` interprets autostart map and coordinates service activation.
+   - `VllmManager` now speaks to the remote admin FastAPI (`imageworks.chat_proxy.vllm_admin_service`) exposed by the `imageworks-vllm` container. It still persists `_staging/active_vllm.json` for bookkeeping but no longer launches the heavy model inside the proxy container.
+   - `OllamaManager` issues keep-alive unload commands (dummy `/api/generate` + `/api/chat` with `keep_alive=0`) because `/api/stop` never existed on Ollama.
+   - `AutostartManager` interprets autostart map definitions for vLLM and shell hooks; Ollama autostart is now limited to registry warmups because unload is purely HTTP-driven.
 4. **Policy helpers** – `capabilities.supports_vision/reasoning`, `normalization.normalize_response`, and `role_selector.RoleSelector` enforce runtime rules.
 5. **Metrics + logging** – `metrics.MetricsAggregator` collects per-request samples; `logging_utils.JsonlLogger` rotates JSONL logs according to `max_log_bytes`.
 6. **Configuration** – `ProxyConfig.load()` merges environment overrides for host/port, logging, timeouts, autostart, history truncation, and Ollama/vLLM tunables.
@@ -32,7 +32,8 @@ Sequence:
 ```
 Client → FastAPI endpoint (OpenAI schema) → ChatForwarder
        → Registry lookup + policy checks
-       → Backend activation (autostart) → HTTP streaming to backend
+       → Backend activation (remote vLLM admin or keep-alive unload)
+       → HTTP streaming to backend
        → Response normalisation → Client stream & metrics/log capture
 ```
 
@@ -74,7 +75,8 @@ CHAT_PROXY_MAX_IMAGE_BYTES=8000000
 CHAT_PROXY_LOG_PROMPTS=1
 CHAT_PROXY_INCLUDE_NON_INSTALLED=0
 CHAT_PROXY_LOOPBACK_ALIAS=imageworks-chat
-CHAT_PROXY_VLLM_SINGLE_PORT=1
+CHAT_PROXY_VLLM_REMOTE_URL=http://imageworks-vllm:8600
+CHAT_PROXY_VLLM_HEALTH_HOST=imageworks-vllm
 CHAT_PROXY_VLLM_PORT=24001
 CHAT_PROXY_VLLM_STATE_PATH=/srv/imageworks/_staging/active_vllm.json
 CHAT_PROXY_VLLM_GPU_MEMORY_UTILIZATION=0.85
@@ -106,7 +108,8 @@ Other knobs:
 - **Template enforcement**: If `require_template` is enabled, chat requests must resolve to a chat template in `chat_templates/`; missing templates yield `err_template_required`.
 - **Image gating**: Payloads with embedded images are size-checked; oversize attachments trigger `err_payload_too_large` (HTTP 413).
 - **Role-aware selection**: `RoleSelector` ensures only models flagged for the active deployment profile (production/testing) are exposed via `/v1/models`.
-- **Autostart**: When a request targets a vLLM model and no instance is active, the proxy invokes `VllmManager.activate()` and waits up to `vllm_start_timeout_s` before failing with `err_model_start_timeout`.
+- **Autostart**: When a request targets a vLLM model and no instance is active, the proxy invokes `VllmManager.activate()` which POSTs to `imageworks-vllm:/admin/activate` and waits up to `vllm_start_timeout_s` before failing with `err_model_start_timeout`.
+- **Ollama unloads**: Instead of the fictional `/api/stop`, the proxy always issues keep-alive requests (`keep_alive=0`) so models vacate VRAM before Judge Vision Stage 2 activates vLLM.
 
 ---
 ## 7. Troubleshooting Quick Reference
@@ -125,4 +128,3 @@ Other knobs:
 - `imageworks-models` CLI provides manual registry inspection and vLLM control (see dedicated guide).
 - GUI Settings and Dashboard pages call into the proxy for backend health; keep proxy running before launching Streamlit (`uv run imageworks-gui`).
 - Integration tests use `CHAT_PROXY_INCLUDE_TEST_MODELS=1` to surface synthetic fixtures.
-

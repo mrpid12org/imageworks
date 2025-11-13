@@ -49,6 +49,7 @@ _vllm_manager = VllmManager(_cfg)
 _ollama_manager = OllamaManager(_cfg)
 _autostart = AutostartManager(_cfg.autostart_map_raw, _cfg, _vllm_manager)
 _logger = JsonlLogger(_cfg.log_path, _cfg.max_log_bytes)
+_gpu_lease = GpuLeaseManager(_vllm_manager, ollama_manager=_ollama_manager)
 _forwarder = ChatForwarder(
     _cfg,
     _metrics,
@@ -56,8 +57,8 @@ _forwarder = ChatForwarder(
     _logger,
     _vllm_manager,
     _ollama_manager,
+    lease_manager=_gpu_lease,
 )
-_gpu_lease = GpuLeaseManager(_vllm_manager)
 
 
 def _configure_forwarder_file_logging() -> None:
@@ -489,8 +490,9 @@ async def list_models_api():
 @app.post("/v1/chat/completions")
 async def chat_completions(req: Request):
     payload = await req.json()
+    lease_token = req.headers.get("x-gpu-lease-token")
     try:
-        result = await _forwarder.handle_chat(payload)
+        result = await _forwarder.handle_chat(payload, lease_token=lease_token)
     except ProxyError as exc:  # structured
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
     # result is either streaming generator reference or full object

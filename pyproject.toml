@@ -30,8 +30,6 @@ dependencies = [
   "lmdeploy>=0.10.1",
   "qwen-vl-utils>=0.0.14",
   "nvidia-ml-py>=13.580.82",
-  "tensorflow==2.17.0",
-  "tensorflow-hub==0.16.1",
   # Model downloader dependencies
   "requests>=2.31.0",
   "aiohttp>=3.9.0",

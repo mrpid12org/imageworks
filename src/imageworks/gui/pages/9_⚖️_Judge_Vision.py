@@ -604,6 +604,11 @@ def _render_progress(progress_path: str) -> None:
     try:
         data = json.loads(path.read_text())
     except Exception:  # noqa: BLE001
+        st.caption("Progress file is updating…")
+        st_autorefresh(
+            interval=PROGRESS_AUTORELOAD_INTERVAL_MS,
+            key=f"judge-progress-retry-{hash(str(path))}",
+        )
         return
 
     total = max(int(data.get("total", 0)), 0)
@@ -667,7 +672,91 @@ def _render_progress(progress_path: str) -> None:
         st.caption(f"Current image: {Path(current).name}")
 
 
-def _render_pairwise_section(results: List[Dict[str, Any]]) -> None:
+def _build_table_rows(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for rec in records:
+        compliance = rec.get("compliance") or {}
+        rows.append(
+            {
+                "Filename": rec.get("filename"),
+                "Image Title": rec.get("image_title"),
+                "Competition": rec.get("competition_category") or "Uncategorised",
+                "Style": rec.get("style") or "",
+                "Total": rec.get("total"),
+                "Pairwise Baseline": rec.get("pairwise_score_initial"),
+                "Raw Score": rec.get("total_initial"),
+                "Award": rec.get("award"),
+                "IQA": rec.get("technical_summary") or "",
+                "Compliance": "PASS" if compliance.get("passed") else "Check",
+            }
+        )
+    return rows
+
+
+def _render_record_detail(
+    record: Dict[str, Any], heading: str | None = None
+) -> None:  # pragma: no cover - UI helper
+    if heading:
+        st.subheader(heading)
+    col_img, col_meta = st.columns([1, 1])
+    with col_img:
+        image_path = record.get("image_path")
+        if image_path and Path(image_path).exists():
+            caption = record.get("image_title") or record.get("filename")
+            st.image(image_path, caption=caption)
+        else:
+            st.info("Image preview unavailable for this entry.")
+
+    with col_meta:
+        st.write(f"**Filename:** {record.get('filename') or 'n/a'}")
+        st.write(f"**Image title:** {record.get('image_title') or 'n/a'}")
+        st.write(
+            f"**Competition category:** {record.get('competition_category') or 'n/a'}"
+        )
+        st.write(f"**Style:** {record.get('style') or 'n/a'}")
+        st.write(f"**Award suggestion:** {record.get('award') or 'n/a'}")
+        st.metric("Total score", record.get("total") or "n/a")
+        compliance = record.get("compliance") or {}
+        if compliance:
+            st.write(
+                f"**Compliance:** {'PASS' if compliance.get('passed') else 'Check flags'}"
+            )
+            if compliance.get("messages"):
+                with st.expander("Compliance notes", expanded=False):
+                    st.write("\n".join(compliance.get("messages")))
+        if record.get("critique"):
+            with st.expander("Critique", expanded=True):
+                st.write(record.get("critique"))
+
+
+def _baseline_score(rec: Dict[str, Any]) -> Optional[float]:
+    for key in ("pairwise_score_initial", "total_initial", "total"):
+        value = rec.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _category_selection_key(category: str) -> str:
+    slug = (category or "uncategorised").strip().lower().replace(" ", "_")
+    return f"{RESULTS_SELECTION_KEY}_{slug or 'uncategorised'}"
+
+
+def _category_sort_key(name: str) -> tuple[int, str]:
+    normalized = (name or "").strip().lower()
+    if normalized == "colour":
+        return (0, normalized)
+    if normalized == "mono":
+        return (1, normalized)
+    return (2, normalized)
+
+
+def _render_pairwise_section(
+    results: List[Dict[str, Any]], category_label: str
+) -> None:
     playoff_rows = [
         rec
         for rec in results
@@ -676,7 +765,7 @@ def _render_pairwise_section(results: List[Dict[str, Any]]) -> None:
     if not playoff_rows:
         return
 
-    st.markdown("### 🎯 Pairwise Adjustments")
+    st.markdown(f"### 🎯 Pairwise Adjustments – {category_label}")
     table = [
         {
             "Filename": Path(rec.get("image_path") or rec.get("filename") or "").name,
@@ -690,6 +779,139 @@ def _render_pairwise_section(results: List[Dict[str, Any]]) -> None:
         for rec in playoff_rows
     ]
     st.dataframe(table, hide_index=True, use_container_width=True)
+
+
+def _render_category_results_view(
+    category: str, records: List[Dict[str, Any]], threshold_value: int
+) -> None:
+    if not records:
+        st.info(f"No records available for {category}.")
+        return
+
+    st.markdown(
+        f"### 📊 Rubric Scores – {category} "
+        f"({len(records)} image{'s' if len(records) != 1 else ''})"
+    )
+    rows = _build_table_rows(records)
+    st.dataframe(rows, use_container_width=True)
+
+    labels = [
+        f"{i + 1:02d} · {rec['filename'] or rec['image_path']}"
+        for i, rec in enumerate(records)
+    ]
+    selection_key = _category_selection_key(category)
+    selector_key = f"{selection_key}_selector"
+    if labels:
+        current_index = st.session_state.get(selection_key, 0) or 0
+        current_index = min(max(current_index, 0), len(labels) - 1)
+        selected_label = st.selectbox(
+            "Select image",
+            options=labels,
+            index=current_index,
+            key=selector_key,
+        )
+        st.session_state[selection_key] = labels.index(selected_label)
+    else:
+        st.info("No images to select for this category.")
+
+    baseline_counter: Counter[str] = Counter()
+    final_counter: Counter[str] = Counter()
+    for rec in records:
+        baseline = _baseline_score(rec)
+        if baseline is not None:
+            baseline_counter[f"{baseline:.1f}"] += 1
+        total = rec.get("total")
+        if total is not None:
+            try:
+                final_counter[f"{float(total):.1f}"] += 1
+            except (TypeError, ValueError):
+                continue
+
+    if baseline_counter:
+        with st.expander(
+            f"📈 Score histogram (pre-pairwise) – {category}", expanded=False
+        ):
+            histogram_rows = [
+                {"Score": score, "Images": count}
+                for score, count in sorted(
+                    baseline_counter.items(), key=lambda item: float(item[0])
+                )
+            ]
+            st.dataframe(histogram_rows, hide_index=True, use_container_width=True)
+    if final_counter:
+        with st.expander(f"📊 Score histogram (final) – {category}", expanded=False):
+            histogram_rows = [
+                {"Score": score, "Images": count}
+                for score, count in sorted(
+                    final_counter.items(), key=lambda item: float(item[0])
+                )
+            ]
+            st.dataframe(histogram_rows, hide_index=True, use_container_width=True)
+
+    candidate_count = sum(
+        1 for rec in records if (_baseline_score(rec) or 0) >= threshold_value
+    )
+    if candidate_count:
+        recommended_rounds = recommended_pairwise_rounds(candidate_count)
+        st.info(
+            f"{category}: Recommended pairwise rounds → {recommended_rounds} "
+            f"({candidate_count} image{'s' if candidate_count != 1 else ''} ≥ {threshold_value})."
+        )
+
+    bucket_map: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for rec in records:
+        total = rec.get("total")
+        if total is None:
+            continue
+        try:
+            bucket = int(round(float(total)))
+        except (TypeError, ValueError):
+            continue
+        bucket_map[bucket].append(rec)
+
+    st.markdown("### 🖼️ Score Bucket Review")
+    priority_buckets = [20, 19, 18]
+    for bucket_score in priority_buckets:
+        bucket_records = bucket_map.get(bucket_score, [])
+        st.markdown(
+            f"#### Score {bucket_score} ({len(bucket_records)} image{'s' if len(bucket_records) != 1 else ''})"
+        )
+        if not bucket_records:
+            st.caption("No images in this bucket.")
+            continue
+        for idx, record in enumerate(bucket_records, start=1):
+            with st.container():
+                _render_record_detail(
+                    record, heading=f"{idx:02d}. {record.get('filename') or ''}"
+                )
+                st.divider()
+
+    other_buckets = sorted(
+        score for score in bucket_map.keys() if score not in set(priority_buckets)
+    )
+    if other_buckets:
+        st.markdown("#### Other Buckets")
+        bucket_selection = st.selectbox(
+            "Select another bucket",
+            other_buckets,
+            format_func=lambda value: f"Score {value} ({len(bucket_map[value])} image{'s' if len(bucket_map[value]) != 1 else ''})",
+            key=f"{selection_key}_bucket_selector",
+        )
+        for idx, record in enumerate(bucket_map.get(bucket_selection, []), start=1):
+            with st.container():
+                _render_record_detail(
+                    record, heading=f"{idx:02d}. {record.get('filename') or ''}"
+                )
+                st.divider()
+
+    st.markdown("### 🖼️ Image & Critique Viewer")
+    selected_index = st.session_state.get(selection_key, 0) or 0
+    if selected_index < 0 or selected_index >= len(records):
+        selected_index = 0
+    selected_record = records[selected_index]
+    _render_record_detail(selected_record)
+
+    _render_pairwise_section(records, category)
 
 
 def render_judge_results(config: Dict[str, Any]) -> None:
@@ -726,24 +948,17 @@ def render_judge_results(config: Dict[str, Any]) -> None:
         subscores = item.get("critique_subscores") or {}
         compliance = item.get("compliance") or {}
         technical = item.get("technical_signals") or {}
-        cache_payload = None
-        if image_path:
-            cache_payload = cache_index.get(str(Path(image_path)))
+        cache_payload = cache_index.get(str(Path(image_path))) if image_path else None
         if cache_payload:
             technical = _merge_technical_signals(technical, cache_payload)
-        technical_summary = ""
         metrics = technical.get("metrics") or {}
-        musiq_value = metrics.get("musiq_mos")
-        nima_a = metrics.get("nima_aesthetic_mean")
-        nima_t = metrics.get("nima_technical_mean")
-        summary_parts = []
-        if musiq_value is not None:
-            summary_parts.append(f"MUSIQ {musiq_value:.1f}")
-        if nima_a is not None:
-            summary_parts.append(f"NIMA aesthetic {nima_a:.2f}")
-        if nima_t is not None:
-            summary_parts.append(f"NIMA technical {nima_t:.2f}")
-        technical_summary = "; ".join(summary_parts) if summary_parts else ""
+        summary_parts: List[str] = []
+        if metrics.get("musiq_mos") is not None:
+            summary_parts.append(f"MUSIQ {metrics['musiq_mos']:.1f}")
+        if metrics.get("nima_aesthetic_mean") is not None:
+            summary_parts.append(f"NIMA aesthetic {metrics['nima_aesthetic_mean']:.2f}")
+        if metrics.get("nima_technical_mean") is not None:
+            summary_parts.append(f"NIMA technical {metrics['nima_technical_mean']:.2f}")
         display_records.append(
             {
                 "image_path": image_path,
@@ -765,7 +980,7 @@ def render_judge_results(config: Dict[str, Any]) -> None:
                 "critique": item.get("critique") or "",
                 "subscores": subscores,
                 "compliance": compliance,
-                "technical_summary": technical_summary,
+                "technical_summary": "; ".join(summary_parts) if summary_parts else "",
                 "technical_signals": technical,
             }
         )
@@ -774,275 +989,27 @@ def render_judge_results(config: Dict[str, Any]) -> None:
         st.info("No records parsed from JSONL.")
         return
 
-    def _baseline_score(rec: Dict[str, Any]) -> Optional[float]:
-        for key in ("pairwise_score_initial", "total_initial", "total"):
-            value = rec.get(key)
-            if value is not None:
-                try:
-                    return float(value)
-                except (TypeError, ValueError):
-                    continue
-        return None
-
-    baseline_counter: Counter[str] = Counter()
-    final_counter: Counter[str] = Counter()
-    for rec in display_records:
-        baseline = _baseline_score(rec)
-        if baseline is not None:
-            baseline_counter[f"{baseline:.1f}"] += 1
-        total = rec.get("total")
-        if total is not None:
-            final_counter[f"{float(total):.1f}"] += 1
-
-    if baseline_counter:
-        with st.expander("📈 Score histogram (pre-pairwise)", expanded=False):
-            histogram_rows = [
-                {"Score": score, "Images": count}
-                for score, count in sorted(
-                    baseline_counter.items(), key=lambda item: float(item[0])
-                )
-            ]
-            st.dataframe(histogram_rows, hide_index=True, use_container_width=True)
-    if final_counter:
-        with st.expander("📊 Score histogram (final)", expanded=False):
-            histogram_rows = [
-                {"Score": score, "Images": count}
-                for score, count in sorted(
-                    final_counter.items(), key=lambda item: float(item[0])
-                )
-            ]
-            st.dataframe(histogram_rows, hide_index=True, use_container_width=True)
-
     threshold_value = int(config.get("pairwise_threshold") or 17)
-    candidate_count = sum(
-        1 for rec in display_records if (_baseline_score(rec) or 0) >= threshold_value
-    )
-    if candidate_count:
-        recommended_rounds = recommended_pairwise_rounds(candidate_count)
-        st.info(
-            f"Recommended pairwise rounds: {recommended_rounds} "
-            f"({candidate_count} image{'s' if candidate_count != 1 else ''} ≥ {threshold_value})."
-        )
-
-    bucket_map: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    category_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for rec in display_records:
-        total = rec.get("total")
-        if total is None:
-            continue
-        bucket_map[int(total)].append(rec)
+        category = rec.get("competition_category") or "Uncategorised"
+        category_map[category].append(rec)
 
-    for score_bucket in (20, 19, 18):
-        bucket_map.setdefault(score_bucket, [])
-
-    pairwise_moves_up = sum(
-        1
-        for rec in display_records
-        if rec.get("pairwise_score_initial") is not None
-        and rec.get("total") is not None
-        and rec["total"] > rec["pairwise_score_initial"]
-    )
-    pairwise_moves_down = sum(
-        1
-        for rec in display_records
-        if rec.get("pairwise_score_initial") is not None
-        and rec.get("total") is not None
-        and rec["total"] < rec["pairwise_score_initial"]
-    )
-    if pairwise_moves_up or pairwise_moves_down:
-        st.info(
-            f"Pairwise adjustments: {pairwise_moves_up} promoted, {pairwise_moves_down} demoted."
-        )
-
-    def _build_table_rows(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        rows: List[Dict[str, Any]] = []
-        for rec in records:
-            subscores = rec.get("subscores") or {}
-            compliance = rec.get("compliance") or {}
-            rows.append(
-                {
-                    "Filename": rec.get("filename"),
-                    "Image Title": rec.get("image_title"),
-                    "Competition": rec.get("competition_category") or "Uncategorised",
-                    "Style": rec.get("style") or "",
-                    "Total": rec.get("total"),
-                    "Pairwise Baseline": rec.get("pairwise_score_initial"),
-                    "Subscore Sum": rec.get("total_initial"),
-                    "Award": rec.get("award"),
-                    "Impact": subscores.get("impact"),
-                    "Composition": subscores.get("composition"),
-                    "Technical": subscores.get("technical"),
-                    "Category Fit": subscores.get("category_fit"),
-                    "IQA": rec.get("technical_summary") or "",
-                    "Compliance": "PASS" if compliance.get("passed") else "Check",
-                }
-            )
-        return rows
-
-    categories = sorted(
-        {
-            rec["competition_category"]
-            for rec in display_records
-            if rec.get("competition_category")
-        }
-    )
-    counts = {
-        cat: sum(1 for rec in display_records if rec["competition_category"] == cat)
-        for cat in categories
-    }
-
-    st.markdown("### 📊 Rubric Scores")
-    tab_labels = ["All"] + [f"{cat} ({counts.get(cat, 0)})" for cat in categories]
-    tabs = st.tabs(tab_labels)
-    for idx, tab in enumerate(tabs):
-        with tab:
-            if idx == 0:
-                rows = _build_table_rows(display_records)
-                st.dataframe(rows, use_container_width=True)
-                labels = [
-                    f"{i + 1:02d} · {rec['filename'] or rec['image_path']}"
-                    for i, rec in enumerate(display_records)
-                ]
-                if not labels:
-                    st.info("No images to select.")
-                else:
-                    current_index = st.session_state.get(RESULTS_SELECTION_KEY, 0) or 0
-                    current_index = min(max(current_index, 0), len(labels) - 1)
-                    selected_label = st.selectbox(
-                        "Select image",
-                        options=labels,
-                        index=current_index,
-                        key="judge_results_selector_control",
-                    )
-                    st.session_state[RESULTS_SELECTION_KEY] = labels.index(
-                        selected_label
-                    )
-            else:
-                category = categories[idx - 1]
-                subset = [
-                    rec
-                    for rec in display_records
-                    if rec["competition_category"] == category
-                ]
-                if not subset:
-                    st.info(f"No entries captured for {category}.")
-                    continue
-                rows = _build_table_rows(subset)
-                st.dataframe(rows, use_container_width=True)
-
-    def _render_record_detail(
-        record: Dict[str, Any], heading: str | None = None
-    ) -> None:
-        if heading:
-            st.subheader(heading)
-        col_img, col_meta = st.columns([1, 1])
-        with col_img:
-            image_path = record.get("image_path")
-            if image_path and Path(image_path).exists():
-                caption = record.get("image_title") or record.get("filename")
-                st.image(image_path, caption=caption)
-            else:
-                st.info("Image preview unavailable for this entry.")
-
-        with col_meta:
-            st.write(f"**Filename:** {record.get('filename') or 'n/a'}")
-            st.write(f"**Image title:** {record.get('image_title') or 'n/a'}")
-            st.write(
-                f"**Competition category:** {record.get('competition_category') or 'n/a'}"
-            )
-            st.write(f"**Style:** {record.get('style') or 'n/a'}")
-            st.write(f"**Award suggestion:** {record.get('award') or 'n/a'}")
-            st.metric("Total score", record.get("total") or "n/a")
-            subscores = record.get("subscores") or {}
-            if subscores:
-                st.markdown("**Subscores**")
-                st.table(
-                    [
-                        {
-                            "Impact": subscores.get("impact"),
-                            "Composition": subscores.get("composition"),
-                            "Technical": subscores.get("technical"),
-                            "Category Fit": subscores.get("category_fit"),
-                        }
-                    ]
+    ordered_categories = sorted(category_map.keys(), key=_category_sort_key)
+    if len(ordered_categories) == 1:
+        category = ordered_categories[0]
+        _render_category_results_view(category, category_map[category], threshold_value)
+    else:
+        tab_labels = [
+            f"{category} ({len(category_map[category])})"
+            for category in ordered_categories
+        ]
+        tabs = st.tabs(tab_labels)
+        for tab, category in zip(tabs, ordered_categories):
+            with tab:
+                _render_category_results_view(
+                    category, category_map[category], threshold_value
                 )
-            compliance = record.get("compliance") or {}
-            if compliance:
-                compliance_status = (
-                    "PASS"
-                    if compliance.get("passed")
-                    else compliance.get("summary") or "Check details"
-                )
-                st.caption(f"Compliance: {compliance_status}")
-            technical_summary = record.get("technical_summary")
-            if technical_summary:
-                st.caption(f"Deterministic IQA: {technical_summary}")
-            technical = record.get("technical_signals") or {}
-            metrics = technical.get("metrics") or {}
-            if metrics:
-                st.markdown("**Deterministic metrics**")
-                st.table(
-                    [
-                        {
-                            "MUSIQ MOS": metrics.get("musiq_mos"),
-                            "NIMA aesthetic": metrics.get("nima_aesthetic_mean"),
-                            "NIMA technical": metrics.get("nima_technical_mean"),
-                        }
-                    ]
-                )
-                if technical.get("notes"):
-                    st.caption(technical["notes"])
-            critique = record.get("critique") or ""
-            if critique:
-                st.markdown("**Critique**")
-                st.write(critique)
-            else:
-                st.caption("No critique text was recorded for this entry.")
-
-    st.markdown("### 🖼️ Score Bucket Review")
-    priority_buckets = [20, 19, 18]
-    for bucket_score in priority_buckets:
-        records = bucket_map.get(bucket_score, [])
-        st.markdown(
-            f"#### Score {bucket_score} ({len(records)} image{'s' if len(records) != 1 else ''})"
-        )
-        if not records:
-            st.caption("No images in this bucket.")
-            continue
-        for idx, record in enumerate(records, start=1):
-            with st.container():
-                _render_record_detail(
-                    record, heading=f"{idx:02d}. {record.get('filename') or ''}"
-                )
-                st.divider()
-
-    other_buckets = sorted(
-        score for score in bucket_map.keys() if score not in set(priority_buckets)
-    )
-    if other_buckets:
-        st.markdown("#### Other Buckets")
-        bucket_selection = st.selectbox(
-            "Select another bucket",
-            other_buckets,
-            format_func=lambda value: f"Score {value} ({len(bucket_map[value])} image{'s' if len(bucket_map[value]) != 1 else ''})",
-            key="judge_bucket_selector",
-        )
-        for idx, record in enumerate(bucket_map.get(bucket_selection, []), start=1):
-            with st.container():
-                _render_record_detail(
-                    record, heading=f"{idx:02d}. {record.get('filename') or ''}"
-                )
-                st.divider()
-
-    st.markdown("### 🖼️ Image & Critique Viewer")
-    selected_index = st.session_state.get(RESULTS_SELECTION_KEY, 0) or 0
-    if not isinstance(selected_index, int):
-        selected_index = 0
-    if selected_index < 0 or selected_index >= len(display_records):
-        selected_index = 0
-    selected_record = display_records[selected_index]
-    _render_record_detail(selected_record)
-
-    _render_pairwise_section(results)
 
 
 def main():  # pragma: no cover - Streamlit entry point

@@ -7,8 +7,11 @@ import argparse
 import os
 from pathlib import Path
 import shutil
+import socket
+import tarfile
 import tempfile
-import time
+from datetime import datetime
+import hashlib
 
 import requests
 
@@ -65,51 +68,47 @@ def _download_musiq_cache(force: bool) -> Path:
         print(f"✔ MUSIQ cache already populated at {cache_dir}")
         return cache_dir
 
-    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-    os.environ["TFHUB_CACHE"] = str(cache_dir)
-    os.environ["TFHUB_CACHE_DIR"] = str(cache_dir)
-    import tensorflow as tf  # noqa: F401  (ensures TF is initialised before TF-Hub)
-    import tensorflow_hub as hub
-
-    def _clear_directory(path: Path) -> None:
-        for child in path.iterdir():
-            if child.is_dir():
-                shutil.rmtree(child, ignore_errors=True)
-            else:
-                child.unlink(missing_ok=True)
-
     print(f"⬇️  Downloading MUSIQ TF-Hub modules into {cache_dir} ...")
     for name, handle in MUSIQ_HANDLES.items():
         print(f"   • Resolving {name}: {handle}")
-        retries = 3
-        for attempt in range(1, retries + 1):
-            try:
-                hub.load(handle)
-                break
-            except Exception as exc:  # noqa: BLE001
-                print(
-                    f"      ⚠️  Failed to download {name} (attempt {attempt}/{retries}): {exc}"
-                )
-                _clear_directory(cache_dir)
-                tmp_cache = Path(tempfile.gettempdir()) / "tfhub_modules"
-                if tmp_cache.exists():
-                    shutil.rmtree(tmp_cache, ignore_errors=True)
-                if attempt == retries:
-                    raise
-                time.sleep(2.0)
+        archive_url = f"{handle}?tf-hub-format=compressed"
+        response = requests.get(archive_url, stream=True, timeout=120)
+        response.raise_for_status()
 
-    if not any(cache_dir.iterdir()):
-        tmp_cache = Path(tempfile.gettempdir()) / "tfhub_modules"
-        if tmp_cache.exists() and any(tmp_cache.iterdir()):
-            print(
-                f"⚠️  TensorFlow Hub cached modules under {tmp_cache}; copying into {cache_dir}"
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz")
+        tmp_path = Path(tmp_file.name)
+        try:
+            for chunk in response.iter_content(chunk_size=1 << 20):
+                if chunk:
+                    tmp_file.write(chunk)
+            tmp_file.flush()
+        finally:
+            tmp_file.close()
+
+        try:
+            module_hash = hashlib.sha1(handle.encode("utf-8")).hexdigest()
+            target_dir = cache_dir / module_hash
+            if target_dir.exists():
+                shutil.rmtree(target_dir, ignore_errors=True)
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            with tarfile.open(tmp_path, "r:gz") as archive:
+                archive.extractall(path=target_dir)
+
+            descriptor = cache_dir / f"{module_hash}.descriptor.txt"
+            descriptor.write_text(
+                "\n".join(
+                    [
+                        f"Module: {handle}",
+                        f"Download Time: {datetime.now().isoformat()}",
+                        f"Downloader Hostname: {socket.gethostname()} (PID:{os.getpid()})",
+                    ]
+                ),
+                encoding="utf-8",
             )
-            for item in tmp_cache.iterdir():
-                dest = cache_dir / item.name
-                if item.is_dir():
-                    shutil.copytree(item, dest, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(item, dest)
+            print(f"      ✅ Cached MUSIQ {name} module at {target_dir}")
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     return cache_dir
 

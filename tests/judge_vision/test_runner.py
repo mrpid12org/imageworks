@@ -188,3 +188,75 @@ def test_runner_iqa_stage_only(monkeypatch, tmp_path):
         if line.strip()
     ]
     assert cache_lines[0]["technical_signals"]["metrics"]["mean_luma"] == 0.5
+
+
+def test_pairwise_plans_split_by_category(tmp_path):
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir()
+
+    output_jsonl = tmp_path / "results.jsonl"
+    summary_path = tmp_path / "summary.md"
+    progress_path = tmp_path / "progress.json"
+    iqa_cache = tmp_path / "iqa.jsonl"
+
+    config = JudgeVisionConfig(
+        input_paths=[input_dir],
+        recursive=False,
+        image_extensions=(".jpg",),
+        backend="stub-backend",
+        base_url="http://localhost:8000",
+        api_key="",
+        timeout=30,
+        max_new_tokens=64,
+        temperature=0.2,
+        top_p=0.9,
+        model="stub-model",
+        use_registry=False,
+        critique_role=None,
+        skip_preflight=True,
+        dry_run=True,
+        competition_id=None,
+        competition_config=None,
+        pairwise_rounds=None,
+        pairwise_enabled=True,
+        pairwise_threshold=17,
+        critique_title_template="{stem}",
+        critique_category=None,
+        critique_notes="",
+        output_jsonl=output_jsonl,
+        summary_path=summary_path,
+        progress_path=progress_path,
+        enable_musiq=False,
+        enable_nima=False,
+        iqa_cache_path=iqa_cache,
+        stage="full",
+        iqa_device="cpu",
+    )
+
+    def _record(name: str, category: str, total: float) -> JudgeVisionRecord:
+        path = tmp_path / f"{name}.jpg"
+        path.write_bytes(b"\x00")
+        return JudgeVisionRecord(
+            image=path,
+            competition_category=category,
+            critique_total=total,
+        )
+
+    records = [
+        _record("colour_a", "Colour", 18.0),
+        _record("colour_b", "Colour", 19.0),
+        _record("colour_c", "Colour", 17.5),
+        _record("colour_low", "Colour", 15.0),
+        _record("mono_a", "Mono", 18.0),
+        _record("mono_b", "Mono", 17.2),
+        _record("mono_low", "Mono", 16.5),
+    ]
+
+    runner = JudgeVisionRunner(config)
+    plans = runner._build_pairwise_plans(records)
+    assert len(plans) == 2
+    plan_map = {plan.category: plan for plan in plans}
+    assert plan_map["Colour"].eligible_count == 3
+    assert plan_map["Mono"].eligible_count == 2
+    assert plan_map["Colour"].comparisons == 3  # recommended for <=10 entrants
+    assert plan_map["Mono"].comparisons == 3
